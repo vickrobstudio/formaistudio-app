@@ -2,8 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormAILogo, FormaHeader } from "@/components/FormaMobile";
-import heroMobile from "@/assets/rb-hero-mobile.png.asset.json";
-import heroDesktop from "@/assets/rb-hero-desktop.png.asset.json";
+import furnitureIllustration from "@/assets/formai-furniture-illustration.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -19,8 +18,8 @@ function HomePage() {
   return <main className="min-h-screen bg-foreground text-primary-foreground">
     <FormaHeader transparent />
     <section className="relative min-h-screen overflow-hidden">
-      <picture><source media="(min-width: 768px)" srcSet={heroDesktop.url} /><img src={heroMobile.url} alt="Sculptural contemporary furniture in a warm interior" className="absolute inset-0 h-full w-full object-cover" /></picture>
-      <div className="absolute inset-0 bg-gradient-to-b from-foreground/55 via-foreground/10 to-foreground/80" />
+      <img src={furnitureIllustration.url} alt="Watercolor collection of sculptural furniture and interior objects" className="absolute inset-0 h-full w-full object-cover object-center" />
+      <div className="absolute inset-0 bg-gradient-to-b from-foreground/30 via-foreground/5 to-foreground/85" />
       <div className="relative flex min-h-screen flex-col justify-end px-6 pb-14 pt-28 sm:px-10 md:max-w-2xl md:pb-20 md:pl-16">
         <FormAILogo inverse className="mb-5 h-33" />
         <h1 className="text-[clamp(2.8rem,12vw,5.5rem)] font-light leading-[0.92] tracking-[-0.045em]">AI-Based<br />Interior Studio</h1>
