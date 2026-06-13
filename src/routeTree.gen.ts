@@ -10,12 +10,36 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModelToAiRoute = ModelToAiRouteImport.update({
+  id: '/model-to-ai',
+  path: '/model-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiToVideoRoute = AiToVideoRouteImport.update({
+  id: '/ai-to-video',
+  path: '/ai-to-video',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -31,30 +55,68 @@ const ApiGenerateImageRoute = ApiGenerateImageRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-to-video': typeof AiToVideoRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
+  '/model-to-ai': typeof ModelToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-to-video': typeof AiToVideoRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
+  '/model-to-ai': typeof ModelToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-to-video': typeof AiToVideoRoute
+  '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
+  '/model-to-ai': typeof ModelToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sitemap.xml' | '/api/generate-image'
+  fullPaths:
+    | '/'
+    | '/ai-to-video'
+    | '/auth'
+    | '/dashboard'
+    | '/model-to-ai'
+    | '/sitemap.xml'
+    | '/api/generate-image'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sitemap.xml' | '/api/generate-image'
-  id: '__root__' | '/' | '/sitemap.xml' | '/api/generate-image'
+  to:
+    | '/'
+    | '/ai-to-video'
+    | '/auth'
+    | '/dashboard'
+    | '/model-to-ai'
+    | '/sitemap.xml'
+    | '/api/generate-image'
+  id:
+    | '__root__'
+    | '/'
+    | '/ai-to-video'
+    | '/auth'
+    | '/dashboard'
+    | '/model-to-ai'
+    | '/sitemap.xml'
+    | '/api/generate-image'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiToVideoRoute: typeof AiToVideoRoute
+  AuthRoute: typeof AuthRoute
+  DashboardRoute: typeof DashboardRoute
+  ModelToAiRoute: typeof ModelToAiRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
 }
@@ -66,6 +128,34 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/model-to-ai': {
+      id: '/model-to-ai'
+      path: '/model-to-ai'
+      fullPath: '/model-to-ai'
+      preLoaderRoute: typeof ModelToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-to-video': {
+      id: '/ai-to-video'
+      path: '/ai-to-video'
+      fullPath: '/ai-to-video'
+      preLoaderRoute: typeof AiToVideoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -87,6 +177,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiToVideoRoute: AiToVideoRoute,
+  AuthRoute: AuthRoute,
+  DashboardRoute: DashboardRoute,
+  ModelToAiRoute: ModelToAiRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
 }
