@@ -77,10 +77,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "EX Roche Bobois AI Studio" },
+      { title: "Forma Studio — AI Interior Design" },
       { name: "description", content: "AI-powered interior design proposals, photorealistic renderings and cinematic presentations." },
-      { name: "author", content: "EX Roche Bobois AI Studio" },
-      { property: "og:title", content: "EX Roche Bobois AI Studio" },
+      { name: "author", content: "Forma Studio" },
+      { property: "og:title", content: "Forma Studio — AI Interior Design" },
       { property: "og:description", content: "Create extraordinary interiors with AI." },
       { property: "og:type", content: "website" },
        { name: "twitter:card", content: "summary_large_image" },
