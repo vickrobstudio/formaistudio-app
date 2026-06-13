@@ -14,6 +14,363 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_rules: {
+        Row: {
+          ai_passed: boolean | null
+          ai_review_notes: string | null
+          ai_score: number | null
+          category: string
+          created_at: string
+          id: string
+          is_active: boolean
+          is_global: boolean
+          priority: number
+          review_decision: string | null
+          reviewed_at: string | null
+          rule: string
+          scope: string
+          status: string
+          submitted_by_email: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_passed?: boolean | null
+          ai_review_notes?: string | null
+          ai_score?: number | null
+          category?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_global?: boolean
+          priority?: number
+          review_decision?: string | null
+          reviewed_at?: string | null
+          rule: string
+          scope?: string
+          status?: string
+          submitted_by_email?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_passed?: boolean | null
+          ai_review_notes?: string | null
+          ai_score?: number | null
+          category?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          is_global?: boolean
+          priority?: number
+          review_decision?: string | null
+          reviewed_at?: string | null
+          rule?: string
+          scope?: string
+          status?: string
+          submitted_by_email?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contact_requests: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          message: string
+          phone: string | null
+          proposal_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          id?: string
+          message: string
+          phone?: string | null
+          proposal_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          message?: string
+          phone?: string | null
+          proposal_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      design_proposals: {
+        Row: {
+          ai_prompt: string | null
+          budget: number | null
+          color_palette: Json
+          created_at: string
+          custom_brands: Json
+          dimension_unit: string
+          existing_finishes: Json
+          existing_plan_url: string | null
+          finishes: Json
+          furniture_suggestions: Json
+          id: string
+          input_type: string
+          is_paid: boolean
+          is_saved: boolean
+          materials: Json
+          name: string
+          rendering_urls: Json
+          room_height: number
+          room_length: number
+          room_type: string
+          room_width: number
+          saved_at: string | null
+          selected_brands: Json
+          sketchup_file_url: string | null
+          source_feature: string
+          space_use: string | null
+          status: string
+          style: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_prompt?: string | null
+          budget?: number | null
+          color_palette?: Json
+          created_at?: string
+          custom_brands?: Json
+          dimension_unit?: string
+          existing_finishes?: Json
+          existing_plan_url?: string | null
+          finishes?: Json
+          furniture_suggestions?: Json
+          id?: string
+          input_type?: string
+          is_paid?: boolean
+          is_saved?: boolean
+          materials?: Json
+          name?: string
+          rendering_urls?: Json
+          room_height?: number
+          room_length?: number
+          room_type?: string
+          room_width?: number
+          saved_at?: string | null
+          selected_brands?: Json
+          sketchup_file_url?: string | null
+          source_feature?: string
+          space_use?: string | null
+          status?: string
+          style?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_prompt?: string | null
+          budget?: number | null
+          color_palette?: Json
+          created_at?: string
+          custom_brands?: Json
+          dimension_unit?: string
+          existing_finishes?: Json
+          existing_plan_url?: string | null
+          finishes?: Json
+          furniture_suggestions?: Json
+          id?: string
+          input_type?: string
+          is_paid?: boolean
+          is_saved?: boolean
+          materials?: Json
+          name?: string
+          rendering_urls?: Json
+          room_height?: number
+          room_length?: number
+          room_type?: string
+          room_width?: number
+          saved_at?: string | null
+          selected_brands?: Json
+          sketchup_file_url?: string | null
+          source_feature?: string
+          space_use?: string | null
+          status?: string
+          style?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      feature_usage: {
+        Row: {
+          created_at: string
+          feature_type: string
+          id: string
+          updated_at: string
+          usage_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          feature_type: string
+          id?: string
+          updated_at?: string
+          usage_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          feature_type?: string
+          id?: string
+          updated_at?: string
+          usage_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      iap_entitlements: {
+        Row: {
+          created_at: string
+          entitlement_id: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          product_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          entitlement_id: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          product_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          entitlement_id?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          product_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      product_tearsheets: {
+        Row: {
+          category: string | null
+          colors: Json
+          created_at: string
+          designer: string | null
+          dimensions: Json
+          fabric_options: Json
+          finishes: Json
+          floor_plan_uploaded_at: string | null
+          floor_plan_url: string | null
+          id: string
+          is_verified: boolean
+          materials: Json
+          parsed_data: Json
+          product_name: string
+          product_url: string | null
+          reference_image_url: string | null
+          reference_images: Json
+          shape_description: string | null
+          subcategory: string | null
+          tearsheet_pdf_url: string | null
+          updated_at: string
+          visual_blueprint: string | null
+        }
+        Insert: {
+          category?: string | null
+          colors?: Json
+          created_at?: string
+          designer?: string | null
+          dimensions?: Json
+          fabric_options?: Json
+          finishes?: Json
+          floor_plan_uploaded_at?: string | null
+          floor_plan_url?: string | null
+          id?: string
+          is_verified?: boolean
+          materials?: Json
+          parsed_data?: Json
+          product_name: string
+          product_url?: string | null
+          reference_image_url?: string | null
+          reference_images?: Json
+          shape_description?: string | null
+          subcategory?: string | null
+          tearsheet_pdf_url?: string | null
+          updated_at?: string
+          visual_blueprint?: string | null
+        }
+        Update: {
+          category?: string | null
+          colors?: Json
+          created_at?: string
+          designer?: string | null
+          dimensions?: Json
+          fabric_options?: Json
+          finishes?: Json
+          floor_plan_uploaded_at?: string | null
+          floor_plan_url?: string | null
+          id?: string
+          is_verified?: boolean
+          materials?: Json
+          parsed_data?: Json
+          product_name?: string
+          product_url?: string | null
+          reference_image_url?: string | null
+          reference_images?: Json
+          shape_description?: string | null
+          subcategory?: string | null
+          tearsheet_pdf_url?: string | null
+          updated_at?: string
+          visual_blueprint?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          has_free_access: boolean
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          has_free_access?: boolean
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          has_free_access?: boolean
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       studio_projects: {
         Row: {
           created_at: string
@@ -48,6 +405,75 @@ export type Database = {
           render_image_url?: string | null
           settings?: Json
           source_image_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_cloud_outputs: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          filename: string | null
+          id: string
+          kind: string
+          metadata: Json
+          size_bytes: number | null
+          source_url: string | null
+          storage_path: string
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          filename?: string | null
+          id?: string
+          kind: string
+          metadata?: Json
+          size_bytes?: number | null
+          source_url?: string | null
+          storage_path: string
+          tool: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          filename?: string | null
+          id?: string
+          kind?: string
+          metadata?: Json
+          size_bytes?: number | null
+          source_url?: string | null
+          storage_path?: string
+          tool?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          status: string
+          subscription_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status: string
+          subscription_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status?: string
+          subscription_type?: string
           updated_at?: string
           user_id?: string
         }
