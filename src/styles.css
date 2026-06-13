@@ -29,10 +29,10 @@
 @theme inline {
   --font-sans: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-display: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-weight-thin: 100;
-  --font-weight-light: 100;
-  --font-weight-normal: 400;
-  --font-weight-medium: 400;
+  --font-weight-thin: 700;
+  --font-weight-light: 700;
+  --font-weight-normal: 700;
+  --font-weight-medium: 700;
   --font-weight-semibold: 700;
   --font-weight-bold: 700;
   --radius-sm: calc(var(--radius) - 4px);
@@ -80,21 +80,21 @@
 :root {
   --radius: 0.25rem;
   --background: oklch(0.06 0 0);
-  --foreground: oklch(0.88 0.035 78);
+  --foreground: oklch(1 0 0);
   --card: oklch(0.10 0.008 70);
-  --card-foreground: oklch(0.88 0.035 78);
+  --card-foreground: oklch(1 0 0);
   --popover: oklch(0.10 0.008 70);
-  --popover-foreground: oklch(0.88 0.035 78);
-  --primary: oklch(0.88 0.035 78);
+  --popover-foreground: oklch(1 0 0);
+  --primary: oklch(1 0 0);
   --primary-foreground: oklch(0.06 0 0);
   --secondary: oklch(0.15 0.012 70);
-  --secondary-foreground: oklch(0.88 0.035 78);
+  --secondary-foreground: oklch(1 0 0);
   --muted: oklch(0.15 0.012 70);
-  --muted-foreground: oklch(0.69 0.03 75);
+  --muted-foreground: oklch(1 0 0);
   --accent: oklch(0.20 0.02 72);
-  --accent-foreground: oklch(0.92 0.025 78);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(1 0 0);
+  --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.88 0.035 78 / 22%);
   --input: oklch(0.88 0.035 78 / 28%);
   --ring: oklch(0.88 0.035 78);
@@ -112,8 +112,8 @@
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
   --dashboard-background: oklch(0.06 0 0);
-  --dashboard-foreground: oklch(0.88 0.035 78);
-  --dashboard-muted: oklch(0.69 0.03 75);
+  --dashboard-foreground: oklch(1 0 0);
+  --dashboard-muted: oklch(1 0 0);
   --dashboard-border: oklch(0.88 0.035 78 / 22%);
 }
 
@@ -161,6 +161,7 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-weight: 700;
     margin: 0;
     min-height: 100svh;
     -webkit-font-smoothing: antialiased;
