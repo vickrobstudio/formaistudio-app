@@ -9,32 +9,57 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
+import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
+import { Route as AiEditsRouteImport } from './routes/ai-edits'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
 import { Route as AuthenticatedTermsRouteImport } from './routes/_authenticated/terms'
-import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedPrivacyRouteImport } from './routes/_authenticated/privacy'
-import { Route as AuthenticatedPhotoToAiRouteImport } from './routes/_authenticated/photo-to-ai'
-import { Route as AuthenticatedModelToAiRouteImport } from './routes/_authenticated/model-to-ai'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/cloud'
-import { Route as AuthenticatedAiToVideoRouteImport } from './routes/_authenticated/ai-to-video'
-import { Route as AuthenticatedAiEditsRouteImport } from './routes/_authenticated/ai-edits'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PhotoToAiRoute = PhotoToAiRouteImport.update({
+  id: '/photo-to-ai',
+  path: '/photo-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModelToAiRoute = ModelToAiRouteImport.update({
+  id: '/model-to-ai',
+  path: '/model-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiToVideoRoute = AiToVideoRouteImport.update({
+  id: '/ai-to-video',
+  path: '/ai-to-video',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiEditsRoute = AiEditsRouteImport.update({
+  id: '/ai-edits',
+  path: '/ai-edits',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -61,24 +86,9 @@ const AuthenticatedTermsRoute = AuthenticatedTermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
-  id: '/studio',
-  path: '/studio',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedPrivacyRoute = AuthenticatedPrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPhotoToAiRoute = AuthenticatedPhotoToAiRouteImport.update({
-  id: '/photo-to-ai',
-  path: '/photo-to-ai',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedModelToAiRoute = AuthenticatedModelToAiRouteImport.update({
-  id: '/model-to-ai',
-  path: '/model-to-ai',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
@@ -96,16 +106,6 @@ const AuthenticatedCloudRoute = AuthenticatedCloudRouteImport.update({
   path: '/cloud',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedAiToVideoRoute = AuthenticatedAiToVideoRouteImport.update({
-  id: '/ai-to-video',
-  path: '/ai-to-video',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAiEditsRoute = AuthenticatedAiEditsRouteImport.update({
-  id: '/ai-edits',
-  path: '/ai-edits',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -114,36 +114,36 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-edits': typeof AiEditsRoute
+  '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/model-to-ai': typeof ModelToAiRoute
+  '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/account': typeof AuthenticatedAccountRoute
-  '/ai-edits': typeof AuthenticatedAiEditsRoute
-  '/ai-to-video': typeof AuthenticatedAiToVideoRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
-  '/model-to-ai': typeof AuthenticatedModelToAiRoute
-  '/photo-to-ai': typeof AuthenticatedPhotoToAiRoute
   '/privacy': typeof AuthenticatedPrivacyRoute
-  '/studio': typeof AuthenticatedStudioRoute
   '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-edits': typeof AiEditsRoute
+  '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/model-to-ai': typeof ModelToAiRoute
+  '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/account': typeof AuthenticatedAccountRoute
-  '/ai-edits': typeof AuthenticatedAiEditsRoute
-  '/ai-to-video': typeof AuthenticatedAiToVideoRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
-  '/model-to-ai': typeof AuthenticatedModelToAiRoute
-  '/photo-to-ai': typeof AuthenticatedPhotoToAiRoute
   '/privacy': typeof AuthenticatedPrivacyRoute
-  '/studio': typeof AuthenticatedStudioRoute
   '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
@@ -152,18 +152,18 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/ai-edits': typeof AiEditsRoute
+  '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/model-to-ai': typeof ModelToAiRoute
+  '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
-  '/_authenticated/ai-edits': typeof AuthenticatedAiEditsRoute
-  '/_authenticated/ai-to-video': typeof AuthenticatedAiToVideoRoute
   '/_authenticated/cloud': typeof AuthenticatedCloudRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
-  '/_authenticated/model-to-ai': typeof AuthenticatedModelToAiRoute
-  '/_authenticated/photo-to-ai': typeof AuthenticatedPhotoToAiRoute
   '/_authenticated/privacy': typeof AuthenticatedPrivacyRoute
-  '/_authenticated/studio': typeof AuthenticatedStudioRoute
   '/_authenticated/terms': typeof AuthenticatedTermsRoute
   '/_authenticated/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
@@ -172,36 +172,36 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/auth'
-    | '/sitemap.xml'
-    | '/account'
     | '/ai-edits'
     | '/ai-to-video'
+    | '/auth'
+    | '/model-to-ai'
+    | '/photo-to-ai'
+    | '/sitemap.xml'
+    | '/studio'
+    | '/account'
     | '/cloud'
     | '/dashboard'
     | '/history'
-    | '/model-to-ai'
-    | '/photo-to-ai'
     | '/privacy'
-    | '/studio'
     | '/terms'
     | '/wallet'
     | '/api/generate-image'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/auth'
-    | '/sitemap.xml'
-    | '/account'
     | '/ai-edits'
     | '/ai-to-video'
+    | '/auth'
+    | '/model-to-ai'
+    | '/photo-to-ai'
+    | '/sitemap.xml'
+    | '/studio'
+    | '/account'
     | '/cloud'
     | '/dashboard'
     | '/history'
-    | '/model-to-ai'
-    | '/photo-to-ai'
     | '/privacy'
-    | '/studio'
     | '/terms'
     | '/wallet'
     | '/api/generate-image'
@@ -209,18 +209,18 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/ai-edits'
+    | '/ai-to-video'
     | '/auth'
+    | '/model-to-ai'
+    | '/photo-to-ai'
     | '/sitemap.xml'
+    | '/studio'
     | '/_authenticated/account'
-    | '/_authenticated/ai-edits'
-    | '/_authenticated/ai-to-video'
     | '/_authenticated/cloud'
     | '/_authenticated/dashboard'
     | '/_authenticated/history'
-    | '/_authenticated/model-to-ai'
-    | '/_authenticated/photo-to-ai'
     | '/_authenticated/privacy'
-    | '/_authenticated/studio'
     | '/_authenticated/terms'
     | '/_authenticated/wallet'
     | '/api/generate-image'
@@ -229,13 +229,25 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AiEditsRoute: typeof AiEditsRoute
+  AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
+  ModelToAiRoute: typeof ModelToAiRoute
+  PhotoToAiRoute: typeof PhotoToAiRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StudioRoute: typeof StudioRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -243,11 +255,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/photo-to-ai': {
+      id: '/photo-to-ai'
+      path: '/photo-to-ai'
+      fullPath: '/photo-to-ai'
+      preLoaderRoute: typeof PhotoToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/model-to-ai': {
+      id: '/model-to-ai'
+      path: '/model-to-ai'
+      fullPath: '/model-to-ai'
+      preLoaderRoute: typeof ModelToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-to-video': {
+      id: '/ai-to-video'
+      path: '/ai-to-video'
+      fullPath: '/ai-to-video'
+      preLoaderRoute: typeof AiToVideoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-edits': {
+      id: '/ai-edits'
+      path: '/ai-edits'
+      fullPath: '/ai-edits'
+      preLoaderRoute: typeof AiEditsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -285,32 +325,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTermsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/studio': {
-      id: '/_authenticated/studio'
-      path: '/studio'
-      fullPath: '/studio'
-      preLoaderRoute: typeof AuthenticatedStudioRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/privacy': {
       id: '/_authenticated/privacy'
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof AuthenticatedPrivacyRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/photo-to-ai': {
-      id: '/_authenticated/photo-to-ai'
-      path: '/photo-to-ai'
-      fullPath: '/photo-to-ai'
-      preLoaderRoute: typeof AuthenticatedPhotoToAiRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/model-to-ai': {
-      id: '/_authenticated/model-to-ai'
-      path: '/model-to-ai'
-      fullPath: '/model-to-ai'
-      preLoaderRoute: typeof AuthenticatedModelToAiRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/history': {
@@ -334,20 +353,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCloudRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/ai-to-video': {
-      id: '/_authenticated/ai-to-video'
-      path: '/ai-to-video'
-      fullPath: '/ai-to-video'
-      preLoaderRoute: typeof AuthenticatedAiToVideoRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/ai-edits': {
-      id: '/_authenticated/ai-edits'
-      path: '/ai-edits'
-      fullPath: '/ai-edits'
-      preLoaderRoute: typeof AuthenticatedAiEditsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/account': {
       id: '/_authenticated/account'
       path: '/account'
@@ -360,30 +365,20 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
-  AuthenticatedAiEditsRoute: typeof AuthenticatedAiEditsRoute
-  AuthenticatedAiToVideoRoute: typeof AuthenticatedAiToVideoRoute
   AuthenticatedCloudRoute: typeof AuthenticatedCloudRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
-  AuthenticatedModelToAiRoute: typeof AuthenticatedModelToAiRoute
-  AuthenticatedPhotoToAiRoute: typeof AuthenticatedPhotoToAiRoute
   AuthenticatedPrivacyRoute: typeof AuthenticatedPrivacyRoute
-  AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
   AuthenticatedTermsRoute: typeof AuthenticatedTermsRoute
   AuthenticatedWalletRoute: typeof AuthenticatedWalletRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
-  AuthenticatedAiEditsRoute: AuthenticatedAiEditsRoute,
-  AuthenticatedAiToVideoRoute: AuthenticatedAiToVideoRoute,
   AuthenticatedCloudRoute: AuthenticatedCloudRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
-  AuthenticatedModelToAiRoute: AuthenticatedModelToAiRoute,
-  AuthenticatedPhotoToAiRoute: AuthenticatedPhotoToAiRoute,
   AuthenticatedPrivacyRoute: AuthenticatedPrivacyRoute,
-  AuthenticatedStudioRoute: AuthenticatedStudioRoute,
   AuthenticatedTermsRoute: AuthenticatedTermsRoute,
   AuthenticatedWalletRoute: AuthenticatedWalletRoute,
 }
@@ -394,8 +389,13 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AiEditsRoute: AiEditsRoute,
+  AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
+  ModelToAiRoute: ModelToAiRoute,
+  PhotoToAiRoute: PhotoToAiRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StudioRoute: StudioRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
 }
 export const routeTree = rootRouteImport
