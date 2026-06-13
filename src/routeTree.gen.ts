@@ -14,6 +14,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as CloudRouteImport } from './routes/cloud'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
@@ -43,6 +44,11 @@ const ModelToAiRoute = ModelToAiRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CloudRoute = CloudRouteImport.update({
+  id: '/cloud',
+  path: '/cloud',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/cloud': typeof CloudRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/cloud': typeof CloudRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/cloud': typeof CloudRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/cloud'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/cloud'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/cloud'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   AiEditsRoute: typeof AiEditsRoute
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
+  CloudRoute: typeof CloudRoute
   DashboardRoute: typeof DashboardRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
@@ -197,6 +210,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cloud': {
+      id: '/cloud'
+      path: '/cloud'
+      fullPath: '/cloud'
+      preLoaderRoute: typeof CloudRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiEditsRoute: AiEditsRoute,
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
+  CloudRoute: CloudRoute,
   DashboardRoute: DashboardRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
