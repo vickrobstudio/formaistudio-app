@@ -14,14 +14,15 @@ import roomImage from "@/assets/studio-room.jpg";
 
 const FurnitureViewer = lazy(() => import("@/components/FurnitureViewer").then((module) => ({ default: module.FurnitureViewer })));
 type StudioMode = "render" | "3d";
+type ProductType = "sofa" | "chair" | "table";
 type Project = Awaited<ReturnType<typeof listProjects>>[number];
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
-    { title: "Forma — AI Architecture & 3D Creation Studio" },
-    { name: "description", content: "Transform sketches, room photos and ideas into architectural renderings and interactive 3D concepts." },
-    { property: "og:title", content: "Forma — AI Architecture & 3D Studio" },
-    { property: "og:description", content: "Create architectural renderings and interactive 3D concepts in one workspace." },
+    { title: "Forma Studio — AI Furniture & 3D Creation" },
+    { name: "description", content: "Visualize furniture from any brand in architectural renderings and configurable 3D concepts." },
+    { property: "og:title", content: "Forma Studio — AI Furniture & 3D Creation" },
+    { property: "og:description", content: "Create furniture visualizations and interactive 3D concepts for any brand." },
   ] }),
   component: Studio,
 });
@@ -47,6 +48,9 @@ function Studio() {
   const [authPassword, setAuthPassword] = useState("");
   const [objectColor, setObjectColor] = useState("#5f7cff");
   const [autoRotate, setAutoRotate] = useState(false);
+  const [furnitureBrand, setFurnitureBrand] = useState("");
+  const [productName, setProductName] = useState("");
+  const [productType, setProductType] = useState<ProductType>("sofa");
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => setSessionEmail(data.session?.user.email ?? null));
@@ -59,7 +63,8 @@ function Studio() {
     setShowSource(false);
     setIsGenerating(true);
     try {
-      await streamImage(prompt, sourceImage, (nextImage: string) => setImage(nextImage));
+      const furnitureContext = [furnitureBrand && `furniture brand: ${furnitureBrand}`, productName && `product: ${productName}`, `furniture category: ${productType}`].filter(Boolean).join(", ");
+      await streamImage(`${prompt}. ${furnitureContext}. Preserve the recognizable design language of the supplied furniture reference without adding logos or text.`, sourceImage, (nextImage: string) => setImage(nextImage));
     } catch (renderError) {
       setError(renderError instanceof Error ? renderError.message : "The rendering could not be created.");
     } finally { setIsGenerating(false); }
@@ -78,7 +83,7 @@ function Studio() {
     if (!sessionEmail) { setAuthOpen(true); return; }
     setError("");
     try {
-      const saved = await persistProject({ data: { id: projectId, name: projectName, mode, prompt, renderImageUrl: image.startsWith("data:") ? image : null, sourceImageUrl: sourceImage, settings: { objectColor, autoRotate } } });
+      const saved = await persistProject({ data: { id: projectId, name: projectName, mode, prompt, renderImageUrl: image.startsWith("data:") ? image : null, sourceImageUrl: sourceImage, settings: { objectColor, autoRotate, furnitureBrand, productName, productType } } });
       setProjectId(saved.id);
     } catch (saveError) { setError(saveError instanceof Error ? saveError.message : "Project could not be saved."); }
   }
@@ -96,6 +101,9 @@ function Studio() {
     if (project.settings && typeof project.settings === "object" && !Array.isArray(project.settings)) {
       if (typeof project.settings.objectColor === "string") setObjectColor(project.settings.objectColor);
       if (typeof project.settings.autoRotate === "boolean") setAutoRotate(project.settings.autoRotate);
+      if (typeof project.settings.furnitureBrand === "string") setFurnitureBrand(project.settings.furnitureBrand);
+      if (typeof project.settings.productName === "string") setProductName(project.settings.productName);
+      if (project.settings.productType === "sofa" || project.settings.productType === "chair" || project.settings.productType === "table") setProductType(project.settings.productType);
     }
   }
 
@@ -116,7 +124,7 @@ function Studio() {
   return (
     <main className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="flex h-14 shrink-0 items-center border-b border-border bg-card px-3 md:px-5">
-        <div className="flex items-center gap-2 border-r border-border pr-4"><div className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground"><ScanLine className="size-4" /></div><span className="text-sm font-semibold tracking-tight">forma</span></div>
+        <div className="flex items-center gap-2 border-r border-border pr-4"><div className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground"><ScanLine className="size-4" /></div><span className="text-sm font-semibold tracking-tight">Forma Studio</span></div>
         <div className="flex min-w-0 flex-1 items-center gap-2 px-3"><Input aria-label="Project name" value={projectName} onChange={(event) => setProjectName(event.target.value)} className="h-8 max-w-48 border-0 bg-transparent px-1 text-xs shadow-none focus-visible:ring-0" /><ChevronDown className="size-3 text-muted-foreground"/><span className="hidden rounded-full bg-muted px-2 py-1 text-[9px] text-muted-foreground md:inline">Draft</span></div>
         <div className="flex items-center gap-1.5"><Button variant="ghost" size="sm" className="hidden md:flex" onClick={openProjects}><FolderOpen/> Projects</Button><Button variant="studioOutline" size="sm" onClick={save}><Save/> <span className="hidden sm:inline">Save</span></Button><Button variant="studio" size="sm" onClick={() => sessionEmail ? void supabase.auth.signOut() : setAuthOpen(true)}>{sessionEmail ? <span className="max-w-24 truncate">{sessionEmail}</span> : <><LogIn/> Sign in</>}</Button></div>
       </header>
@@ -133,13 +141,18 @@ function Studio() {
         <aside className="w-full shrink-0 border-b border-border bg-card md:w-80 md:border-b-0 md:border-r">
           <div className="border-b border-border p-5"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">{mode === "render" ? "AI visualization" : "3D configurator"}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{mode === "render" ? "Create a rendering" : "Shape your object"}</h1><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{mode === "render" ? "Upload a sketch or photo, describe the result, then generate." : "Inspect, orbit and configure a real-time 3D concept."}</p></div>
           <div className="space-y-5 p-5">
+            <div className="space-y-3">
+              <div><label className="studio-label" htmlFor="brand">Furniture brand</label><Input id="brand" value={furnitureBrand} onChange={(event) => setFurnitureBrand(event.target.value)} placeholder="Any brand or independent maker" className="mt-2 bg-muted/35 text-xs" /></div>
+              <div><label className="studio-label" htmlFor="product-name">Collection or product</label><Input id="product-name" value={productName} onChange={(event) => setProductName(event.target.value)} placeholder="Optional model or collection name" className="mt-2 bg-muted/35 text-xs" /></div>
+              <div><p className="studio-label mb-2">Furniture category</p><div className="grid grid-cols-3 gap-2">{(["sofa", "chair", "table"] as const).map((type) => <Button key={type} variant={productType === type ? "default" : "secondary"} size="sm" className="capitalize text-[10px]" onClick={() => setProductType(type)}>{type}</Button>)}</div></div>
+            </div>
             {mode === "render" ? <>
               <div><div className="mb-2 flex items-center justify-between"><label className="studio-label" htmlFor="reference">Reference image</label>{sourceImage && <Button variant="ghost" size="sm" onClick={() => setSourceImage(null)}><X/> Remove</Button>}</div><input ref={fileRef} id="reference" className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadReference}/><button type="button" onClick={() => fileRef.current?.click()} className="group relative flex h-28 w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/40 transition-colors hover:border-primary">{sourceImage ? <img src={sourceImage} alt="Uploaded architecture reference" className="h-full w-full object-cover"/> : <div className="text-center"><Upload className="mx-auto mb-2 size-5 text-muted-foreground group-hover:text-primary"/><p className="text-xs font-medium">Upload sketch or photo</p><p className="mt-1 text-[10px] text-muted-foreground">PNG, JPG or WEBP · 6 MB max</p></div>}</button></div>
               <div><label className="studio-label" htmlFor="prompt">Describe your result</label><Textarea id="prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} className="mt-2 min-h-28 resize-none bg-muted/35 text-xs leading-relaxed"/></div>
               <div><p className="studio-label mb-2">Quick styles</p><div className="grid grid-cols-2 gap-2">{["Photoreal", "Japandi", "Industrial", "Tropical"].map((style) => <Button key={style} variant="secondary" size="sm" className="justify-start text-[10px]" onClick={() => setPrompt((value) => `${value}, ${style.toLowerCase()} style`)}>{style}</Button>)}</div></div>
               <Button variant="studio" size="lg" className="w-full rounded-md" disabled={isGenerating || prompt.trim().length < 10} onClick={generate}>{isGenerating ? <LoaderCircle className="animate-spin"/> : <Sparkles/>}{isGenerating ? "Rendering…" : sourceImage ? "Transform image" : "Generate render"}</Button>
             </> : <>
-              <div><p className="studio-label mb-3">Material color</p><div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3"><input type="color" value={objectColor} onChange={(event) => setObjectColor(event.target.value)} className="size-10 cursor-pointer rounded border-0 bg-transparent"/><div><p className="text-xs font-medium">Upholstery</p><p className="text-[10px] uppercase text-muted-foreground">{objectColor}</p></div></div></div>
+              <div><p className="studio-label mb-3">Material color</p><div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3"><input aria-label="Material color" type="color" value={objectColor} onChange={(event) => setObjectColor(event.target.value)} className="size-10 cursor-pointer rounded border-0 bg-transparent"/><div><p className="text-xs font-medium">Finish</p><p className="text-[10px] uppercase text-muted-foreground">{objectColor}</p></div></div></div>
               <div><p className="studio-label mb-2">Scene controls</p><Button variant={autoRotate ? "default" : "secondary"} className="w-full justify-start" onClick={() => setAutoRotate((value) => !value)}><Rotate3D/> Auto rotate</Button></div>
               <div className="rounded-lg border border-border bg-muted/30 p-4"><p className="studio-label">Navigation</p><div className="mt-3 grid grid-cols-2 gap-y-2 text-[11px]"><span className="text-muted-foreground">Orbit</span><span>Left drag</span><span className="text-muted-foreground">Zoom</span><span>Scroll</span><span className="text-muted-foreground">Reset</span><span>Double click</span></div></div>
             </>}
@@ -150,9 +163,9 @@ function Studio() {
         <section className="relative flex min-h-[520px] min-w-0 flex-1 flex-col bg-muted p-3 md:p-4">
           <div className="mb-3 flex h-9 items-center justify-between"><div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"><span className="size-1.5 rounded-full bg-primary"/>{mode === "render" ? "Render canvas" : "Realtime viewport"}</div><div className="flex items-center gap-1">{mode === "render" && sourceImage && <Button variant={showSource ? "default" : "secondary"} size="sm" onClick={() => setShowSource((value) => !value)}><Image/> {showSource ? "Showing source" : "Compare source"}</Button>}<Button variant="secondary" size="icon" aria-label="Fullscreen"><Maximize2/></Button><Button variant="secondary" size="icon" aria-label="Download" onClick={() => { const link = document.createElement("a"); link.href = image; link.download = "forma-render.png"; link.click(); }}><Download/></Button></div></div>
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
-            {mode === "render" ? <img src={showSource && sourceImage ? sourceImage : image} alt={showSource ? "Uploaded architecture source" : "AI-generated architectural visualization"} className={`h-full min-h-[460px] w-full object-cover transition-[filter] duration-700 ${isGenerating ? "blur-xl" : "blur-0"}`} width={1600} height={1024}/> : <Suspense fallback={<div className="grid h-full min-h-[460px] place-items-center"><LoaderCircle className="animate-spin"/></div>}><div className="h-full min-h-[460px]"><FurnitureViewer color={objectColor} autoRotate={autoRotate}/></div></Suspense>}
+            {mode === "render" ? <img src={showSource && sourceImage ? sourceImage : image} alt={showSource ? "Uploaded architecture source" : "AI-generated architectural visualization"} className={`h-full min-h-[460px] w-full object-cover transition-[filter] duration-700 ${isGenerating ? "blur-xl" : "blur-0"}`} width={1600} height={1024}/> : <Suspense fallback={<div className="grid h-full min-h-[460px] place-items-center"><LoaderCircle className="animate-spin"/></div>}><div className="h-full min-h-[460px]"><FurnitureViewer color={objectColor} autoRotate={autoRotate} productType={productType}/></div></Suspense>}
             {isGenerating && <div className="absolute inset-0 grid place-items-center bg-background/20"><div className="rounded-full bg-card/90 px-4 py-2 text-xs font-medium shadow-xl"><LoaderCircle className="mr-2 inline size-4 animate-spin"/>Building your scene</div></div>}
-            <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-card/85 px-3 py-2 text-[10px] shadow-lg backdrop-blur"><p className="font-medium text-foreground">{projectName}</p><p className="mt-0.5 text-muted-foreground">{mode === "render" ? "1536 × 1024 · AI Render" : "Interactive mesh · WebGL"}</p></div>
+            <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-card/85 px-3 py-2 text-[10px] shadow-lg backdrop-blur"><p className="font-medium text-foreground">{projectName}</p><p className="mt-0.5 text-muted-foreground">{furnitureBrand || "Brand-neutral"} · {productName || productType} · {mode === "render" ? "AI Render" : "Interactive 3D"}</p></div>
           </div>
         </section>
       </div>
