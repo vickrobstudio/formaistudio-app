@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, ChevronRight, Cloud, Home, Menu, UserRound, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import formaiLogo from "@/assets/formai-logo.png.asset.json";
 
 const tools = [
   { to: "/studio", label: "Studio AI" },
@@ -12,7 +13,13 @@ const tools = [
 ] as const;
 
 function FormaWordmark({ inverse = false }: { inverse?: boolean }) {
-  return <span className={`text-sm font-black tracking-[0.2em] ${inverse ? "text-primary-foreground" : "text-foreground"}`}>FormAI STUDIO</span>;
+  return (
+    <img
+      src={formaiLogo.url}
+      alt="FormAI"
+      className={`h-7 w-auto ${inverse ? "brightness-0 invert" : ""}`}
+    />
+  );
 }
 
 export function FormaHeader({ transparent = false }: { transparent?: boolean }) {
