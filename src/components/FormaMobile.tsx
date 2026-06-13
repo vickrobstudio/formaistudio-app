@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, ChevronRight, Cloud, Home, Menu, UserRound, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import formaiLogo from "@/assets/formai-logo.png.asset.json";
+import formaiLogo from "@/assets/formai-official-logo.png.asset.json";
 
 const tools = [
   { to: "/studio", label: "Studio AI" },
@@ -12,12 +12,12 @@ const tools = [
   { to: "/ai-to-video", label: "AI to Video" },
 ] as const;
 
-function FormaWordmark({ inverse = false }: { inverse?: boolean }) {
+export function FormAILogo({ inverse = false, className = "h-7" }: { inverse?: boolean; className?: string }) {
   return (
     <img
       src={formaiLogo.url}
-      alt="FormAI"
-      className={`h-7 w-auto ${inverse ? "brightness-0 invert" : ""}`}
+      alt="FormAI logo"
+      className={`${className} w-auto object-contain ${inverse ? "brightness-0 invert" : ""}`}
     />
   );
 }
@@ -28,11 +28,11 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   return (
     <>
       <header className={`fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between px-5 ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/95 text-foreground backdrop-blur"}`}>
-        <Link to="/" aria-label="FormAI STUDIO home"><FormaWordmark inverse={transparent} /></Link>
+        <Link to="/" aria-label="FormAI STUDIO home"><FormAILogo inverse={transparent} /></Link>
         <Button variant="ghost" size="icon" aria-label="Open navigation" className={transparent ? "hover:bg-background/15 hover:text-primary-foreground" : ""} onClick={() => setOpen(true)}><Menu className="size-6" /></Button>
       </header>
       {open && <div className="fixed inset-0 z-50 bg-foreground text-background">
-        <div className="flex h-16 items-center justify-between px-5"><FormaWordmark inverse /><Button variant="ghost" size="icon" aria-label="Close navigation" className="text-background hover:bg-background/10 hover:text-background" onClick={() => setOpen(false)}><X className="size-6" /></Button></div>
+        <div className="flex h-16 items-center justify-between px-5"><FormAILogo inverse /><Button variant="ghost" size="icon" aria-label="Close navigation" className="text-background hover:bg-background/10 hover:text-background" onClick={() => setOpen(false)}><X className="size-6" /></Button></div>
         <nav className="flex h-[calc(100%-4rem)] flex-col px-6 pb-8 pt-8">
           <Link to="/dashboard" onClick={() => setOpen(false)} className="border-b border-background/15 py-4 text-2xl font-light">Dashboard</Link>
           {tools.map((tool) => <Link key={tool.to} to={tool.to} onClick={() => setOpen(false)} className="flex items-center justify-between border-b border-background/15 py-4 text-xl font-light"><span>{tool.label}</span><ChevronRight className="size-4" /></Link>)}
