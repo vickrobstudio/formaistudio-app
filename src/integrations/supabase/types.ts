@@ -266,6 +266,30 @@ export type Database = {
         }
         Relationships: []
       }
+      photo_ai_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       product_tearsheets: {
         Row: {
           category: string | null
@@ -349,6 +373,7 @@ export type Database = {
           full_name: string | null
           has_free_access: boolean
           id: string
+          starter_credits: number
           updated_at: string
         }
         Insert: {
@@ -358,6 +383,7 @@ export type Database = {
           full_name?: string | null
           has_free_access?: boolean
           id: string
+          starter_credits?: number
           updated_at?: string
         }
         Update: {
@@ -367,6 +393,7 @@ export type Database = {
           full_name?: string | null
           has_free_access?: boolean
           id?: string
+          starter_credits?: number
           updated_at?: string
         }
         Relationships: []
@@ -485,6 +512,8 @@ export type Database = {
     }
     Functions: {
       activate_vip_access: { Args: never; Returns: boolean }
+      consume_starter_credit: { Args: never; Returns: number }
+      get_my_starter_credits: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never
