@@ -1,16 +1,26 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Box, Camera, Film, ImagePlus, Sparkles, UserRound } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ArrowRight, Cloud, FileClock, LogOut, ScrollText, ShieldCheck, UserRound, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormaHeader, PageIntro } from "@/components/FormaMobile";
+import { supabase } from "@/integrations/supabase/client";
 
-const tools = [
-  { to: "/studio", icon: Sparkles, name: "Studio AI", price: "$4.99 / project", description: "Complete interior designs, curated furniture and multiple photorealistic views." },
-  { to: "/model-to-ai", icon: Box, name: "3D to AI", price: "1st upload free", description: "Transform a SketchUp model into polished architectural renderings." },
-  { to: "/ai-edits", icon: ImagePlus, name: "AI Edits", price: "3 free edits", description: "Change materials, lighting, colors, wallpaper and artwork." },
-  { to: "/photo-to-ai", icon: Camera, name: "Photo to AI", price: "Free", description: "Upload any room and redesign it through a conversational studio." },
-  { to: "/ai-to-video", icon: Film, name: "AI to Video", price: "$29.99 / video", description: "Turn static renderings into a smooth cinematic walkthrough." },
+const dashboardItems = [
+  { icon: UserRound, name: "Account", description: "Profile, email and account settings" },
+  { icon: Cloud, name: "Cloud", description: "Saved projects, images and products", to: "/cloud" },
+  { icon: FileClock, name: "History", description: "Your recent creations and activity" },
+  { icon: WalletCards, name: "Wallet", description: "Credits, purchases and billing" },
+  { icon: ScrollText, name: "Terms & Conditions", description: "Rules for using FormAI STUDIO" },
+  { icon: ShieldCheck, name: "Privacy", description: "How your information is protected" },
 ] as const;
 
-export const Route = createFileRoute("/_authenticated/dashboard")({ head: () => ({ meta: [{ title: "Dashboard — FormAI STUDIO" }, { name: "description", content: "Choose an AI interior design tool." }, { property: "og:title", content: "FormAI STUDIO Dashboard" }, { property: "og:description", content: "Five tools for AI interior creation." }] }), component: Dashboard });
+export const Route = createFileRoute("/_authenticated/dashboard")({ head: () => ({ meta: [{ title: "Dashboard — FormAI STUDIO" }, { name: "description", content: "Manage your account, cloud, history and wallet." }, { property: "og:title", content: "FormAI STUDIO Dashboard" }, { property: "og:description", content: "Your private FormAI STUDIO dashboard." }] }), component: Dashboard });
 
-function Dashboard() { return <main className="min-h-screen bg-background"><FormaHeader /><PageIntro eyebrow="Creative suite" title="Choose a tool" description="Start creating interior designs, photorealistic renderings and cinematic presentations with AI."><Button asChild variant="ghost" className="mt-4 -ml-3 text-xs"><Link to="/auth"><UserRound />Sign in to save your work</Link></Button></PageIntro><section className="border-t border-border px-5 pb-12">{tools.map(({ to, icon: Icon, name, price, description }, index) => <Link key={to} to={to} className="group grid grid-cols-[3rem_1fr_auto] gap-4 border-b border-border py-6"><div className="grid size-12 place-items-center rounded-full bg-secondary"><Icon className="size-5" /></div><div><div className="flex items-baseline gap-2"><span className="text-[10px] text-muted-foreground">0{index + 1}</span><h2 className="text-xl font-medium">{name}</h2></div><p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p><p className="mt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">{price}</p></div><ArrowRight className="mt-3 size-4 transition-transform group-hover:translate-x-1" /></Link>)}</section></main>; }
+function Dashboard() {
+  const navigate = useNavigate();
+  const user = Route.useRouteContext().user;
+  async function signOut() { await supabase.auth.signOut(); void navigate({ to: "/auth", replace: true }); }
+  return <main className="min-h-screen bg-background"><FormaHeader /><PageIntro eyebrow="Your space" title="Dashboard" description={user.email ?? "Manage your FormAI STUDIO account."} /><section className="border-t border-border px-5 pb-[calc(2rem+env(safe-area-inset-bottom))]">{dashboardItems.map(({ icon: Icon, name, description, ...item }) => {
+    const content = <><div className="grid size-11 place-items-center rounded-full bg-foreground text-background"><Icon className="size-5" /></div><div><h2 className="text-base font-semibold">{name}</h2><p className="mt-1 text-xs text-muted-foreground">{description}</p></div><ArrowRight className="size-4 text-muted-foreground" /></>;
+    return "to" in item ? <Link key={name} to={item.to} className="grid min-h-20 grid-cols-[2.75rem_1fr_auto] items-center gap-4 border-b border-border py-4">{content}</Link> : <div key={name} className="grid min-h-20 grid-cols-[2.75rem_1fr_auto] items-center gap-4 border-b border-border py-4">{content}</div>;
+  })}<Button variant="outline" className="mt-6 w-full" onClick={signOut}><LogOut />Sign out</Button></section></main>;
+}
