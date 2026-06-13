@@ -12,7 +12,7 @@ const tools = [
   { to: "/ai-to-video", label: "AI to Video" },
 ] as const;
 
-export function FormAILogo({ inverse = false, className = "h-7" }: { inverse?: boolean; className?: string }) {
+export function FormAILogo({ inverse = false, className = "h-21" }: { inverse?: boolean; className?: string }) {
   return (
     <img
       src={formaiLogo.url}
