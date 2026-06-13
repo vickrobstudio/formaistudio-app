@@ -12,7 +12,7 @@ const tools = [
 ] as const;
 
 function FormaWordmark({ inverse = false }: { inverse?: boolean }) {
-  return <span className={`text-sm font-black uppercase tracking-[0.28em] ${inverse ? "text-primary-foreground" : "text-foreground"}`}>Forma Studio</span>;
+  return <span className={`text-sm font-black tracking-[0.2em] ${inverse ? "text-primary-foreground" : "text-foreground"}`}>FormAI STUDIO</span>;
 }
 
 export function FormaHeader({ transparent = false }: { transparent?: boolean }) {
@@ -21,7 +21,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   return (
     <>
       <header className={`fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between px-5 ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/95 text-foreground backdrop-blur"}`}>
-        <Link to="/" aria-label="Forma Studio home"><FormaWordmark inverse={transparent} /></Link>
+        <Link to="/" aria-label="FormAI STUDIO home"><FormaWordmark inverse={transparent} /></Link>
         <Button variant="ghost" size="icon" aria-label="Open navigation" className={transparent ? "hover:bg-background/15 hover:text-primary-foreground" : ""} onClick={() => setOpen(true)}><Menu className="size-6" /></Button>
       </header>
       {open && <div className="fixed inset-0 z-50 bg-foreground text-background">

@@ -7,7 +7,7 @@ import { BackLink, FormaHeader } from "@/components/FormaMobile";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/auth")({ head: () => ({ meta: [{ title: "Sign In — Forma Studio" }, { name: "description", content: "Sign in or create your Forma Studio account." }, { property: "og:title", content: "Sign In — Forma Studio" }, { property: "og:description", content: "Access your designs and cloud library." }] }), component: AuthPage });
+export const Route = createFileRoute("/auth")({ head: () => ({ meta: [{ title: "Sign In — FormAI STUDIO" }, { name: "description", content: "Sign in or create your FormAI STUDIO account." }, { property: "og:title", content: "Sign In — FormAI STUDIO" }, { property: "og:description", content: "Access your designs and cloud library." }] }), component: AuthPage });
 function AuthPage() {
   const navigate = useNavigate(); const [signup, setSignup] = useState(false); const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
   async function emailAuth() { setBusy(true); setError(""); const result = signup ? await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } }) : await supabase.auth.signInWithPassword({ email, password }); setBusy(false); if (result.error) return setError(result.error.message); void navigate({ to: "/dashboard" }); }
