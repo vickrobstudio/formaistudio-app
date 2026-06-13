@@ -1,26 +1,23 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Cloud, FileClock, LogOut, ScrollText, ShieldCheck, UserRound, WalletCards } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight, Box, Camera, Film, ImagePlus, Sparkles, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
-import { supabase } from "@/integrations/supabase/client";
+import { useCredits } from "@/hooks/use-credits";
 
 const dashboardItems = [
-  { icon: UserRound, name: "Account", description: "Profile, email and account settings", to: "/account" },
-  { icon: Cloud, name: "Cloud", description: "Saved projects, images and products", to: "/cloud" },
-  { icon: FileClock, name: "History", description: "Your recent creations and activity", to: "/history" },
-  { icon: WalletCards, name: "Wallet", description: "Credits, purchases and billing", to: "/wallet" },
-  { icon: ScrollText, name: "Terms & Conditions", description: "Rules for using FormAI STUDIO", to: "/terms" },
-  { icon: ShieldCheck, name: "Privacy", description: "How your information is protected", to: "/privacy" },
+  { icon: Sparkles, name: "Studio", description: "Complete interior proposals · 1 credit", to: "/studio" },
+  { icon: Box, name: "3D to AI", description: "Photorealistic views from 3D models · 1 credit", to: "/model-to-ai" },
+  { icon: ImagePlus, name: "AI Edits", description: "Refine materials, lighting and details · 1 credit", to: "/ai-edits" },
+  { icon: Camera, name: "Photo AI", description: "Always free · No account required", to: "/photo-to-ai" },
+  { icon: Film, name: "AI Video", description: "Cinematic motion from renderings · 1 credit", to: "/ai-to-video" },
 ] as const;
 
-export const Route = createFileRoute("/dashboard")({ head: () => ({ meta: [{ title: "Dashboard — FormAI STUDIO" }, { name: "description", content: "Manage your account, cloud, history and wallet." }, { property: "og:title", content: "FormAI STUDIO Dashboard" }, { property: "og:description", content: "Your private FormAI STUDIO dashboard." }] }), component: Dashboard });
+export const Route = createFileRoute("/dashboard")({ head: () => ({ meta: [{ title: "Dashboard — FormAI STUDIO" }, { name: "description", content: "Use five AI interior tools with four guest credits and free Photo AI." }, { property: "og:title", content: "FormAI STUDIO Dashboard" }, { property: "og:description", content: "Four premium AI tools plus free Photo AI." }] }), component: Dashboard });
 
 function Dashboard() {
-  const navigate = useNavigate();
-  const user = Route.useRouteContext().user;
-  async function signOut() { await supabase.auth.signOut(); void navigate({ to: "/auth", replace: true }); }
-  return <main className="min-h-screen bg-background"><FormaHeader /><PageIntro eyebrow="Your space" title="Dashboard" description={user.email ?? "Manage your FormAI STUDIO account."} /><section className="border-t border-border px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">{dashboardItems.map(({ icon: Icon, name, description, ...item }) => {
+  const { credits, signedIn, vip } = useCredits();
+  return <main className="min-h-screen bg-background"><FormaHeader /><PageIntro eyebrow="Creative dashboard" title="Choose a tool" description="Use your starter credits on four premium tools, or open Photo AI free at any time."><p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "VIP · Unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p></PageIntro><section className="border-t border-border px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">{dashboardItems.map(({ icon: Icon, name, description, ...item }) => {
     const content = <><div className="grid size-11 place-items-center rounded-full bg-foreground text-background"><Icon className="size-5" /></div><div><h2 className="text-base font-semibold">{name}</h2><p className="mt-1 text-xs text-muted-foreground">{description}</p></div><ArrowRight className="size-4 text-muted-foreground" /></>;
     return <Link key={name} to={item.to} className="grid min-h-20 grid-cols-[2.75rem_1fr_auto] items-center gap-4 border-b border-border py-4">{content}</Link>;
-  })}<Button variant="outline" className="mt-6 w-full" onClick={signOut}><LogOut />Sign out</Button></section><ToolTabBar /></main>;
+  })}{!signedIn && <Button asChild variant="outline" className="mt-6 w-full"><Link to="/auth"><UserRound />Sign in or create account</Link></Button>}</section><ToolTabBar /></main>;
 }
