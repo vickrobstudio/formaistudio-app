@@ -8,7 +8,7 @@ export function ToolInformation({ sections }: { sections: ToolInfoSection[] }) {
   return (
     <div className="mt-10 space-y-2">
       {sections.map((section) => (
-        <section key={section.title} className="py-6">
+        <section key={section.title} className="organic-divider py-6">
           <h2 className="text-lg font-semibold">{section.title}</h2>
           {section.description && <p className="mt-2 text-sm leading-6 text-muted-foreground">{section.description}</p>}
           <ul className="mt-4 space-y-3">
