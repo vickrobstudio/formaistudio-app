@@ -233,6 +233,24 @@ export type Database = {
         }
         Relationships: []
       }
+      guest_credit_claims: {
+        Row: {
+          created_at: string
+          remaining_credits: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          remaining_credits: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          remaining_credits?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       iap_entitlements: {
         Row: {
           created_at: string
@@ -514,14 +532,6 @@ export type Database = {
       activate_vip_access: { Args: never; Returns: boolean }
       consume_starter_credit: { Args: never; Returns: number }
       get_my_starter_credits: { Args: never; Returns: number }
-      save_guest_credit_balance: {
-        Args: { _remaining: number }
-        Returns: number
-      }
-      update_my_profile_name: {
-        Args: { _full_name: string }
-        Returns: undefined
-      }
     }
     Enums: {
       [_ in never]: never
