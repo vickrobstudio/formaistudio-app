@@ -111,6 +111,10 @@
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
+  --dashboard-background: oklch(0.06 0 0);
+  --dashboard-foreground: oklch(0.88 0.035 78);
+  --dashboard-muted: oklch(0.69 0.03 75);
+  --dashboard-border: oklch(0.88 0.035 78 / 22%);
 }
 
 .dark {
@@ -170,4 +174,13 @@
 
 @keyframes studio-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .studio-in { animation: studio-in 600ms cubic-bezier(.2,.8,.2,1) both; }
+.dashboard-theme {
+  --background: var(--dashboard-background);
+  --foreground: var(--dashboard-foreground);
+  --primary: var(--dashboard-foreground);
+  --primary-foreground: var(--dashboard-background);
+  --muted-foreground: var(--dashboard-muted);
+  --border: var(--dashboard-border);
+  --input: var(--dashboard-border);
+}
 @media (prefers-reduced-motion: reduce) { .studio-in { animation: none; } }
