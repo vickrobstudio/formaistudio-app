@@ -514,6 +514,14 @@ export type Database = {
       activate_vip_access: { Args: never; Returns: boolean }
       consume_starter_credit: { Args: never; Returns: number }
       get_my_starter_credits: { Args: never; Returns: number }
+      save_guest_credit_balance: {
+        Args: { _remaining: number }
+        Returns: number
+      }
+      update_my_profile_name: {
+        Args: { _full_name: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
