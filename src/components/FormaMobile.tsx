@@ -26,7 +26,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   return (
     <>
       <header className={`fixed inset-x-0 top-0 z-40 flex h-[calc(4rem+env(safe-area-inset-top))] transform-gpu items-center px-[max(1.25rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/95 text-foreground backdrop-blur"}`}>
-        <Link to="/" aria-label="FormAI STUDIO home"><FormAILogo inverse={transparent} /></Link>
+        <Link to="/" aria-label="FormAI STUDIO home"><FormAILogo inverse /></Link>
       </header>
       {path !== "/" && <div className="h-[calc(4rem+env(safe-area-inset-top))]" />}
     </>
