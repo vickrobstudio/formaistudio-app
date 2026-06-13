@@ -1,7 +1,7 @@
 import type { ToolInfoSection } from "@/components/ToolInformation";
 
 export const studioInformation: ToolInfoSection[] = [
-  { title: "Room plan", description: "Configure one room or single space. AI reads dimensions and the positions of walls, doors and windows.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Choose meters or feet, room type, width, length and height", "Select any existing finishes that must remain"] },
+  { title: "Room plan", description: "Upload your plan first, or continue without one and enter the room’s overall dimensions manually.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Choose feet or meters, then enter width, length and height", "AI reads dimensions and the positions of walls, doors and windows from an uploaded plan"] },
   { title: "Design direction", items: ["Set design style, color palette and up to four custom colors", "Choose new materials, finishes and the amount of interior vegetation", "Define the room’s primary use and furniture budget", "Select preferred furniture brands or add custom brands"] },
   { title: "Your design package", items: ["2D floor plan with furniture layout and dimensions", "Immersive 360° virtual tour", "Two to three photorealistic renderings from multiple angles", "Curated furniture suggestions and detailed budget document"] },
 ];
