@@ -233,6 +233,24 @@ export type Database = {
         }
         Relationships: []
       }
+      guest_credit_claims: {
+        Row: {
+          created_at: string
+          remaining_credits: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          remaining_credits: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          remaining_credits?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       iap_entitlements: {
         Row: {
           created_at: string
@@ -262,6 +280,30 @@ export type Database = {
           is_active?: boolean
           product_id?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      photo_ai_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          role?: string
           user_id?: string
         }
         Relationships: []
@@ -349,6 +391,7 @@ export type Database = {
           full_name: string | null
           has_free_access: boolean
           id: string
+          starter_credits: number
           updated_at: string
         }
         Insert: {
@@ -358,6 +401,7 @@ export type Database = {
           full_name?: string | null
           has_free_access?: boolean
           id: string
+          starter_credits?: number
           updated_at?: string
         }
         Update: {
@@ -367,6 +411,7 @@ export type Database = {
           full_name?: string | null
           has_free_access?: boolean
           id?: string
+          starter_credits?: number
           updated_at?: string
         }
         Relationships: []
@@ -485,6 +530,8 @@ export type Database = {
     }
     Functions: {
       activate_vip_access: { Args: never; Returns: boolean }
+      consume_starter_credit: { Args: never; Returns: number }
+      get_my_starter_credits: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never
