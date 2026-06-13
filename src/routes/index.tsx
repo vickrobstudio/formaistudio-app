@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormAILogo } from "@/components/FormaMobile";
-import furnitureIllustration from "@/assets/formai-furniture-illustration.png.asset.json";
+import landingArtwork from "@/assets/formai-landing-original.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -15,8 +15,7 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   return <main className="min-h-[100svh] bg-background">
     <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden px-[max(1.5rem,env(safe-area-inset-left))] py-[max(1.5rem,env(safe-area-inset-top))]">
-      <img src={furnitureIllustration.url} alt="Watercolor collection of sculptural furniture and interior objects" className="absolute inset-0 h-full w-full object-cover object-center" />
-      <div className="absolute inset-0 bg-background/38 backdrop-blur-[1px]" />
+      <img src={landingArtwork.url} alt="Watercolor collection of sculptural furniture and interior objects" className="absolute inset-0 h-full w-full object-cover object-center" />
       <Link to="/dashboard" aria-label="Enter FormAI Studio" className="relative z-10 flex min-h-11 items-center justify-center rounded-lg px-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
         <FormAILogo className="h-auto w-[min(78vw,23rem)]" />
       </Link>
