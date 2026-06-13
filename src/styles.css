@@ -29,6 +29,12 @@
 @theme inline {
   --font-sans: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-display: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-weight-thin: 100;
+  --font-weight-light: 100;
+  --font-weight-normal: 400;
+  --font-weight-medium: 400;
+  --font-weight-semibold: 700;
+  --font-weight-bold: 700;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
