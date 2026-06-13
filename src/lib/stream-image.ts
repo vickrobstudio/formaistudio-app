@@ -1,16 +1,24 @@
 export async function streamImage(
   prompt: string,
+  sourceImage: string | null,
   onImage: (src: string, isFinal: boolean) => void,
 ) {
   const response = await fetch("/api/generate-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ prompt, sourceImage }),
   });
 
   if (!response.ok || !response.body) {
     const message = await response.text();
     throw new Error(message || "The rendering could not be created.");
+  }
+
+  if (response.headers.get("content-type")?.includes("application/json")) {
+    const result = (await response.json()) as { image?: string };
+    if (!result.image) throw new Error("The rendering response did not include an image.");
+    onImage(result.image, true);
+    return;
   }
 
   const reader = response.body.getReader();

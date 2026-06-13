@@ -3,6 +3,7 @@ import { z } from "zod";
 
 const RenderInput = z.object({
   prompt: z.string().trim().min(10).max(1800),
+  sourceImage: z.string().startsWith("data:image/").max(8_000_000).nullable().optional(),
 });
 
 export const Route = createFileRoute("/api/generate-image")({
@@ -15,23 +16,54 @@ export const Route = createFileRoute("/api/generate-image")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("Rendering service is unavailable.", { status: 500 });
 
-        const upstream = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const renderPrompt = `${result.data.prompt}. Professional architectural visualization, physically accurate materials and lighting, coherent perspective, construction-ready spatial logic, no text, no logos, no watermarks.`;
+        let endpoint = "https://ai.gateway.lovable.dev/v1/images/generations";
+        let body: BodyInit;
+        let contentType: string | undefined = "application/json";
+
+        if (result.data.sourceImage) {
+          const match = result.data.sourceImage.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
+          if (!match) return new Response("The reference image format is not supported.", { status: 400 });
+          const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
+          const form = new FormData();
+          form.append("model", "openai/gpt-image-2");
+          form.append("prompt", renderPrompt);
+          form.append("size", "1536x1024");
+          form.append("quality", "low");
+          form.append("image", new Blob([bytes], { type: match[1] }), "reference.png");
+          endpoint = "https://ai.gateway.lovable.dev/v1/images/edits";
+          body = form;
+          contentType = undefined;
+        } else {
+          body = JSON.stringify({
             model: "openai/gpt-image-2",
-            prompt: `${result.data.prompt}. Photorealistic luxury interior visualization, sculptural contemporary European furniture, refined materials, editorial architectural lighting, no text, no logos.`,
+            prompt: renderPrompt,
             quality: "low",
             size: "1536x1024",
             stream: true,
             partial_images: 1,
-          }),
+          });
+        }
+
+        const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
+        if (contentType) headers["Content-Type"] = contentType;
+        const upstream = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body,
         });
 
         if (!upstream.ok || !upstream.body) {
           const status = upstream.status === 402 ? 402 : upstream.status === 429 ? 429 : 502;
           const message = status === 402 ? "AI credits are exhausted." : status === 429 ? "The studio is busy. Please retry shortly." : "The rendering could not be created.";
           return new Response(message, { status });
+        }
+
+        if (result.data.sourceImage) {
+          const payload = (await upstream.json()) as { data?: Array<{ b64_json?: string }> };
+          const generated = payload.data?.[0]?.b64_json;
+          if (!generated) return new Response("The edit did not return an image.", { status: 502 });
+          return Response.json({ image: `data:image/png;base64,${generated}` });
         }
 
         return new Response(upstream.body, {
