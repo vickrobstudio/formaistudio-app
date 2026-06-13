@@ -9,13 +9,61 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
+import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as CloudRouteImport } from './routes/cloud'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
+import { Route as AiEditsRouteImport } from './routes/ai-edits'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PhotoToAiRoute = PhotoToAiRouteImport.update({
+  id: '/photo-to-ai',
+  path: '/photo-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ModelToAiRoute = ModelToAiRouteImport.update({
+  id: '/model-to-ai',
+  path: '/model-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CloudRoute = CloudRouteImport.update({
+  id: '/cloud',
+  path: '/cloud',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiToVideoRoute = AiToVideoRouteImport.update({
+  id: '/ai-to-video',
+  path: '/ai-to-video',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiEditsRoute = AiEditsRouteImport.update({
+  id: '/ai-edits',
+  path: '/ai-edits',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -31,41 +79,163 @@ const ApiGenerateImageRoute = ApiGenerateImageRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-edits': typeof AiEditsRoute
+  '/ai-to-video': typeof AiToVideoRoute
+  '/auth': typeof AuthRoute
+  '/cloud': typeof CloudRoute
+  '/dashboard': typeof DashboardRoute
+  '/model-to-ai': typeof ModelToAiRoute
+  '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-edits': typeof AiEditsRoute
+  '/ai-to-video': typeof AiToVideoRoute
+  '/auth': typeof AuthRoute
+  '/cloud': typeof CloudRoute
+  '/dashboard': typeof DashboardRoute
+  '/model-to-ai': typeof ModelToAiRoute
+  '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-edits': typeof AiEditsRoute
+  '/ai-to-video': typeof AiToVideoRoute
+  '/auth': typeof AuthRoute
+  '/cloud': typeof CloudRoute
+  '/dashboard': typeof DashboardRoute
+  '/model-to-ai': typeof ModelToAiRoute
+  '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/studio': typeof StudioRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sitemap.xml' | '/api/generate-image'
+  fullPaths:
+    | '/'
+    | '/ai-edits'
+    | '/ai-to-video'
+    | '/auth'
+    | '/cloud'
+    | '/dashboard'
+    | '/model-to-ai'
+    | '/photo-to-ai'
+    | '/sitemap.xml'
+    | '/studio'
+    | '/api/generate-image'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sitemap.xml' | '/api/generate-image'
-  id: '__root__' | '/' | '/sitemap.xml' | '/api/generate-image'
+  to:
+    | '/'
+    | '/ai-edits'
+    | '/ai-to-video'
+    | '/auth'
+    | '/cloud'
+    | '/dashboard'
+    | '/model-to-ai'
+    | '/photo-to-ai'
+    | '/sitemap.xml'
+    | '/studio'
+    | '/api/generate-image'
+  id:
+    | '__root__'
+    | '/'
+    | '/ai-edits'
+    | '/ai-to-video'
+    | '/auth'
+    | '/cloud'
+    | '/dashboard'
+    | '/model-to-ai'
+    | '/photo-to-ai'
+    | '/sitemap.xml'
+    | '/studio'
+    | '/api/generate-image'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiEditsRoute: typeof AiEditsRoute
+  AiToVideoRoute: typeof AiToVideoRoute
+  AuthRoute: typeof AuthRoute
+  CloudRoute: typeof CloudRoute
+  DashboardRoute: typeof DashboardRoute
+  ModelToAiRoute: typeof ModelToAiRoute
+  PhotoToAiRoute: typeof PhotoToAiRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  StudioRoute: typeof StudioRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/photo-to-ai': {
+      id: '/photo-to-ai'
+      path: '/photo-to-ai'
+      fullPath: '/photo-to-ai'
+      preLoaderRoute: typeof PhotoToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/model-to-ai': {
+      id: '/model-to-ai'
+      path: '/model-to-ai'
+      fullPath: '/model-to-ai'
+      preLoaderRoute: typeof ModelToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cloud': {
+      id: '/cloud'
+      path: '/cloud'
+      fullPath: '/cloud'
+      preLoaderRoute: typeof CloudRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-to-video': {
+      id: '/ai-to-video'
+      path: '/ai-to-video'
+      fullPath: '/ai-to-video'
+      preLoaderRoute: typeof AiToVideoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-edits': {
+      id: '/ai-edits'
+      path: '/ai-edits'
+      fullPath: '/ai-edits'
+      preLoaderRoute: typeof AiEditsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -87,19 +257,17 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiEditsRoute: AiEditsRoute,
+  AiToVideoRoute: AiToVideoRoute,
+  AuthRoute: AuthRoute,
+  CloudRoute: CloudRoute,
+  DashboardRoute: DashboardRoute,
+  ModelToAiRoute: ModelToAiRoute,
+  PhotoToAiRoute: PhotoToAiRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  StudioRoute: StudioRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
