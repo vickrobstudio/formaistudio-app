@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Box, Camera, ChevronRight, Cloud, Film, Home, ImagePlus, Menu, Sparkles, UserRound, X } from "lucide-react";
+import { ArrowLeft, Box, Camera, ChevronRight, Cloud, Film, ImagePlus, Menu, Sparkles, UserRound, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import formaiLogo from "@/assets/formai-official-logo.png.asset.json";
@@ -36,8 +36,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
         <nav className="flex h-[calc(100%-4rem)] flex-col px-6 pb-8 pt-8">
           <Link to="/dashboard" onClick={() => setOpen(false)} className="border-b border-background/15 py-4 text-2xl font-light">Dashboard</Link>
           {tools.map((tool) => <Link key={tool.to} to={tool.to} onClick={() => setOpen(false)} className="flex items-center justify-between border-b border-background/15 py-4 text-xl font-light"><span>{tool.label}</span><ChevronRight className="size-4" /></Link>)}
-          <div className="mt-auto grid grid-cols-3 gap-2">
-            <Link to="/" onClick={() => setOpen(false)} className="flex flex-col items-center gap-2 py-3 text-xs"><Home /><span>Home</span></Link>
+          <div className="mt-auto grid grid-cols-2 gap-2">
             <Link to="/cloud" onClick={() => setOpen(false)} className="flex flex-col items-center gap-2 py-3 text-xs"><Cloud /><span>My Cloud</span></Link>
             <Link to="/auth" onClick={() => setOpen(false)} className="flex flex-col items-center gap-2 py-3 text-xs"><UserRound /><span>Account</span></Link>
           </div>
