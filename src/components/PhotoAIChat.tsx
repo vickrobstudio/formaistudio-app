@@ -1,5 +1,5 @@
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import { DefaultChatTransport, type FileUIPart, type UIMessage } from "ai";
 import { ImagePlus, LoaderCircle, Send, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
@@ -17,7 +17,7 @@ function messageText(message: UIMessage) {
 }
 
 function messageImages(message: UIMessage) {
-  return message.parts.filter((part) => part.type === "file" && part.mediaType.startsWith("image/"));
+  return message.parts.filter((part): part is FileUIPart => part.type === "file" && part.mediaType.startsWith("image/"));
 }
 
 export function PhotoAIChat() {
