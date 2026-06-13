@@ -13,7 +13,7 @@ const dashboardItems = [
   { icon: ShieldCheck, name: "Privacy", description: "How your information is protected", to: "/privacy" },
 ] as const;
 
-export const Route = createFileRoute("/_authenticated/dashboard")({ head: () => ({ meta: [{ title: "Dashboard — FormAI STUDIO" }, { name: "description", content: "Manage your account, cloud, history and wallet." }, { property: "og:title", content: "FormAI STUDIO Dashboard" }, { property: "og:description", content: "Your private FormAI STUDIO dashboard." }] }), component: Dashboard });
+export const Route = createFileRoute("/dashboard")({ head: () => ({ meta: [{ title: "Dashboard — FormAI STUDIO" }, { name: "description", content: "Manage your account, cloud, history and wallet." }, { property: "og:title", content: "FormAI STUDIO Dashboard" }, { property: "og:description", content: "Your private FormAI STUDIO dashboard." }] }), component: Dashboard });
 
 function Dashboard() {
   const navigate = useNavigate();

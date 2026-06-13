@@ -13,6 +13,7 @@ import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
@@ -24,7 +25,6 @@ import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedTermsRouteImport } from './routes/_authenticated/terms'
 import { Route as AuthenticatedPrivacyRouteImport } from './routes/_authenticated/privacy'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/cloud'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 
@@ -46,6 +46,11 @@ const PhotoToAiRoute = PhotoToAiRouteImport.update({
 const ModelToAiRoute = ModelToAiRouteImport.update({
   id: '/model-to-ai',
   path: '/model-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -102,11 +107,6 @@ const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedCloudRoute = AuthenticatedCloudRouteImport.update({
   id: '/cloud',
   path: '/cloud',
@@ -123,13 +123,13 @@ export interface FileRoutesByFullPath {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/privacy': typeof AuthenticatedPrivacyRoute
   '/terms': typeof AuthenticatedTermsRoute
@@ -142,13 +142,13 @@ export interface FileRoutesByTo {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/privacy': typeof AuthenticatedPrivacyRoute
   '/terms': typeof AuthenticatedTermsRoute
@@ -163,13 +163,13 @@ export interface FileRoutesById {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/cloud': typeof AuthenticatedCloudRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/privacy': typeof AuthenticatedPrivacyRoute
   '/_authenticated/terms': typeof AuthenticatedTermsRoute
@@ -184,13 +184,13 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/sitemap.xml'
     | '/studio'
     | '/account'
     | '/cloud'
-    | '/dashboard'
     | '/history'
     | '/privacy'
     | '/terms'
@@ -203,13 +203,13 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/sitemap.xml'
     | '/studio'
     | '/account'
     | '/cloud'
-    | '/dashboard'
     | '/history'
     | '/privacy'
     | '/terms'
@@ -223,13 +223,13 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/sitemap.xml'
     | '/studio'
     | '/_authenticated/account'
     | '/_authenticated/cloud'
-    | '/_authenticated/dashboard'
     | '/_authenticated/history'
     | '/_authenticated/privacy'
     | '/_authenticated/terms'
@@ -244,6 +244,7 @@ export interface RootRouteChildren {
   AiEditsRoute: typeof AiEditsRoute
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
+  DashboardRoute: typeof DashboardRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -280,6 +281,13 @@ declare module '@tanstack/react-router' {
       path: '/model-to-ai'
       fullPath: '/model-to-ai'
       preLoaderRoute: typeof ModelToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -359,13 +367,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHistoryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/cloud': {
       id: '/_authenticated/cloud'
       path: '/cloud'
@@ -386,7 +387,6 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedCloudRoute: typeof AuthenticatedCloudRoute
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedPrivacyRoute: typeof AuthenticatedPrivacyRoute
   AuthenticatedTermsRoute: typeof AuthenticatedTermsRoute
@@ -396,7 +396,6 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedCloudRoute: AuthenticatedCloudRoute,
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedPrivacyRoute: AuthenticatedPrivacyRoute,
   AuthenticatedTermsRoute: AuthenticatedTermsRoute,
@@ -412,6 +411,7 @@ const rootRouteChildren: RootRouteChildren = {
   AiEditsRoute: AiEditsRoute,
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
+  DashboardRoute: DashboardRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
@@ -422,3 +422,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
