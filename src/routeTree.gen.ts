@@ -18,6 +18,7 @@ import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
 import { Route as AuthenticatedTermsRouteImport } from './routes/_authenticated/terms'
@@ -69,6 +70,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPhotoChatRoute = ApiPhotoChatRouteImport.update({
+  id: '/api/photo-chat',
+  path: '/api/photo-chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGenerateImageRoute = ApiGenerateImageRouteImport.update({
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
+  '/api/photo-chat': typeof ApiPhotoChatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByTo {
   '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
+  '/api/photo-chat': typeof ApiPhotoChatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/_authenticated/terms': typeof AuthenticatedTermsRoute
   '/_authenticated/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
+  '/api/photo-chat': typeof ApiPhotoChatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/wallet'
     | '/api/generate-image'
+    | '/api/photo-chat'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/wallet'
     | '/api/generate-image'
+    | '/api/photo-chat'
   id:
     | '__root__'
     | '/'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/_authenticated/terms'
     | '/_authenticated/wallet'
     | '/api/generate-image'
+    | '/api/photo-chat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -237,6 +249,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
+  ApiPhotoChatRoute: typeof ApiPhotoChatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -302,6 +315,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/photo-chat': {
+      id: '/api/photo-chat'
+      path: '/api/photo-chat'
+      fullPath: '/api/photo-chat'
+      preLoaderRoute: typeof ApiPhotoChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/generate-image': {
@@ -397,7 +417,18 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
+  ApiPhotoChatRoute: ApiPhotoChatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
