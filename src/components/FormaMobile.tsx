@@ -27,7 +27,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   const path = useRouterState({ select: (state) => state.location.pathname });
   return (
     <>
-      <header className={`fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between px-5 ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/95 text-foreground backdrop-blur"}`}>
+      <header className={`fixed inset-x-0 top-0 z-40 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between px-[max(1.25rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/95 text-foreground backdrop-blur"}`}>
         <Link to="/" aria-label="FormAI STUDIO home"><FormAILogo inverse={transparent} /></Link>
         <Button variant="ghost" size="icon" aria-label="Open navigation" className={transparent ? "hover:bg-background/15 hover:text-primary-foreground" : ""} onClick={() => setOpen(true)}><Menu className="size-6" /></Button>
       </header>
@@ -43,7 +43,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
           </div>
         </nav>
       </div>}
-      {path !== "/" && <div className="h-16" />}
+      {path !== "/" && <div className="h-[calc(4rem+env(safe-area-inset-top))]" />}
     </>
   );
 }
