@@ -5,7 +5,7 @@ export const designStyles = [
   "Scandinavian",
   "Industrial",
   "Bohemian",
-  "Art deco",
+  "Classic French",
   "Mediterranean",
   "Japandi",
   "Transitional",
@@ -22,7 +22,7 @@ export const colorPalettes = [
   "Terracotta",
   "Pastel tones",
   "Moody dark",
-  "Bright colors",
+  "Multicolor",
   "Monochrome",
 ] as const;
 
