@@ -5,8 +5,8 @@ import formaiLogo from "@/assets/formai-logo-complete.png.asset.json";
 
 const tools = [
   { to: "/feed", label: "Home", icon: House },
-  { to: "/create", label: "Create", icon: Sparkles },
   { to: "/tools", label: "Tools", icon: Grid2X2 },
+  { to: "/create", label: "Create", icon: Sparkles },
   { to: "/dashboard", label: "Profile", icon: UserRound },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
