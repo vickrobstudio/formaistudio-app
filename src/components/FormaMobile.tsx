@@ -37,6 +37,13 @@ export function PageIntro({ eyebrow, title, description, children }: { eyebrow: 
 }
 
 export function ToolTabBar() {
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  const isActive = (label: string, to: string) => {
+    if (label === "Tools") return ["/tools", "/studio", "/model-to-ai", "/ai-edits", "/photo-to-ai", "/ai-to-video"].includes(path);
+    if (label === "Profile") return ["/dashboard", "/account", "/cloud", "/history"].includes(path);
+    if (label === "Settings") return ["/settings", "/wallet", "/about", "/terms", "/privacy", "/contact"].includes(path);
+    return path === to;
+  };
   return (
     <nav aria-label="Creative tools" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
       <div className="mx-auto grid h-16 max-w-xl grid-cols-4">
@@ -45,7 +52,7 @@ export function ToolTabBar() {
             key={to}
             to={to}
             activeOptions={{ exact: true }}
-            className="flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl text-muted-foreground transition-colors active:scale-[0.96] [&[data-status=active]]:text-foreground"
+            className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl transition-colors active:scale-[0.96] ${isActive(label, to) ? "text-foreground" : "text-muted-foreground"}`}
           >
             <Icon className="size-[22px]" strokeWidth={1.8} />
             <span className="text-[10px] font-semibold leading-none">{label}</span>
