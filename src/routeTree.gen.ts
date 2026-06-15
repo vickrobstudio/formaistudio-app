@@ -22,8 +22,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
-import { Route as AuthenticatedTermsRouteImport } from './routes/_authenticated/terms'
-import { Route as AuthenticatedPrivacyRouteImport } from './routes/_authenticated/privacy'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/cloud'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
@@ -92,16 +90,6 @@ const AuthenticatedWalletRoute = AuthenticatedWalletRouteImport.update({
   path: '/wallet',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedTermsRoute = AuthenticatedTermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPrivacyRoute = AuthenticatedPrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -131,8 +119,6 @@ export interface FileRoutesByFullPath {
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
-  '/privacy': typeof AuthenticatedPrivacyRoute
-  '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
@@ -150,8 +136,6 @@ export interface FileRoutesByTo {
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
-  '/privacy': typeof AuthenticatedPrivacyRoute
-  '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
@@ -171,8 +155,6 @@ export interface FileRoutesById {
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/cloud': typeof AuthenticatedCloudRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
-  '/_authenticated/privacy': typeof AuthenticatedPrivacyRoute
-  '/_authenticated/terms': typeof AuthenticatedTermsRoute
   '/_authenticated/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
@@ -192,8 +174,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/cloud'
     | '/history'
-    | '/privacy'
-    | '/terms'
     | '/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
@@ -211,8 +191,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/cloud'
     | '/history'
-    | '/privacy'
-    | '/terms'
     | '/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
@@ -231,8 +209,6 @@ export interface FileRouteTypes {
     | '/_authenticated/account'
     | '/_authenticated/cloud'
     | '/_authenticated/history'
-    | '/_authenticated/privacy'
-    | '/_authenticated/terms'
     | '/_authenticated/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
@@ -346,20 +322,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWalletRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/terms': {
-      id: '/_authenticated/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof AuthenticatedTermsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/privacy': {
-      id: '/_authenticated/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof AuthenticatedPrivacyRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
@@ -388,8 +350,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedCloudRoute: typeof AuthenticatedCloudRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
-  AuthenticatedPrivacyRoute: typeof AuthenticatedPrivacyRoute
-  AuthenticatedTermsRoute: typeof AuthenticatedTermsRoute
   AuthenticatedWalletRoute: typeof AuthenticatedWalletRoute
 }
 
@@ -397,8 +357,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedCloudRoute: AuthenticatedCloudRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
-  AuthenticatedPrivacyRoute: AuthenticatedPrivacyRoute,
-  AuthenticatedTermsRoute: AuthenticatedTermsRoute,
   AuthenticatedWalletRoute: AuthenticatedWalletRoute,
 }
 
