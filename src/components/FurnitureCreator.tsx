@@ -12,7 +12,7 @@ import { FurnitureSketchBoard } from "@/components/FurnitureSketchBoard";
 import { AiPlanGenerator } from "@/components/AiPlanGenerator";
 import { Furniture3DViewer } from "@/components/Furniture3DViewer";
 import { generateFurniture3D } from "@/lib/furniture-3d.functions";
-import { saveMediaToDevice } from "@/lib/save-to-device.client";
+import { saveMediaToDevice } from "@/lib/save-to-device";
 
 const materialOptions = ["Solid wood", "Stone", "Metal", "Glass", "Upholstery", "Leather", "Recycled composite"];
 

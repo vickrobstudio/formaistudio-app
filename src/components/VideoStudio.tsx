@@ -4,7 +4,7 @@ import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/Forma
 import { Button } from "@/components/ui/button";
 import { ToolInformation } from "@/components/ToolInformation";
 import { videoInformation } from "@/lib/tool-information";
-import { saveMediaToDevice } from "@/lib/save-to-device.client";
+import { saveMediaToDevice } from "@/lib/save-to-device";
 
 type TourImage = { name: string; url: string };
 
