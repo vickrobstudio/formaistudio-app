@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Box, Camera, Film, ImagePlus, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
-import formaiLogo from "@/assets/formai-metallic-logo.png.asset.json";
+import formaiLogo from "@/assets/formai-metallic-logo-isolated.png.asset.json";
 
 const tools = [
   { to: "/studio", label: "Studio", icon: Sparkles },
