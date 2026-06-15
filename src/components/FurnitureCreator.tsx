@@ -92,6 +92,11 @@ export function FurnitureCreator() {
     }, 900);
     try {
       const model = await create3D({ data: { imageDataUrl: result } });
+      if (!model.ok) {
+        setModelProgress(0);
+        setError(model.error);
+        return;
+      }
       setModelUrl(model.modelUrl);
       setModelGlbPath(model.modelPath);
       setModelUsdzPath(null);
