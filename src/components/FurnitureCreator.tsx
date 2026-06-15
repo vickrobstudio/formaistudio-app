@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, ImagePlus, Library, LoaderCircle, MapPin, Share2, Sparkles, X } from "lucide-react";
+import { Box, Download, ImagePlus, Library, LoaderCircle, MapPin, Share2, Sparkles, X } from "lucide-react";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ import { saveFurnitureCreation } from "@/lib/feed.functions";
 import { useCredits } from "@/hooks/use-credits";
 import { FurnitureSketchBoard } from "@/components/FurnitureSketchBoard";
 import { AiPlanGenerator } from "@/components/AiPlanGenerator";
+import { Furniture3DViewer } from "@/components/Furniture3DViewer";
+import { generateFurniture3D } from "@/lib/furniture-3d.functions";
 
 const materialOptions = ["Solid wood", "Stone", "Metal", "Glass", "Upholstery", "Leather", "Recycled composite"];
 
@@ -20,11 +22,16 @@ export function FurnitureCreator() {
   const [location, setLocation] = useState("");
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<string | null>(null);
+  const [modelUrl, setModelUrl] = useState<string | null>(null);
+  const [modelGlbPath, setModelGlbPath] = useState<string | null>(null);
+  const [modelUsdzPath, setModelUsdzPath] = useState<string | null>(null);
+  const [generating3D, setGenerating3D] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<"private" | "public" | null>(null);
   const { signedIn } = useCredits();
   const saveFurniture = useServerFn(saveFurnitureCreation);
+  const create3D = useServerFn(generateFurniture3D);
 
   function attach(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).slice(0, 4);
@@ -50,7 +57,7 @@ export function FurnitureCreator() {
     setBusy(true);
     setError("");
     try {
-      await saveFurniture({ data: { title: prompt.trim().slice(0, 120), description: `Custom furniture concept. Materials: ${materials.join(", ") || "Designer selected"}.`, imageUrl: result, isPublic } });
+      await saveFurniture({ data: { title: prompt.trim().slice(0, 120), description: `Custom furniture concept. Materials: ${materials.join(", ") || "Designer selected"}.`, imageUrl: result, modelGlbPath, modelUsdzPath, isPublic } });
       setSaved(isPublic ? "public" : "private");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The furniture piece could not be saved.");
@@ -59,5 +66,22 @@ export function FurnitureCreator() {
     }
   }
 
-  return <main className="min-h-screen bg-background"><FormaHeader /><div className="px-5 pt-7"><BackLink to="/dashboard" label="Back" /></div><PageIntro eyebrow="Create with AI" title="Custom furniture" description="Draw an original shape, explore nature-inspired forms, or upload a reference image for shape, texture, or inspiration." /><section className="space-y-6 px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]"><input ref={inputRef} type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={attach} /><FurnitureSketchBoard onAddReferences={(images) => setReferences((current) => [...current, ...images].slice(0, 4))} onInspiration={setPrompt} />{result && <img src={result} alt="AI custom furniture concept" className="aspect-[4/3] w-full rounded-2xl border border-border object-cover" />}<Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Chat with AI: describe the shape, dimensions, function, style and details…" className="min-h-32 resize-none" /><Button type="button" variant="outline" className="w-full" onClick={() => inputRef.current?.click()}><ImagePlus />{references.length ? `${references.length} shape, texture, or inspiration references` : "Upload more reference images"}</Button>{references.length > 0 && <div className="grid grid-cols-4 gap-2">{references.map((reference, index) => <div key={`${reference.slice(-20)}-${index}`} className="relative aspect-square overflow-hidden rounded-xl border border-border"><img src={reference} alt={`Furniture reference ${index + 1}`} className="h-full w-full object-cover" /><Button type="button" variant="default" size="icon" aria-label={`Remove reference ${index + 1}`} className="absolute right-1 top-1 size-7 min-h-0 rounded-full" onClick={() => setReferences((current) => current.filter((_, itemIndex) => index !== itemIndex))}><X className="size-3" /></Button></div>)}</div>}<div><p className="text-xs uppercase tracking-[0.14em]">Materials</p><div className="mt-3 flex flex-wrap gap-2">{materialOptions.map((material) => <Button key={material} type="button" size="sm" variant={materials.includes(material) ? "default" : "outline"} onClick={() => setMaterials((current) => current.includes(material) ? current.filter((item) => item !== material) : [...current, material])}>{material}</Button>)}</div></div><label className="block text-xs"><span className="flex items-center gap-2 uppercase tracking-[0.14em]"><MapPin className="size-4" />Supplier location</span><Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, country or region" className="mt-2 h-12" /></label>{location && <p className="text-xs leading-5 text-muted-foreground">The concept will prioritize materials and manufacturing methods commonly available near {location}. Supplier outreach and live inventory require verified supplier partnerships.</p>}{error && <p role="alert" className="text-xs text-destructive">{error}</p>}{saved && <p role="status" className="text-xs">Saved to your library{saved === "public" ? " and shared with the community" : ""}. It can now be used in your renderings.</p>}<Button variant="studio" className="h-12 w-full" disabled={busy || prompt.trim().length < 10} onClick={() => void create()}>{busy ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{busy ? "Creating furniture…" : "Create furniture concept"}</Button>{result && <><AiPlanGenerator sourceImage={result} kind="furniture" /><div className="grid grid-cols-2 gap-3"><Button variant="outline" disabled={!signedIn || busy || Boolean(saved)} onClick={() => void saveToLibrary(false)}><Library />Save</Button><Button variant="outline" disabled={!signedIn || busy || Boolean(saved)} onClick={() => void saveToLibrary(true)}><Share2 />Share</Button></div>{!signedIn && <p className="text-center text-xs text-muted-foreground">Sign in to save this piece to your reusable furniture library.</p>}<Button asChild variant="outline" className="w-full"><a href={result} download="formai-custom-furniture.png"><Download />Download concept</a></Button></>}</section><ToolTabBar /></main>;
+  async function createRotatableModel() {
+    if (!result) return;
+    setGenerating3D(true);
+    setError("");
+    try {
+      const model = await create3D({ data: { imageDataUrl: result } });
+      setModelUrl(model.modelUrl);
+      setModelGlbPath(model.modelPath);
+      setModelUsdzPath(null);
+      setSaved(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The 3D furniture model could not be created.");
+    } finally {
+      setGenerating3D(false);
+    }
+  }
+
+  return <main className="min-h-screen bg-background"><FormaHeader /><div className="px-5 pt-7"><BackLink to="/dashboard" label="Back" /></div><PageIntro eyebrow="Create with AI" title="Custom furniture" description="Draw an original shape, explore nature-inspired forms, or upload a reference image for shape, texture, or inspiration." /><section className="space-y-6 px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]"><input ref={inputRef} type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={attach} /><FurnitureSketchBoard onAddReferences={(images) => setReferences((current) => [...current, ...images].slice(0, 4))} onInspiration={setPrompt} />{result && <img src={result} alt="AI custom furniture concept" className="aspect-[4/3] w-full rounded-2xl border border-border object-cover" />}{modelUrl && <Furniture3DViewer modelUrl={modelUrl} onUsdExported={(path) => { setModelUsdzPath(path); setSaved(null); }} />}<Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Chat with AI: describe the shape, dimensions, function, style and details…" className="min-h-32 resize-none" /><Button type="button" variant="outline" className="w-full" onClick={() => inputRef.current?.click()}><ImagePlus />{references.length ? `${references.length} shape, texture, or inspiration references` : "Upload more reference images"}</Button>{references.length > 0 && <div className="grid grid-cols-4 gap-2">{references.map((reference, index) => <div key={`${reference.slice(-20)}-${index}`} className="relative aspect-square overflow-hidden rounded-xl border border-border"><img src={reference} alt={`Furniture reference ${index + 1}`} className="h-full w-full object-cover" /><Button type="button" variant="default" size="icon" aria-label={`Remove reference ${index + 1}`} className="absolute right-1 top-1 size-7 min-h-0 rounded-full" onClick={() => setReferences((current) => current.filter((_, itemIndex) => index !== itemIndex))}><X className="size-3" /></Button></div>)}</div>}<div><p className="text-xs uppercase tracking-[0.14em]">Materials</p><div className="mt-3 flex flex-wrap gap-2">{materialOptions.map((material) => <Button key={material} type="button" size="sm" variant={materials.includes(material) ? "default" : "outline"} onClick={() => setMaterials((current) => current.includes(material) ? current.filter((item) => item !== material) : [...current, material])}>{material}</Button>)}</div></div><label className="block text-xs"><span className="flex items-center gap-2 uppercase tracking-[0.14em]"><MapPin className="size-4" />Supplier location</span><Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, country or region" className="mt-2 h-12" /></label>{location && <p className="text-xs leading-5 text-muted-foreground">The concept will prioritize materials and manufacturing methods commonly available near {location}. Supplier outreach and live inventory require verified supplier partnerships.</p>}{error && <p role="alert" className="text-xs text-destructive">{error}</p>}{saved && <p role="status" className="text-xs">Saved to your Cloud and interior library{saved === "public" ? ", and shared with the community" : ""}.</p>}<Button variant="studio" className="h-12 w-full" disabled={busy || prompt.trim().length < 10} onClick={() => void create()}>{busy ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{busy ? "Creating furniture…" : "Create furniture concept"}</Button>{result && <><Button variant="studio" className="h-12 w-full" disabled={!signedIn || generating3D} onClick={() => void createRotatableModel()}>{generating3D ? <LoaderCircle className="animate-spin" /> : <Box />}{generating3D ? "Building 3D model…" : modelUrl ? "Regenerate 3D model" : "Create rotatable 3D model"}</Button><AiPlanGenerator sourceImage={result} kind="furniture" /><div className="grid grid-cols-2 gap-3"><Button variant="outline" disabled={!signedIn || busy || Boolean(saved)} onClick={() => void saveToLibrary(false)}><Library />Save</Button><Button variant="outline" disabled={!signedIn || busy || Boolean(saved)} onClick={() => void saveToLibrary(true)}><Share2 />Share</Button></div>{!signedIn && <p className="text-center text-xs text-muted-foreground">Sign in to create 3D files and save this piece to your reusable furniture library.</p>}<Button asChild variant="outline" className="w-full"><a href={result} download="formai-custom-furniture.png"><Download />Download concept</a></Button></>}</section><ToolTabBar /></main>;
 }
