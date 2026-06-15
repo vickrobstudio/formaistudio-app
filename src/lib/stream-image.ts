@@ -18,7 +18,8 @@ function loadImage(dataUrl: string) {
 
 async function compressImageDataUrl(dataUrl: string) {
   if (!dataUrl.startsWith("data:image/")) return dataUrl;
-  if (typeof document === "undefined" || dataUrl.length <= MAX_IMAGE_DATA_URL_LENGTH) return dataUrl;
+  if (typeof document === "undefined" || dataUrl.length <= MAX_IMAGE_DATA_URL_LENGTH)
+    return dataUrl;
 
   const image = await loadImage(dataUrl);
   const sourceWidth = image.naturalWidth || image.width;
@@ -51,9 +52,7 @@ export async function streamImage(
   onImage: (src: string, isFinal: boolean) => void,
   sourceImages: string[] = [],
 ) {
-  const preparedSourceImage = sourceImage
-    ? await compressImageDataUrl(sourceImage)
-    : null;
+  const preparedSourceImage = sourceImage ? await compressImageDataUrl(sourceImage) : null;
   const preparedSourceImages = await Promise.all(
     sourceImages.map((image) => compressImageDataUrl(image)),
   );
@@ -135,8 +134,6 @@ export async function streamImage(
   }
 
   if (!completed) {
-    throw new Error(
-      "The image stream ended before the final render was completed.",
-    );
+    throw new Error("The image stream ended before the final render was completed.");
   }
 }

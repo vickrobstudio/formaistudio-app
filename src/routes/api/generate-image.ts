@@ -13,9 +13,7 @@ export const Route = createFileRoute("/api/generate-image")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const result = RenderInput.safeParse(
-          await request.json().catch(() => null),
-        );
+        const result = RenderInput.safeParse(await request.json().catch(() => null));
         if (!result.success) {
           return new Response("Describe the room in a little more detail.", {
             status: 400,
