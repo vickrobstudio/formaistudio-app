@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Grid2X2, House, Settings, Sparkles, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import formaiLogo from "@/assets/formai-logo-complete.png.asset.json";
@@ -68,6 +68,7 @@ export function ToolTabBar() {
   );
 }
 
-export function BackLink({ to = "/dashboard", label = "Back to Dashboard" }: { to?: "/" | "/dashboard"; label?: string }) {
-  return <Link to={to} className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"><ArrowLeft className="size-4" />{label}</Link>;
+export function BackLink({ label = "Back" }: { label?: string }) {
+  const router = useRouter();
+  return <button type="button" onClick={() => router.history.back()} className="inline-flex min-h-11 items-center gap-2 rounded-xl text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"><ArrowLeft className="size-4" />{label}</button>;
 }
