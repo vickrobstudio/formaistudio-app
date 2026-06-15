@@ -1,13 +1,13 @@
 import type { ToolInfoSection } from "@/components/ToolInformation";
 
 export const studioInformation: ToolInfoSection[] = [
-  { title: "Room plan", description: "Upload your plan first, or continue without one and enter the room’s overall dimensions manually.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Choose feet or meters, then enter width, length and height", "Choose Indoor or Outdoor, then select the room purpose", "AI reads dimensions and the positions of walls, doors and windows from an uploaded plan"] },
+  { title: "Room plan & exact products", description: "Upload your plan first, or continue without one and enter the room’s overall dimensions manually.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Attach pictures of exact furniture or objects to place in the proposal", "Choose feet or meters, then enter width, length and height", "Choose Indoor or Outdoor, then select the room purpose"] },
   { title: "Design direction", items: ["Set design style, color palette and up to four custom colors", "Choose new materials, finishes and the amount of interior vegetation", "Define the room’s primary use and furniture budget", "Select preferred furniture brands or add custom brands"] },
   { title: "Your design package", items: ["2D floor plan with furniture layout and dimensions", "Immersive 360° virtual tour", "Two to three photorealistic renderings from multiple angles", "Curated furniture suggestions and detailed budget document"] },
 ];
 
 export const modelInformation: ToolInfoSection[] = [
-  { title: "Files to prepare", items: ["SketchUp .skp or .skb file up to 5 GB, including materials and lighting", "A PNG, JPG or WebP preview image up to 50 MB", "For the best preview, position the camera 45–60° above the model so the full layout and materials are visible"] },
+  { title: "Perspective to prepare", items: ["Upload one JPG, PNG or WebP perspective exported from any 2D or 3D design software", "Keep material colors, finishes and textures visible in the source", "AI preserves the original camera, geometry and design intent while adding photorealism"] },
   { title: "Project settings", items: ["Choose an interior or exterior rendering", "Set building type and ceiling height", "Add an optional project location for region-accurate backgrounds and vegetation", "Choose month and hour for accurate sunlight, shadows and lighting"] },
   { title: "AI output", items: ["Photorealistic renderings from multiple camera angles", "Location-accurate architectural context and vegetation", "Time-based sun position and shadow direction"] },
 ];
