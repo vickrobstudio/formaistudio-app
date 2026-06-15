@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LegalPage, LegalSection } from "@/components/LegalPage";
 
 export const Route = createFileRoute("/terms")({
-  head: () => ({ meta: [{ title: "Terms of Use — FormAI STUDIO" }, { name: "description", content: "Terms governing use of the FormAI STUDIO app and AI design tools." }] }),
+  head: () => ({ meta: [{ title: "Terms of Use — FormAI STUDIO" }, { name: "description", content: "Terms governing use of the FormAI STUDIO app and AI design tools." }, { property: "og:title", content: "FormAI STUDIO Terms of Use" }, { property: "og:description", content: "Review the terms governing FormAI STUDIO and its AI design tools." }] }),
   component: TermsPage,
 });
 
