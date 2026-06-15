@@ -1,7 +1,7 @@
 import { Suspense, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
-import { Box, Download, LoaderCircle, Rotate3D } from "lucide-react";
+import { Box, LoaderCircle, Rotate3D } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
