@@ -5,7 +5,7 @@ export const consumeAccountCredit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin.rpc("consume_starter_credit");
+    const { data, error } = await supabaseAdmin.rpc("consume_starter_credit_for_user", { _user_id: context.userId });
     if (error || data === null) throw new Error("Unable to apply credit");
     return { remaining: data };
   });
