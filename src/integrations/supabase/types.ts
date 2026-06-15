@@ -526,8 +526,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      activate_vip_access: { Args: never; Returns: boolean }
-      consume_starter_credit: { Args: never; Returns: number }
+      consume_starter_credit_for_user: {
+        Args: { _user_id: string }
+        Returns: number
+      }
       get_my_starter_credits: { Args: never; Returns: number }
     }
     Enums: {
