@@ -1,9 +1,9 @@
 import type { ToolInfoSection } from "@/components/ToolInformation";
 
 export const studioInformation: ToolInfoSection[] = [
-  { title: "Room plan & exact products", description: "Upload your plan first, or continue without one and enter the room’s overall dimensions manually.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Attach pictures of exact furniture or objects to place in the proposal", "Choose feet or meters, then enter width, length and height", "Choose Indoor or Outdoor, then select the room purpose"] },
-  { title: "Design direction", items: ["Set design style, color palette and up to four custom colors", "Choose new materials, finishes and the amount of interior vegetation", "Define the room’s primary use and furniture budget", "Select preferred furniture brands or add custom brands"] },
-  { title: "Your design package", items: ["2D floor plan with furniture layout and dimensions", "Immersive 360° virtual tour", "Two to three photorealistic renderings from multiple angles", "Curated furniture suggestions and detailed budget document"] },
+  { title: "Room plan & exact furniture", description: "Upload a room plan, then add reference images of furniture created in FormAI or from any existing source.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Attach clear images of every exact furniture piece to place in the proposal", "Choose feet or meters, then enter width, length and height", "Choose Indoor or Outdoor, then select the room purpose"] },
+  { title: "100% reference fidelity", items: ["Preserve each referenced piece’s exact silhouette, proportions and construction details", "Match visible materials, grain, weave, color and surface texture without substitution", "Use multiple views when available for more accurate placement", "Set the room style, palette, finishes, use and furniture budget independently"] },
+  { title: "Your design output", items: ["2D floor plan with furniture layout and dimensions", "Photorealistic rendering with referenced furniture placed naturally", "Accurate scale, perspective, lighting, contact shadows and material response", "Downloadable rendering and project saved to your cloud"] },
 ];
 
 export const modelInformation: ToolInfoSection[] = [
