@@ -9,11 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
@@ -26,6 +29,11 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/cloud'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -34,6 +42,11 @@ const StudioRoute = StudioRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PhotoToAiRoute = PhotoToAiRouteImport.update({
@@ -49,6 +62,11 @@ const ModelToAiRoute = ModelToAiRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -111,11 +129,14 @@ export interface FileRoutesByFullPath {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/privacy': typeof PrivacyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
+  '/terms': typeof TermsRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
@@ -128,11 +149,14 @@ export interface FileRoutesByTo {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/privacy': typeof PrivacyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
+  '/terms': typeof TermsRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
@@ -147,11 +171,14 @@ export interface FileRoutesById {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/privacy': typeof PrivacyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
+  '/terms': typeof TermsRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/cloud': typeof AuthenticatedCloudRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
@@ -166,11 +193,14 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/contact'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/privacy'
     | '/sitemap.xml'
     | '/studio'
+    | '/terms'
     | '/account'
     | '/cloud'
     | '/history'
@@ -183,11 +213,14 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/contact'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/privacy'
     | '/sitemap.xml'
     | '/studio'
+    | '/terms'
     | '/account'
     | '/cloud'
     | '/history'
@@ -201,11 +234,14 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/contact'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/privacy'
     | '/sitemap.xml'
     | '/studio'
+    | '/terms'
     | '/_authenticated/account'
     | '/_authenticated/cloud'
     | '/_authenticated/history'
@@ -220,17 +256,27 @@ export interface RootRouteChildren {
   AiEditsRoute: typeof AiEditsRoute
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
+  ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
+  PrivacyRoute: typeof PrivacyRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRoute
+  TermsRoute: typeof TermsRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studio': {
       id: '/studio'
       path: '/studio'
@@ -243,6 +289,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/photo-to-ai': {
@@ -264,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -369,11 +429,14 @@ const rootRouteChildren: RootRouteChildren = {
   AiEditsRoute: AiEditsRoute,
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
+  ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
+  PrivacyRoute: PrivacyRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRoute,
+  TermsRoute: TermsRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
 }
