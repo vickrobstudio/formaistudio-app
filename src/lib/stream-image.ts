@@ -25,16 +25,19 @@ export async function streamImage(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let completed = false;
 
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split("\n\n");
+    const events = buffer.split(/\r?\n\r?\n/);
     buffer = events.pop() ?? "";
 
     for (const event of events) {
-      const line = event.split("\n").find((item) => item.startsWith("data:"));
+      const lines = event.split(/\r?\n/);
+      const eventType = lines.find((item) => item.startsWith("event:"))?.slice(6).trim();
+      const line = lines.find((item) => item.startsWith("data:"));
       if (!line) continue;
       const payload = line.slice(5).trim();
       if (payload === "[DONE]") continue;
@@ -45,10 +48,15 @@ export async function streamImage(
           type?: string;
         };
         const image = parsed.b64_json ?? parsed.partial_image_b64;
-        if (image) onImage(`data:image/png;base64,${image}`, Boolean(parsed.b64_json));
+        const type = eventType ?? parsed.type;
+        const isFinal = type === "image_generation.completed";
+        if (image) onImage(`data:image/png;base64,${image}`, isFinal);
+        if (isFinal) completed = true;
       } catch {
         // Ignore non-image progress events.
       }
     }
   }
+
+  if (!completed) throw new Error("The image stream ended before the final render was completed.");
 }
