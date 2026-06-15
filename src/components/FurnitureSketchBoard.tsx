@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 export function FurnitureSketchBoard({ onAddReferences, onInspiration }: { onAddReferences: (images: string[]) => void; onInspiration: (prompt: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const textureRef = useRef<HTMLInputElement>(null);
+  const referenceRef = useRef<HTMLInputElement>(null);
   const [drawing, setDrawing] = useState(false);
   const [hasSketch, setHasSketch] = useState(false);
 
@@ -62,7 +62,7 @@ export function FurnitureSketchBoard({ onAddReferences, onInspiration }: { onAdd
     if (sketch) onAddReferences([sketch]);
   }
 
-  function addTexture(event: ChangeEvent<HTMLInputElement>) {
+  function addReference(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || file.size > 10_000_000) return;
     const reader = new FileReader();
@@ -71,11 +71,11 @@ export function FurnitureSketchBoard({ onAddReferences, onInspiration }: { onAdd
   }
 
   return <div className="space-y-4 rounded-2xl border border-border p-4">
-    <div><p className="flex items-center gap-2 text-xs uppercase tracking-[0.14em]"><Pencil className="size-4" />Shape studio</p><p className="mt-2 text-xs leading-5 text-muted-foreground">Draw a silhouette, trace an idea, or upload a material texture for AI to reinterpret.</p></div>
+    <div><p className="flex items-center gap-2 text-xs uppercase tracking-[0.14em]"><Pencil className="size-4" />Shape studio</p><p className="mt-2 text-xs leading-5 text-muted-foreground">Draw a silhouette, trace an idea, or upload an image as a reference for shape, texture, or inspiration.</p></div>
     <canvas ref={canvasRef} width={900} height={560} aria-label="Furniture shape drawing canvas" className="aspect-[9/5.6] w-full touch-none rounded-xl border border-border bg-primary" onPointerDown={start} onPointerMove={move} onPointerUp={() => setDrawing(false)} onPointerCancel={() => setDrawing(false)} />
     <div className="grid grid-cols-2 gap-3"><Button type="button" variant="outline" onClick={clear}><Eraser />Clear</Button><Button type="button" variant="outline" disabled={!hasSketch} onClick={addSketch}><Pencil />Use sketch</Button></div>
-    <input ref={textureRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={addTexture} />
-    <Button type="button" variant="outline" className="w-full" onClick={() => textureRef.current?.click()}><ImagePlus />Upload texture reference</Button>
+    <input ref={referenceRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={addReference} />
+    <Button type="button" variant="outline" className="w-full" onClick={() => referenceRef.current?.click()}><ImagePlus />Upload reference image</Button>
     <div><p className="text-xs uppercase tracking-[0.14em]">Organic inspiration</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => onInspiration("Create a sculptural furniture form inspired by smooth river stones and erosion") }><Waves />River stone</Button><Button type="button" size="sm" variant="outline" onClick={() => onInspiration("Create a biomorphic furniture form inspired by leaves, stems and natural branching") }><Leaf />Botanical</Button><Button type="button" size="sm" variant="outline" onClick={() => onInspiration("Create an organic furniture form inspired by shells, waves and continuous curves") }><Waves />Shell & wave</Button></div></div>
   </div>;
 }
