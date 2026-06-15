@@ -9,13 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as CreateRouteImport } from './routes/create'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
@@ -29,6 +32,11 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/cloud'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 
+const ToolsRoute = ToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
@@ -42,6 +50,11 @@ const StudioRoute = StudioRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -62,6 +75,11 @@ const ModelToAiRoute = ModelToAiRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreateRoute = CreateRouteImport.update({
+  id: '/create',
+  path: '/create',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -130,13 +148,16 @@ export interface FileRoutesByFullPath {
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
+  '/tools': typeof ToolsRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
@@ -150,13 +171,16 @@ export interface FileRoutesByTo {
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
+  '/tools': typeof ToolsRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
@@ -172,13 +196,16 @@ export interface FileRoutesById {
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
+  '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
+  '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
+  '/tools': typeof ToolsRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/cloud': typeof AuthenticatedCloudRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
@@ -194,13 +221,16 @@ export interface FileRouteTypes {
     | '/ai-to-video'
     | '/auth'
     | '/contact'
+    | '/create'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
+    | '/settings'
     | '/sitemap.xml'
     | '/studio'
     | '/terms'
+    | '/tools'
     | '/account'
     | '/cloud'
     | '/history'
@@ -214,13 +244,16 @@ export interface FileRouteTypes {
     | '/ai-to-video'
     | '/auth'
     | '/contact'
+    | '/create'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
+    | '/settings'
     | '/sitemap.xml'
     | '/studio'
     | '/terms'
+    | '/tools'
     | '/account'
     | '/cloud'
     | '/history'
@@ -235,13 +268,16 @@ export interface FileRouteTypes {
     | '/ai-to-video'
     | '/auth'
     | '/contact'
+    | '/create'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
+    | '/settings'
     | '/sitemap.xml'
     | '/studio'
     | '/terms'
+    | '/tools'
     | '/_authenticated/account'
     | '/_authenticated/cloud'
     | '/_authenticated/history'
@@ -257,19 +293,29 @@ export interface RootRouteChildren {
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
   ContactRoute: typeof ContactRoute
+  CreateRoute: typeof CreateRoute
   DashboardRoute: typeof DashboardRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
   PrivacyRoute: typeof PrivacyRoute
+  SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRoute
   TermsRoute: typeof TermsRoute
+  ToolsRoute: typeof ToolsRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tools': {
+      id: '/tools'
+      path: '/tools'
+      fullPath: '/tools'
+      preLoaderRoute: typeof ToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/terms': {
       id: '/terms'
       path: '/terms'
@@ -289,6 +335,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -317,6 +370,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create': {
+      id: '/create'
+      path: '/create'
+      fullPath: '/create'
+      preLoaderRoute: typeof CreateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -430,13 +490,16 @@ const rootRouteChildren: RootRouteChildren = {
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
   ContactRoute: ContactRoute,
+  CreateRoute: CreateRoute,
   DashboardRoute: DashboardRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
   PrivacyRoute: PrivacyRoute,
+  SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRoute,
   TermsRoute: TermsRoute,
+  ToolsRoute: ToolsRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
 }
