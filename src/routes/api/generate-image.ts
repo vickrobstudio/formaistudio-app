@@ -7,12 +7,19 @@ const RenderInput = z.object({
   sourceImages: z.array(z.string().startsWith("data:image/").max(8_000_000)).max(5).optional(),
 });
 
+const MAX_TOTAL_IMAGE_INPUT = 4_500_000;
+
 export const Route = createFileRoute("/api/generate-image")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const result = RenderInput.safeParse(await request.json().catch(() => null));
         if (!result.success) return new Response("Describe the room in a little more detail.", { status: 400 });
+
+        const totalImageInput = [result.data.sourceImage, ...(result.data.sourceImages ?? [])].reduce((sum, image) => sum + (image?.length ?? 0), 0);
+        if (totalImageInput > MAX_TOTAL_IMAGE_INPUT) {
+          return new Response("The attached images are too large. Please use smaller or fewer references.", { status: 413 });
+        }
 
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("Rendering service is unavailable.", { status: 500 });
