@@ -35,6 +35,7 @@ export function VideoStudio() {
       canvas.height = 720;
       const context = canvas.getContext("2d");
       if (!context) throw new Error("Video creation is not supported on this device.");
+      const drawingContext = context;
       const loaded = await Promise.all(images.map((item) => new Promise<HTMLImageElement>((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = item.url; })));
       const stream = canvas.captureStream(30);
       const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm" });
@@ -56,14 +57,14 @@ export function VideoStudio() {
             const scale = Math.max(canvas.width / image.width, canvas.height / image.height) * zoom;
             const width = image.width * scale;
             const height = image.height * scale;
-            context.globalAlpha = alpha;
-            context.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+            drawingContext.globalAlpha = alpha;
+            drawingContext.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
           };
-          context.fillStyle = "#000";
-          context.fillRect(0, 0, canvas.width, canvas.height);
+          drawingContext.fillStyle = "#000";
+          drawingContext.fillRect(0, 0, canvas.width, canvas.height);
           paint(current, 1, 1 + local * 0.06);
           if (local > 0.72 && next !== current) paint(next, (local - 0.72) / 0.28, 1.06 - local * 0.06);
-          context.globalAlpha = 1;
+          drawingContext.globalAlpha = 1;
           if (elapsed < 10_000) requestAnimationFrame(draw); else resolve();
         }
         requestAnimationFrame(draw);
