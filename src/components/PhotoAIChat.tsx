@@ -14,7 +14,7 @@ import { FurnitureLibraryPicker } from "@/components/FurnitureLibraryPicker";
 import { useCredits } from "@/hooks/use-credits";
 import { SceneComposer } from "@/components/SceneComposer";
 import { AiPlanGenerator } from "@/components/AiPlanGenerator";
-import { saveMediaToDevice } from "@/lib/save-to-device.client";
+import { saveMediaToDevice } from "@/lib/save-to-device";
 
 const transport = new DefaultChatTransport({ api: "/api/photo-chat" });
 
