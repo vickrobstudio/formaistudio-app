@@ -72,10 +72,23 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         if (error) throw new Error("Unable to remove all account files.");
       }
     }
-    for (const table of ["creation_favorites", "creation_likes", "creation_comments", "public_creations", "photo_ai_messages", "user_cloud_outputs", "studio_projects", "design_proposals", "product_tearsheets", "ai_rules", "feature_usage", "guest_credit_claims", "iap_entitlements", "user_subscriptions", "contact_requests"] as const) {
-      const { error } = await supabaseAdmin.from(table).delete().eq("user_id", context.userId);
-      if (error) throw new Error("Unable to remove all account data.");
-    }
+    const deletions = await Promise.all([
+      supabaseAdmin.from("creation_favorites").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("creation_likes").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("creation_comments").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("public_creations").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("photo_ai_messages").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("user_cloud_outputs").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("studio_projects").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("design_proposals").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("ai_rules").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("feature_usage").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("guest_credit_claims").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("iap_entitlements").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("user_subscriptions").delete().eq("user_id", context.userId),
+      supabaseAdmin.from("contact_requests").delete().eq("user_id", context.userId),
+    ]);
+    if (deletions.some(({ error }) => error)) throw new Error("Unable to remove all account data.");
     const { error: profileError } = await supabaseAdmin.from("profiles").delete().eq("id", context.userId);
     if (profileError) throw new Error("Unable to remove the profile.");
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(context.userId);
