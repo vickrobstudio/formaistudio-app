@@ -37,7 +37,7 @@ export function FurnitureCreator() {
     setBusy(true);
     setError("");
     try {
-      await streamImage(`Design one original, manufacturable custom furniture piece from this conversation: ${prompt}. Materials: ${materials.join(", ") || "designer selected"}. Supplier sourcing location: ${location || "global"}. Use attached references only for shape, construction, material and detail inspiration. Show the complete uncropped product as a premium photorealistic furniture concept on a neutral studio background, accurate proportions, no text, no logos.`, null, (image, isFinal) => { if (isFinal) setResult(image); }, references);
+      await streamImage(`Design one original, manufacturable custom furniture piece from this conversation: ${prompt}. Materials: ${materials.join(", ") || "designer selected"}. Supplier sourcing location: ${location || "global"}. Use attached references only for shape, construction, material and detail inspiration. Show the complete uncropped product as an 8K-target luxury editorial furniture photograph by an elite architectural and product photographer, on a warm neutral studio background, with accurate proportions, realistic color, true material grain, texture, reflectance and controlled HDR illumination, no text, no logos.`, null, (image, isFinal) => { if (isFinal) setResult(image); }, references);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The furniture concept could not be created.");
     } finally {

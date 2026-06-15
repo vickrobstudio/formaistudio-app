@@ -117,7 +117,7 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
     setRendering(true);
     setFileError("");
     try {
-      await streamImage(`${instruction}. Edit the supplied photo directly. Preserve its camera, perspective and unchanged architecture. Integrate any selected furniture references faithfully, preserving their recognizable shape, materials, proportions and color. Produce a photorealistic interior image, no text, no logos.`, preview, (image, isFinal) => { if (isFinal) setEditedImage(image); }, [...furnitureReferences, ...(surfaceTexture ? [surfaceTexture] : [])].slice(0, 5));
+      await streamImage(`${instruction}. Edit the supplied photo directly. Preserve its camera, perspective and unchanged architecture. Integrate any selected furniture references faithfully, preserving their recognizable shape, materials, proportions, color and texture. Produce an 8K-target luxury editorial architectural photograph with warm realistic color, true material response, balanced HDR illumination, controlled highlights, natural shadows and realistic varied greenery. No excess exposure, artificial saturation, strange color casts, fantasy grading, text or logos.`, preview, (image, isFinal) => { if (isFinal) setEditedImage(image); }, [...furnitureReferences, ...(surfaceTexture ? [surfaceTexture] : [])].slice(0, 5));
     } catch (cause) {
       setFileError(cause instanceof Error ? cause.message : "The photo edit could not be created.");
     } finally {

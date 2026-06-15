@@ -3,7 +3,7 @@ import type { ToolInfoSection } from "@/components/ToolInformation";
 export const studioInformation: ToolInfoSection[] = [
   { title: "Room plan & exact furniture", description: "Upload a room plan, then add reference images of furniture created in FormAI or from any existing source.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Attach clear images of every exact furniture piece to place in the proposal", "Choose feet or meters, then enter width, length and height", "Choose Indoor or Outdoor, then select the room purpose"] },
   { title: "100% reference fidelity", items: ["Preserve each referenced piece’s exact silhouette, proportions and construction details", "Match visible materials, grain, weave, color and surface texture without substitution", "Use multiple views when available for more accurate placement", "Set the room style, palette, finishes, use and furniture budget independently"] },
-  { title: "Your design output", items: ["2D floor plan with furniture layout and dimensions", "Photorealistic rendering with referenced furniture placed naturally", "Accurate scale, perspective, lighting, contact shadows and material response", "Downloadable rendering and project saved to your cloud"] },
+  { title: "Your design output", items: ["2D floor plan with furniture layout and dimensions", "8K-target luxury editorial rendering with referenced furniture placed naturally", "True-to-life color, balanced HDR light, accurate textures and material response", "Downloadable rendering and project saved to your cloud"] },
 ];
 
 export const modelInformation: ToolInfoSection[] = [

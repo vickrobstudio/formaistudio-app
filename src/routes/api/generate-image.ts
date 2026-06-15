@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 const RenderInput = z.object({
-  prompt: z.string().trim().min(10).max(1800),
+  prompt: z.string().trim().min(10).max(3000),
   sourceImage: z.string().startsWith("data:image/").max(8_000_000).nullable().optional(),
   sourceImages: z.array(z.string().startsWith("data:image/").max(8_000_000)).max(5).optional(),
 });
@@ -17,7 +17,9 @@ export const Route = createFileRoute("/api/generate-image")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("Rendering service is unavailable.", { status: 500 });
 
-        const renderPrompt = `${result.data.prompt}. Professional architectural visualization, physically accurate materials and lighting, coherent perspective, construction-ready spatial logic, no text, no logos, no watermarks.`;
+        const isTechnicalDrawing = /2D (floor plan|orthographic)|architectural drafting/i.test(result.data.prompt);
+        const editorialStandard = isTechnicalDrawing ? "Precise professional technical drawing, clean drafting hierarchy and proportional geometry." : "8K-target ultra-detailed luxury editorial architectural photography suitable for a leading worldwide interiors magazine. Shot with the disciplined composition, natural perspective, depth and restraint of an elite architectural photographer. Warm, realistic neutral color science with true-to-life white balance, controlled highlights, open natural shadows and balanced HDR dynamic range. Preserve physically accurate colors, textures, material grain, reflectance, roughness, scale and imperfections. Vegetation must show natural variation in species, hue, density, leaf age and form, never repeated or synthetic. Realistic illumination and contact shadows. No clipping, excessive exposure, crushed blacks, artificial saturation, color casts, neon tones, fantasy grading, haze, halos, plastic surfaces or weird colors.";
+        const renderPrompt = `${result.data.prompt}. ${editorialStandard} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.`;
         let endpoint = "https://ai.gateway.lovable.dev/v1/images/generations";
         let body: BodyInit;
         let contentType: string | undefined = "application/json";
@@ -28,7 +30,7 @@ export const Route = createFileRoute("/api/generate-image")({
           form.append("model", "openai/gpt-image-2");
           form.append("prompt", renderPrompt);
           form.append("size", "1536x1024");
-          form.append("quality", "low");
+          form.append("quality", "high");
           for (const [index, reference] of references.entries()) {
             const match = reference.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
             if (!match) return new Response("A reference image format is not supported.", { status: 400 });
@@ -42,7 +44,7 @@ export const Route = createFileRoute("/api/generate-image")({
           body = JSON.stringify({
             model: "openai/gpt-image-2",
             prompt: renderPrompt,
-            quality: "low",
+            quality: "high",
             size: "1536x1024",
             stream: true,
             partial_images: 1,
