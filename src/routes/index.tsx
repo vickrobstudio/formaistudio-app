@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormAILogo } from "@/components/FormaMobile";
-import landingArtwork from "@/assets/formai-landing-watercolor.png.asset.json";
+import landingArtwork from "@/assets/formai-landing-clean.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
