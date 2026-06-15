@@ -86,8 +86,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
        { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "FormAI STUDIO App" },
       { name: "twitter:description", content: "Interior AI STUDIO App with 3D proposals, photorealistic renderings and more. The future of visualizations." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/saAxfikeWyUmIa5jK4TY97OlnYZ2/social-images/social-1781326689413-ISIMG-768822.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/saAxfikeWyUmIa5jK4TY97OlnYZ2/social-images/social-1781326689413-ISIMG-768822.webp" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/saAxfikeWyUmIa5jK4TY97OlnYZ2/social-images/social-1781492090994-72360254-BBEE-41B8-AFAD-44B3C9636E22.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/saAxfikeWyUmIa5jK4TY97OlnYZ2/social-images/social-1781492090994-72360254-BBEE-41B8-AFAD-44B3C9636E22.webp" },
     ],
     links: [
       {
