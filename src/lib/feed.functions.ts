@@ -1,0 +1,91 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+const CreationIdInput = z.object({ creationId: z.string().uuid() });
+const CommentInput = CreationIdInput.extend({ body: z.string().trim().min(1).max(500) });
+
+export type FeedCreation = {
+  id: string;
+  creatorName: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  creationType: string;
+  createdAt: string;
+  likeCount: number;
+  comments: Array<{ id: string; authorName: string; body: string; createdAt: string }>;
+};
+
+export const getPublicFeed = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: creations, error } = await supabaseAdmin
+    .from("public_creations")
+    .select("id,creator_name,title,description,image_url,creation_type,created_at")
+    .eq("is_public", true)
+    .order("created_at", { ascending: false })
+    .limit(30);
+  if (error) throw new Error("The community feed is unavailable.");
+  if (!creations.length) return [] as FeedCreation[];
+
+  const ids = creations.map((creation) => creation.id);
+  const [{ data: likes }, { data: comments }] = await Promise.all([
+    supabaseAdmin.from("creation_likes").select("creation_id").in("creation_id", ids),
+    supabaseAdmin.from("creation_comments").select("id,creation_id,author_name,body,created_at").in("creation_id", ids).order("created_at", { ascending: true }),
+  ]);
+
+  return creations.map((creation) => ({
+    id: creation.id,
+    creatorName: creation.creator_name,
+    title: creation.title,
+    description: creation.description,
+    imageUrl: creation.image_url,
+    creationType: creation.creation_type,
+    createdAt: creation.created_at,
+    likeCount: likes?.filter((like) => like.creation_id === creation.id).length ?? 0,
+    comments: (comments ?? []).filter((comment) => comment.creation_id === creation.id).slice(-3).map((comment) => ({ id: comment.id, authorName: comment.author_name, body: comment.body, createdAt: comment.created_at })),
+  }));
+});
+
+export const toggleCreationLike = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => CreationIdInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: existing } = await context.supabase.from("creation_likes").select("creation_id").eq("creation_id", data.creationId).eq("user_id", context.userId).maybeSingle();
+    const result = existing
+      ? await context.supabase.from("creation_likes").delete().eq("creation_id", data.creationId).eq("user_id", context.userId)
+      : await context.supabase.from("creation_likes").insert({ creation_id: data.creationId, user_id: context.userId });
+    if (result.error) throw new Error("Unable to update this like.");
+    return { liked: !existing };
+  });
+
+export const toggleCreationFavorite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => CreationIdInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: existing } = await context.supabase.from("creation_favorites").select("creation_id").eq("creation_id", data.creationId).eq("user_id", context.userId).maybeSingle();
+    const result = existing
+      ? await context.supabase.from("creation_favorites").delete().eq("creation_id", data.creationId).eq("user_id", context.userId)
+      : await context.supabase.from("creation_favorites").insert({ creation_id: data.creationId, user_id: context.userId });
+    if (result.error) throw new Error("Unable to update your library.");
+    return { saved: !existing };
+  });
+
+export const addCreationComment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => CommentInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: profile } = await context.supabase.from("profiles").select("full_name,email").eq("id", context.userId).single();
+    const authorName = profile?.full_name?.trim() || profile?.email?.split("@")[0] || "FormAI member";
+    const { error } = await context.supabase.from("creation_comments").insert({ creation_id: data.creationId, user_id: context.userId, author_name: authorName.slice(0, 80), body: data.body });
+    if (error) throw new Error("Unable to post your comment.");
+    return { ok: true };
+  });
+
+export const listFavoriteCreations = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase.from("creation_favorites").select("created_at,public_creations(id,title,image_url,creator_name,creation_type)").eq("user_id", context.userId).order("created_at", { ascending: false });
+    if (error) throw new Error("Unable to load your favorites.");
+    return data;
+  });

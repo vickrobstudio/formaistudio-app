@@ -104,6 +104,96 @@ export type Database = {
         }
         Relationships: []
       }
+      creation_comments: {
+        Row: {
+          author_name: string
+          body: string
+          created_at: string
+          creation_id: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          author_name: string
+          body: string
+          created_at?: string
+          creation_id: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          author_name?: string
+          body?: string
+          created_at?: string
+          creation_id?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creation_comments_creation_id_fkey"
+            columns: ["creation_id"]
+            isOneToOne: false
+            referencedRelation: "public_creations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creation_favorites: {
+        Row: {
+          created_at: string
+          creation_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          creation_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          creation_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creation_favorites_creation_id_fkey"
+            columns: ["creation_id"]
+            isOneToOne: false
+            referencedRelation: "public_creations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creation_likes: {
+        Row: {
+          created_at: string
+          creation_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          creation_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          creation_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creation_likes_creation_id_fkey"
+            columns: ["creation_id"]
+            isOneToOne: false
+            referencedRelation: "public_creations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_proposals: {
         Row: {
           ai_prompt: string | null
@@ -410,6 +500,45 @@ export type Database = {
           id?: string
           starter_credits?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      public_creations: {
+        Row: {
+          created_at: string
+          creation_type: string
+          creator_name: string
+          description: string
+          id: string
+          image_url: string
+          is_public: boolean
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          creation_type: string
+          creator_name: string
+          description?: string
+          id?: string
+          image_url: string
+          is_public?: boolean
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          creation_type?: string
+          creator_name?: string
+          description?: string
+          id?: string
+          image_url?: string
+          is_public?: boolean
+          title?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

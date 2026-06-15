@@ -1,9 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Grid2X2, Settings, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, Grid2X2, House, Settings, Sparkles, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import formaiLogo from "@/assets/formai-logo-complete.png.asset.json";
 
 const tools = [
+  { to: "/feed", label: "Home", icon: House },
   { to: "/create", label: "Create", icon: Sparkles },
   { to: "/tools", label: "Tools", icon: Grid2X2 },
   { to: "/dashboard", label: "Profile", icon: UserRound },
@@ -46,7 +47,7 @@ export function ToolTabBar() {
   };
   return (
     <nav aria-label="Creative tools" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-      <div className="mx-auto grid h-16 max-w-xl grid-cols-4">
+      <div className="mx-auto grid h-16 max-w-xl grid-cols-5">
         {tools.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
