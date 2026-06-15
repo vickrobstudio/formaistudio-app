@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormAILogo } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
 import landingArtwork from "@/assets/formai-landing-sharp.png.asset.json";
+import desktopWallpaper from "@/assets/formai-desktop-wallpaper.png.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -11,14 +12,15 @@ export const Route = createFileRoute("/")({
     { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     { property: "og:title", content: "FormAI STUDIO — AI Interior Design" },
     { property: "og:description", content: "AI-powered interior visualization and furniture exploration." },
-  ], links: [{ rel: "preload", as: "image", href: landingArtwork.url, fetchPriority: "high" }] }),
+  ], links: [{ rel: "preload", as: "image", href: landingArtwork.url, fetchPriority: "high" }, { rel: "preload", as: "image", href: desktopWallpaper.url, fetchPriority: "high" }] }),
   component: HomePage,
 });
 
 function HomePage() {
   return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen touch-none overflow-hidden overscroll-none bg-landing-paper">
     <section className="relative h-full w-full overflow-hidden bg-landing-paper">
-      <img src={landingArtwork.url} alt="Watercolor collection of sculptural furniture and interior objects" width="853" height="1844" fetchPriority="high" className="absolute inset-0 block size-full min-h-full min-w-full object-cover object-center" />
+      <img src={landingArtwork.url} alt="Watercolor collection of sculptural furniture and interior objects" width="853" height="1844" fetchPriority="high" className="absolute inset-0 block size-full min-h-full min-w-full object-cover object-center md:hidden" />
+      <img src={desktopWallpaper.url} alt="Watercolor FORM lettering composed of furniture pieces" width="1660" height="920" fetchPriority="high" className="absolute inset-0 hidden size-full min-h-full min-w-full object-cover object-center md:block" />
       <Link to="/dashboard" aria-label="Open FormAI Studio" className="absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-10 flex min-h-11 -translate-x-1/2 items-center justify-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
         <FormAILogo className="w-16 sm:w-20" />
       </Link>
