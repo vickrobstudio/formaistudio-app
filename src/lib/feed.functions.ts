@@ -83,8 +83,8 @@ export const addCreationComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CommentInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: profile } = await context.supabase.from("profiles").select("full_name,email").eq("id", context.userId).single();
-    const authorName = profile?.full_name?.trim() || profile?.email?.split("@")[0] || "FormAI member";
+    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
+    const authorName = profile?.username || "FormAI member";
     const { error } = await context.supabase.from("creation_comments").insert({ creation_id: data.creationId, user_id: context.userId, author_name: authorName.slice(0, 80), body: data.body });
     if (error) throw new Error("Unable to post your comment.");
     return { ok: true };
@@ -119,8 +119,8 @@ export const saveFurnitureCreation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => FurnitureCreationInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: profile } = await context.supabase.from("profiles").select("full_name,email").eq("id", context.userId).single();
-    const creatorName = profile?.full_name?.trim() || profile?.email?.split("@")[0] || "FormAI member";
+    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
+    const creatorName = profile?.username || "FormAI member";
     const { data: creation, error } = await context.supabase.from("public_creations").insert({
       user_id: context.userId,
       creator_name: creatorName.slice(0, 80),
