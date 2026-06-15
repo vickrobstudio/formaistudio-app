@@ -68,7 +68,7 @@ export function ToolTabBar() {
   );
 }
 
-export function BackLink({ label = "Back" }: { label?: string }) {
+export function BackLink({ label = "Back" }: { to?: "/" | "/dashboard"; label?: string }) {
   const router = useRouter();
   return <button type="button" onClick={() => router.history.back()} className="inline-flex min-h-11 items-center gap-2 rounded-xl text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"><ArrowLeft className="size-4" />{label}</button>;
 }
