@@ -1,4 +1,0 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DashboardDetail } from "@/components/DashboardDetail";
-
-export const Route = createFileRoute("/_authenticated/terms")({ component: () => <DashboardDetail eyebrow="Legal" title="Terms & Conditions" description="Rules for using FormAI STUDIO."><div className="space-y-5 text-sm leading-6 text-muted-foreground"><p>By using FormAI STUDIO, you agree to use the service lawfully and only with content you have permission to upload.</p><p>AI-generated results may vary. Review all outputs before professional, commercial, or construction use.</p><p>Your account is personal to you. Keep your sign-in credentials secure.</p></div></DashboardDetail> });

@@ -9,11 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
@@ -22,12 +25,15 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
-import { Route as AuthenticatedTermsRouteImport } from './routes/_authenticated/terms'
-import { Route as AuthenticatedPrivacyRouteImport } from './routes/_authenticated/privacy'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/cloud'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioRoute = StudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -36,6 +42,11 @@ const StudioRoute = StudioRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PhotoToAiRoute = PhotoToAiRouteImport.update({
@@ -51,6 +62,11 @@ const ModelToAiRoute = ModelToAiRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -92,16 +108,6 @@ const AuthenticatedWalletRoute = AuthenticatedWalletRouteImport.update({
   path: '/wallet',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedTermsRoute = AuthenticatedTermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedPrivacyRoute = AuthenticatedPrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -123,16 +129,17 @@ export interface FileRoutesByFullPath {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/privacy': typeof PrivacyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
+  '/terms': typeof TermsRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
-  '/privacy': typeof AuthenticatedPrivacyRoute
-  '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
@@ -142,16 +149,17 @@ export interface FileRoutesByTo {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/privacy': typeof PrivacyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
+  '/terms': typeof TermsRoute
   '/account': typeof AuthenticatedAccountRoute
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
-  '/privacy': typeof AuthenticatedPrivacyRoute
-  '/terms': typeof AuthenticatedTermsRoute
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
@@ -163,16 +171,17 @@ export interface FileRoutesById {
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
+  '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/privacy': typeof PrivacyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/studio': typeof StudioRoute
+  '/terms': typeof TermsRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/cloud': typeof AuthenticatedCloudRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
-  '/_authenticated/privacy': typeof AuthenticatedPrivacyRoute
-  '/_authenticated/terms': typeof AuthenticatedTermsRoute
   '/_authenticated/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
@@ -184,16 +193,17 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/contact'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/privacy'
     | '/sitemap.xml'
     | '/studio'
+    | '/terms'
     | '/account'
     | '/cloud'
     | '/history'
-    | '/privacy'
-    | '/terms'
     | '/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
@@ -203,16 +213,17 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/contact'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/privacy'
     | '/sitemap.xml'
     | '/studio'
+    | '/terms'
     | '/account'
     | '/cloud'
     | '/history'
-    | '/privacy'
-    | '/terms'
     | '/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
@@ -223,16 +234,17 @@ export interface FileRouteTypes {
     | '/ai-edits'
     | '/ai-to-video'
     | '/auth'
+    | '/contact'
     | '/dashboard'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/privacy'
     | '/sitemap.xml'
     | '/studio'
+    | '/terms'
     | '/_authenticated/account'
     | '/_authenticated/cloud'
     | '/_authenticated/history'
-    | '/_authenticated/privacy'
-    | '/_authenticated/terms'
     | '/_authenticated/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
@@ -244,17 +256,27 @@ export interface RootRouteChildren {
   AiEditsRoute: typeof AiEditsRoute
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
+  ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
+  PrivacyRoute: typeof PrivacyRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StudioRoute: typeof StudioRoute
+  TermsRoute: typeof TermsRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/studio': {
       id: '/studio'
       path: '/studio'
@@ -267,6 +289,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/photo-to-ai': {
@@ -288,6 +317,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -346,20 +382,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWalletRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/terms': {
-      id: '/_authenticated/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof AuthenticatedTermsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/privacy': {
-      id: '/_authenticated/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof AuthenticatedPrivacyRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/history': {
       id: '/_authenticated/history'
       path: '/history'
@@ -388,8 +410,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedCloudRoute: typeof AuthenticatedCloudRoute
   AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
-  AuthenticatedPrivacyRoute: typeof AuthenticatedPrivacyRoute
-  AuthenticatedTermsRoute: typeof AuthenticatedTermsRoute
   AuthenticatedWalletRoute: typeof AuthenticatedWalletRoute
 }
 
@@ -397,8 +417,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedCloudRoute: AuthenticatedCloudRoute,
   AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
-  AuthenticatedPrivacyRoute: AuthenticatedPrivacyRoute,
-  AuthenticatedTermsRoute: AuthenticatedTermsRoute,
   AuthenticatedWalletRoute: AuthenticatedWalletRoute,
 }
 
@@ -411,11 +429,14 @@ const rootRouteChildren: RootRouteChildren = {
   AiEditsRoute: AiEditsRoute,
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
+  ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
+  PrivacyRoute: PrivacyRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StudioRoute: StudioRoute,
+  TermsRoute: TermsRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
 }

@@ -1,7 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Box, Camera, Film, ImagePlus, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
-import formaiLogo from "@/assets/formai-official-logo.png.asset.json";
+import formaiLogo from "@/assets/formai-metallic-logo-isolated.png.asset.json";
 
 const tools = [
   { to: "/studio", label: "Studio", icon: Sparkles },
@@ -11,13 +11,15 @@ const tools = [
   { to: "/ai-to-video", label: "Video", icon: Film },
 ] as const;
 
-export function FormAILogo({ inverse = false, className = "h-21" }: { inverse?: boolean; className?: string }) {
+export function FormAILogo({ className = "h-12" }: { className?: string }) {
   return (
-    <img
-      src={formaiLogo.url}
-      alt="FormAI logo"
-      className={`${className} w-auto object-contain ${inverse ? "brightness-0 invert" : ""}`}
-    />
+    <span className={`relative block aspect-[1.36] overflow-hidden ${className}`}>
+      <img
+        src={formaiLogo.url}
+        alt="FormAI logo"
+        className="absolute -left-[58%] -top-[42%] h-auto w-[206%] max-w-none"
+      />
+    </span>
   );
 }
 
@@ -26,7 +28,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   return (
     <>
       <header className={`fixed inset-x-0 top-0 z-40 flex h-[calc(4rem+env(safe-area-inset-top))] transform-gpu items-center px-[max(1.25rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/95 text-foreground backdrop-blur"}`}>
-        <Link to="/" aria-label="FormAI STUDIO home"><FormAILogo inverse /></Link>
+        <Link to="/" aria-label="FormAI STUDIO home"><FormAILogo /></Link>
       </header>
       {path !== "/" && <div className="h-[calc(4rem+env(safe-area-inset-top))]" />}
     </>

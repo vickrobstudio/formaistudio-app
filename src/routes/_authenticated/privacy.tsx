@@ -1,4 +1,0 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { DashboardDetail } from "@/components/DashboardDetail";
-
-export const Route = createFileRoute("/_authenticated/privacy")({ component: () => <DashboardDetail eyebrow="Legal" title="Privacy" description="How your information is handled."><div className="space-y-5 text-sm leading-6 text-muted-foreground"><p>We store account information and the content needed to provide your private FormAI STUDIO experience.</p><p>Your projects and cloud files are associated with your account and are not made public by default.</p><p>You may contact FormAI STUDIO to request access to or deletion of your account information.</p></div></DashboardDetail> });
