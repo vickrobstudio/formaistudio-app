@@ -51,18 +51,31 @@ export async function streamImage(
   onImage: (src: string, isFinal: boolean) => void,
   sourceImages: string[] = [],
 ) {
-  const preparedSourceImage = sourceImage ? await compressImageDataUrl(sourceImage) : null;
-  const preparedSourceImages = await Promise.all(sourceImages.map((image) => compressImageDataUrl(image)));
-  const totalImagePayloadLength = [preparedSourceImage, ...preparedSourceImages].reduce((sum, image) => sum + (image?.length ?? 0), 0);
+  const preparedSourceImage = sourceImage
+    ? await compressImageDataUrl(sourceImage)
+    : null;
+  const preparedSourceImages = await Promise.all(
+    sourceImages.map((image) => compressImageDataUrl(image)),
+  );
+  const totalImagePayloadLength = [preparedSourceImage, ...preparedSourceImages].reduce(
+    (sum, image) => sum + (image?.length ?? 0),
+    0,
+  );
 
   if (totalImagePayloadLength > MAX_TOTAL_IMAGE_DATA_URL_LENGTH) {
-    throw new Error("The attached images are too large. Please remove some references or use smaller files.");
+    throw new Error(
+      "The attached images are too large. Please remove some references or use smaller files.",
+    );
   }
 
   const response = await fetch("/api/generate-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, sourceImage: preparedSourceImage, sourceImages: preparedSourceImages }),
+    body: JSON.stringify({
+      prompt,
+      sourceImage: preparedSourceImage,
+      sourceImages: preparedSourceImages,
+    }),
   });
 
   if (!response.ok || !response.body) {
@@ -75,7 +88,9 @@ export async function streamImage(
 
   if (response.headers.get("content-type")?.includes("application/json")) {
     const result = (await response.json()) as { image?: string };
-    if (!result.image) throw new Error("The rendering response did not include an image.");
+    if (!result.image) {
+      throw new Error("The rendering response did not include an image.");
+    }
     onImage(result.image, true);
     return;
   }
@@ -94,7 +109,10 @@ export async function streamImage(
 
     for (const event of events) {
       const lines = event.split(/\r?\n/);
-      const eventType = lines.find((item) => item.startsWith("event:"))?.slice(6).trim();
+      const eventType = lines
+        .find((item) => item.startsWith("event:"))
+        ?.slice(6)
+        .trim();
       const line = lines.find((item) => item.startsWith("data:"));
       if (!line) continue;
       const payload = line.slice(5).trim();
@@ -116,5 +134,9 @@ export async function streamImage(
     }
   }
 
-  if (!completed) throw new Error("The image stream ended before the final render was completed.");
+  if (!completed) {
+    throw new Error(
+      "The image stream ended before the final render was completed.",
+    );
+  }
 }
