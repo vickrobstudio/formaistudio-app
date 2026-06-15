@@ -31,6 +31,8 @@ export const Route = createFileRoute("/api/generate-image")({
           form.append("prompt", renderPrompt);
           form.append("size", "1536x1024");
           form.append("quality", "high");
+          form.append("stream", "true");
+          form.append("partial_images", "1");
           for (const [index, reference] of references.entries()) {
             const match = reference.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
             if (!match) return new Response("A reference image format is not supported.", { status: 400 });
@@ -51,7 +53,7 @@ export const Route = createFileRoute("/api/generate-image")({
           });
         }
 
-        const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
+        const headers: Record<string, string> = { Authorization: `Bearer ${key}`, Accept: "text/event-stream" };
         if (contentType) headers["Content-Type"] = contentType;
         const upstream = await fetch(endpoint, {
           method: "POST",
@@ -65,15 +67,12 @@ export const Route = createFileRoute("/api/generate-image")({
           return new Response(message, { status });
         }
 
-        if (references.length > 0) {
-          const payload = (await upstream.json()) as { data?: Array<{ b64_json?: string }> };
-          const generated = payload.data?.[0]?.b64_json;
-          if (!generated) return new Response("The edit did not return an image.", { status: 502 });
-          return Response.json({ image: `data:image/png;base64,${generated}` });
-        }
-
         return new Response(upstream.body, {
-          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+          },
         });
       },
     },
