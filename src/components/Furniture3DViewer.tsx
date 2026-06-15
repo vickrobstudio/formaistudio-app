@@ -53,7 +53,7 @@ export function Furniture3DViewer({ modelUrl, onUsdExported }: { modelUrl: strin
       </Canvas>
       <p className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-2 text-xs text-muted-foreground"><Rotate3D className="size-4" />Drag to rotate · pinch to zoom</p>
     </div>
-    <Button type="button" variant="outline" className="w-full" disabled={exporting} onClick={() => void exportUsd()}>{exporting ? <LoaderCircle className="animate-spin" /> : <Box />}{exporting ? "Exporting USDZ…" : "Export & download USDZ"}</Button>
+    <Button type="button" variant="outline" className="w-full" disabled={exporting} onClick={() => void exportUsd()}>{exporting ? <LoaderCircle className="animate-spin" /> : <Box />}{exporting ? "Exporting USDZ…" : "Export & save to Files"}</Button>
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
   </div>;
 }
