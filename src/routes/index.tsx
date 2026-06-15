@@ -7,6 +7,8 @@ export const Route = createFileRoute("/")({
   head: () => ({ meta: [
     { title: "FormAI STUDIO — AI Interior Design" },
     { name: "description", content: "Create interior design proposals with AI and explore selected furniture in photorealistic spaces." },
+    { name: "theme-color", content: "#f4ecd9" },
+    { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     { property: "og:title", content: "FormAI STUDIO — AI Interior Design" },
     { property: "og:description", content: "AI-powered interior visualization and furniture exploration." },
   ], links: [{ rel: "preload", as: "image", href: landingArtwork.url, fetchPriority: "high" }] }),
@@ -14,7 +16,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  return <main className="fixed inset-0 h-[100dvh] w-screen overflow-hidden bg-landing-paper">
+  return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen overflow-hidden bg-landing-paper">
     <section className="relative h-full w-full overflow-hidden bg-landing-paper">
       <img src={landingArtwork.url} alt="Watercolor collection of sculptural furniture and interior objects" width="853" height="1844" fetchPriority="high" className="absolute inset-0 block size-full min-h-full min-w-full object-cover object-center" />
       <Link to="/dashboard" aria-label="Open FormAI Studio" className="absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-10 flex min-h-11 -translate-x-1/2 items-center justify-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
