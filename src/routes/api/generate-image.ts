@@ -53,7 +53,7 @@ export const Route = createFileRoute("/api/generate-image")({
           form.append("model", "openai/gpt-image-2");
           form.append("prompt", renderPrompt);
           form.append("size", "1536x1024");
-          form.append("quality", "high");
+          form.append("quality", "medium");
           form.append("stream", "true");
           form.append("partial_images", "1");
           for (const [index, reference] of references.entries()) {
@@ -77,7 +77,7 @@ export const Route = createFileRoute("/api/generate-image")({
           body = JSON.stringify({
             model: "openai/gpt-image-2",
             prompt: renderPrompt,
-            quality: "high",
+            quality: "medium",
             size: "1536x1024",
             stream: true,
             partial_images: 1,

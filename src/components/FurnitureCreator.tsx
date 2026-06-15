@@ -48,15 +48,16 @@ export function FurnitureCreator() {
     setConceptProgress(3);
     setError("");
     const progressTimer = window.setInterval(() => {
-      setConceptProgress((current) => Math.min(92, current + Math.max(1, Math.round((92 - current) / 9))));
-    }, 700);
+      setConceptProgress((current) => Math.min(97, current + Math.max(1, Math.round((97 - current) / 14))));
+    }, 900);
     try {
       await streamImage(`Design one original, manufacturable custom furniture piece from this conversation: ${prompt}. Materials: ${materials.join(", ") || "designer selected"}. Supplier sourcing location: ${location || "global"}. Use attached references only for shape, construction, material and detail inspiration. Show the complete uncropped product as an 8K-target luxury editorial furniture photograph by an elite architectural and product photographer, on a warm neutral studio background, with accurate proportions, realistic color, true material grain, texture, reflectance and controlled HDR illumination, no text, no logos.`, null, (image, isFinal) => {
         if (isFinal) {
           setResult(image);
           setConceptProgress(100);
         } else {
-          setConceptProgress((current) => Math.max(current, 80));
+          setResult(image);
+          setConceptProgress((current) => Math.min(96, current + 6));
         }
       }, references);
     } catch (cause) {
