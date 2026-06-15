@@ -16,6 +16,7 @@ const FurnitureCreationInput = z.object({
 export type FeedCreation = {
   id: string;
   creatorName: string;
+  creatorAvatarUrl: string | null;
   title: string;
   description: string;
   imageUrl: string;
@@ -29,7 +30,7 @@ export const getPublicFeed = createServerFn({ method: "GET" }).handler(async () 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: creations, error } = await supabaseAdmin
     .from("public_creations")
-    .select("id,creator_name,title,description,image_url,creation_type,created_at")
+    .select("id,user_id,creator_name,title,description,image_url,creation_type,created_at")
     .eq("is_public", true)
     .order("created_at", { ascending: false })
     .limit(30);
@@ -37,14 +38,24 @@ export const getPublicFeed = createServerFn({ method: "GET" }).handler(async () 
   if (!creations.length) return [] as FeedCreation[];
 
   const ids = creations.map((creation) => creation.id);
-  const [{ data: likes }, { data: comments }] = await Promise.all([
+  const userIds = [...new Set(creations.map((creation) => creation.user_id))];
+  const [{ data: likes }, { data: comments }, { data: profiles }] = await Promise.all([
     supabaseAdmin.from("creation_likes").select("creation_id").in("creation_id", ids),
     supabaseAdmin.from("creation_comments").select("id,creation_id,author_name,body,created_at").in("creation_id", ids).order("created_at", { ascending: true }),
+    supabaseAdmin.from("profiles").select("id,username,avatar_path").in("id", userIds),
   ]);
+
+  const avatarUrls = new Map<string, string>();
+  await Promise.all((profiles ?? []).map(async (profile) => {
+    if (!profile.avatar_path) return;
+    const signed = await supabaseAdmin.storage.from("user-outputs").createSignedUrl(profile.avatar_path, 3_600);
+    if (signed.data?.signedUrl) avatarUrls.set(profile.id, signed.data.signedUrl);
+  }));
 
   return creations.map((creation) => ({
     id: creation.id,
-    creatorName: creation.creator_name,
+    creatorName: profiles?.find((profile) => profile.id === creation.user_id)?.username ?? creation.creator_name,
+    creatorAvatarUrl: avatarUrls.get(creation.user_id) ?? null,
     title: creation.title,
     description: creation.description,
     imageUrl: creation.image_url,
@@ -83,8 +94,8 @@ export const addCreationComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CommentInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: profile } = await context.supabase.from("profiles").select("full_name,email").eq("id", context.userId).single();
-    const authorName = profile?.full_name?.trim() || profile?.email?.split("@")[0] || "FormAI member";
+    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
+    const authorName = profile?.username || "FormAI member";
     const { error } = await context.supabase.from("creation_comments").insert({ creation_id: data.creationId, user_id: context.userId, author_name: authorName.slice(0, 80), body: data.body });
     if (error) throw new Error("Unable to post your comment.");
     return { ok: true };
@@ -119,8 +130,8 @@ export const saveFurnitureCreation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => FurnitureCreationInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: profile } = await context.supabase.from("profiles").select("full_name,email").eq("id", context.userId).single();
-    const creatorName = profile?.full_name?.trim() || profile?.email?.split("@")[0] || "FormAI member";
+    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
+    const creatorName = profile?.username || "FormAI member";
     const { data: creation, error } = await context.supabase.from("public_creations").insert({
       user_id: context.userId,
       creator_name: creatorName.slice(0, 80),

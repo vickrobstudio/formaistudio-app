@@ -17,12 +17,7 @@ export const activateVerifiedVipAccess = createServerFn({ method: "POST" })
     if (email !== "hello@vickrob.com") return { activated: false };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("profiles").upsert({
-      id: context.userId,
-      email,
-      has_free_access: true,
-      updated_at: new Date().toISOString(),
-    });
+    const { error } = await supabaseAdmin.from("profiles").update({ has_free_access: true, updated_at: new Date().toISOString() }).eq("id", context.userId);
     if (error) throw new Error("Unable to activate access");
     return { activated: true };
   });

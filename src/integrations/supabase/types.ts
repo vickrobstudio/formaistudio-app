@@ -472,6 +472,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_path: string | null
           company_name: string | null
           created_at: string
           email: string | null
@@ -480,8 +481,10 @@ export type Database = {
           id: string
           starter_credits: number
           updated_at: string
+          username: string
         }
         Insert: {
+          avatar_path?: string | null
           company_name?: string | null
           created_at?: string
           email?: string | null
@@ -490,8 +493,10 @@ export type Database = {
           id: string
           starter_credits?: number
           updated_at?: string
+          username: string
         }
         Update: {
+          avatar_path?: string | null
           company_name?: string | null
           created_at?: string
           email?: string | null
@@ -500,6 +505,7 @@ export type Database = {
           id?: string
           starter_credits?: number
           updated_at?: string
+          username?: string
         }
         Relationships: []
       }

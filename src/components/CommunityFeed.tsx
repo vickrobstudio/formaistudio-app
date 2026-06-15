@@ -5,6 +5,7 @@ import { Bookmark, Heart, MessageCircle, Send, Share } from "lucide-react";
 import { useState } from "react";
 import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { addCreationComment, getPublicFeed, toggleCreationFavorite, toggleCreationLike } from "@/lib/feed.functions";
 import { useCredits } from "@/hooks/use-credits";
 
@@ -41,7 +42,7 @@ export function CommunityFeed() {
       {isLoading && <p className="px-5 py-12 text-center text-sm text-muted-foreground">Loading the community…</p>}
       {!isLoading && creations.length === 0 && <div className="px-5 py-12 text-center"><p className="text-xl font-light">The feed is ready</p><p className="mt-2 text-sm text-muted-foreground">Public creations shared by members will appear here.</p><Button asChild className="mt-6"><Link to="/create">Create the first piece</Link></Button></div>}
       {creations.map((creation) => <article key={creation.id} className="border-b border-border pb-7 mb-7">
-        <div className="flex items-center justify-between px-5 pb-3"><div><p className="text-sm font-semibold">{creation.creatorName}</p><p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{creation.creationType} · {new Date(creation.createdAt).toLocaleDateString()}</p></div></div>
+        <div className="flex items-center gap-3 px-5 pb-3"><Avatar><AvatarImage src={creation.creatorAvatarUrl ?? undefined} alt={`${creation.creatorName} profile photo`} className="object-cover" /><AvatarFallback>{creation.creatorName.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar><div><p className="text-sm font-semibold">{creation.creatorName}</p><p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{creation.creationType} · {new Date(creation.createdAt).toLocaleDateString()}</p></div></div>
         <img src={creation.imageUrl} alt={creation.title} loading="lazy" className="aspect-[4/5] w-full object-cover" />
         <div className="flex items-center px-3 pt-2">
           <Button type="button" variant="ghost" size="icon" aria-label={`Like ${creation.title}`} onClick={() => action.mutate({ type: "like", creationId: creation.id })}><Heart /></Button>
