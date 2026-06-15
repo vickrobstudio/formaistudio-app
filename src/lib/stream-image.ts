@@ -2,11 +2,12 @@ export async function streamImage(
   prompt: string,
   sourceImage: string | null,
   onImage: (src: string, isFinal: boolean) => void,
+  sourceImages: string[] = [],
 ) {
   const response = await fetch("/api/generate-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, sourceImage }),
+    body: JSON.stringify({ prompt, sourceImage, sourceImages }),
   });
 
   if (!response.ok || !response.body) {
