@@ -4,6 +4,7 @@ import { z } from "zod";
 const RenderInput = z.object({
   prompt: z.string().trim().min(10).max(1800),
   sourceImage: z.string().startsWith("data:image/").max(8_000_000).nullable().optional(),
+  sourceImages: z.array(z.string().startsWith("data:image/").max(8_000_000)).max(5).optional(),
 });
 
 export const Route = createFileRoute("/api/generate-image")({
@@ -21,16 +22,19 @@ export const Route = createFileRoute("/api/generate-image")({
         let body: BodyInit;
         let contentType: string | undefined = "application/json";
 
-        if (result.data.sourceImage) {
-          const match = result.data.sourceImage.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
-          if (!match) return new Response("The reference image format is not supported.", { status: 400 });
-          const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
+        const references = [result.data.sourceImage, ...(result.data.sourceImages ?? [])].filter((image): image is string => Boolean(image));
+        if (references.length > 0) {
           const form = new FormData();
           form.append("model", "openai/gpt-image-2");
           form.append("prompt", renderPrompt);
           form.append("size", "1536x1024");
           form.append("quality", "low");
-          form.append("image", new Blob([bytes], { type: match[1] }), "reference.png");
+          for (const [index, reference] of references.entries()) {
+            const match = reference.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
+            if (!match) return new Response("A reference image format is not supported.", { status: 400 });
+            const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
+            form.append("image", new Blob([bytes], { type: match[1] }), `reference-${index + 1}.png`);
+          }
           endpoint = "https://ai.gateway.lovable.dev/v1/images/edits";
           body = form;
           contentType = undefined;
@@ -59,7 +63,7 @@ export const Route = createFileRoute("/api/generate-image")({
           return new Response(message, { status });
         }
 
-        if (result.data.sourceImage) {
+        if (references.length > 0) {
           const payload = (await upstream.json()) as { data?: Array<{ b64_json?: string }> };
           const generated = payload.data?.[0]?.b64_json;
           if (!generated) return new Response("The edit did not return an image.", { status: 502 });
