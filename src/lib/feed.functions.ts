@@ -4,6 +4,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const CreationIdInput = z.object({ creationId: z.string().uuid() });
 const CommentInput = CreationIdInput.extend({ body: z.string().trim().min(1).max(500) });
+const FurnitureCreationInput = z.object({
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000),
+  imageUrl: z.string().min(1).max(8_000_000),
+  isPublic: z.boolean(),
+});
 
 export type FeedCreation = {
   id: string;
@@ -88,4 +94,40 @@ export const listFavoriteCreations = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase.from("creation_favorites").select("created_at,public_creations(id,title,image_url,creator_name,creation_type)").eq("user_id", context.userId).order("created_at", { ascending: false });
     if (error) throw new Error("Unable to load your favorites.");
     return data;
+  });
+
+export const listReusableFurniture = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const [{ data: owned, error: ownedError }, { data: favorites, error: favoritesError }] = await Promise.all([
+      context.supabase.from("public_creations").select("id,title,image_url,creator_name,created_at").eq("user_id", context.userId).eq("creation_type", "furniture").order("created_at", { ascending: false }),
+      context.supabase.from("creation_favorites").select("created_at,public_creations(id,title,image_url,creator_name,creation_type)").eq("user_id", context.userId).order("created_at", { ascending: false }),
+    ]);
+    if (ownedError || favoritesError) throw new Error("Unable to load your furniture library.");
+    const saved = (favorites ?? []).flatMap((favorite) => {
+      const item = favorite.public_creations;
+      if (!item || item.creation_type !== "furniture") return [];
+      return [{ id: item.id, title: item.title, imageUrl: item.image_url, creatorName: item.creator_name, source: "Saved" as const }];
+    });
+    const mine = (owned ?? []).map((item) => ({ id: item.id, title: item.title, imageUrl: item.image_url, creatorName: item.creator_name, source: "Created" as const }));
+    return [...mine, ...saved.filter((savedItem) => !mine.some((ownedItem) => ownedItem.id === savedItem.id))];
+  });
+
+export const saveFurnitureCreation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => FurnitureCreationInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: profile } = await context.supabase.from("profiles").select("full_name,email").eq("id", context.userId).single();
+    const creatorName = profile?.full_name?.trim() || profile?.email?.split("@")[0] || "FormAI member";
+    const { data: creation, error } = await context.supabase.from("public_creations").insert({
+      user_id: context.userId,
+      creator_name: creatorName.slice(0, 80),
+      title: data.title,
+      description: data.description,
+      image_url: data.imageUrl,
+      creation_type: "furniture",
+      is_public: data.isPublic,
+    }).select("id").single();
+    if (error) throw new Error("Unable to save this furniture piece.");
+    return creation;
   });
