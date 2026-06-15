@@ -7,7 +7,7 @@ export const Route = createFileRoute("/")({
   head: () => ({ meta: [
     { title: "FormAI STUDIO — AI Interior Design" },
     { name: "description", content: "Create interior design proposals with AI and explore selected furniture in photorealistic spaces." },
-    { name: "theme-color", content: "#f4ecd9" },
+    { name: "theme-color", content: "#fbf5e7" },
     { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     { property: "og:title", content: "FormAI STUDIO — AI Interior Design" },
     { property: "og:description", content: "AI-powered interior visualization and furniture exploration." },

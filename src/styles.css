@@ -118,7 +118,7 @@
   --dashboard-muted: oklch(1 0 0);
   --dashboard-border: oklch(0.88 0.035 78 / 22%);
   --landing-button: oklch(0.06 0 0);
-  --landing-paper: oklch(0.94 0.035 82);
+  --landing-paper: oklch(0.971 0.0196 87.5);
 }
 
 .dark {
