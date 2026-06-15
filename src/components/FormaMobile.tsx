@@ -13,11 +13,13 @@ const tools = [
 
 export function FormAILogo({ className = "h-12" }: { className?: string }) {
   return (
-    <img
-      src={formaiLogo.url}
-      alt="FormAI logo"
-      className={`${className} w-auto object-contain`}
-    />
+    <span className={`relative block aspect-[1.36] overflow-hidden ${className}`}>
+      <img
+        src={formaiLogo.url}
+        alt="FormAI logo"
+        className="absolute -left-[58%] -top-[42%] h-auto w-[206%] max-w-none"
+      />
+    </span>
   );
 }
 

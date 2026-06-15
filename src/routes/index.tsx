@@ -17,7 +17,7 @@ function HomePage() {
     <section className="relative min-h-[100svh] overflow-hidden">
       <img src={landingArtwork.url} alt="Watercolor collection of sculptural furniture and interior objects" className="absolute inset-0 h-full w-full object-cover object-center" />
       <Link to="/dashboard" aria-label="Open FormAI Studio" className="absolute bottom-[max(1.15rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-10 flex min-h-11 items-end rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
-        <FormAILogo className="h-auto w-20 sm:w-24" />
+        <FormAILogo className="w-20 sm:w-24" />
       </Link>
       <nav aria-label="Legal" className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center whitespace-nowrap text-[9px] tracking-[0.04em] text-foreground sm:text-[11px]">
         <Link to="/privacy" className="min-h-11 px-1.5 leading-[2.75rem]">Privacy Policy</Link><span aria-hidden="true">|</span>
