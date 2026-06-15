@@ -17,6 +17,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
+import { Route as FeedRouteImport } from './routes/feed'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as ContactRouteImport } from './routes/contact'
@@ -71,6 +72,11 @@ const PhotoToAiRoute = PhotoToAiRouteImport.update({
 const ModelToAiRoute = ModelToAiRouteImport.update({
   id: '/model-to-ai',
   path: '/model-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeedRoute = FeedRouteImport.update({
+  id: '/feed',
+  path: '/feed',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
+  '/feed': typeof FeedRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -181,6 +188,7 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
+  '/feed': typeof FeedRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
+  '/feed': typeof FeedRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/create'
     | '/dashboard'
+    | '/feed'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/create'
     | '/dashboard'
+    | '/feed'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -282,6 +293,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/create'
     | '/dashboard'
+    | '/feed'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -308,6 +320,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   CreateRoute: typeof CreateRoute
   DashboardRoute: typeof DashboardRoute
+  FeedRoute: typeof FeedRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -376,6 +389,13 @@ declare module '@tanstack/react-router' {
       path: '/model-to-ai'
       fullPath: '/model-to-ai'
       preLoaderRoute: typeof ModelToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feed': {
+      id: '/feed'
+      path: '/feed'
+      fullPath: '/feed'
+      preLoaderRoute: typeof FeedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -513,6 +533,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   CreateRoute: CreateRoute,
   DashboardRoute: DashboardRoute,
+  FeedRoute: FeedRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
   PrivacyRoute: PrivacyRoute,
