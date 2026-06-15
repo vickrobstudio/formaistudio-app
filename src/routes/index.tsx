@@ -16,6 +16,7 @@ function HomePage() {
   return <main className="min-h-[100svh] bg-background">
     <section className="relative min-h-[100svh] overflow-hidden">
       <img src={landingArtwork.url} alt="Watercolor collection of sculptural furniture and interior objects" className="absolute inset-0 h-full w-full object-cover object-center" />
+      <h1 className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-4xl font-bold tracking-tight text-foreground sm:text-5xl">AI Studio</h1>
       <Link to="/dashboard" aria-label="Open FormAI Studio" className="absolute bottom-[max(1.15rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-10 flex min-h-11 items-end rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
         <FormAILogo className="w-20 sm:w-24" />
       </Link>
