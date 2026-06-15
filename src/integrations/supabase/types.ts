@@ -512,6 +512,8 @@ export type Database = {
           id: string
           image_url: string
           is_public: boolean
+          model_glb_path: string | null
+          model_usdz_path: string | null
           title: string
           updated_at: string
           user_id: string
@@ -524,6 +526,8 @@ export type Database = {
           id?: string
           image_url: string
           is_public?: boolean
+          model_glb_path?: string | null
+          model_usdz_path?: string | null
           title: string
           updated_at?: string
           user_id: string
@@ -536,6 +540,8 @@ export type Database = {
           id?: string
           image_url?: string
           is_public?: boolean
+          model_glb_path?: string | null
+          model_usdz_path?: string | null
           title?: string
           updated_at?: string
           user_id?: string
