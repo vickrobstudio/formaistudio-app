@@ -1,6 +1,8 @@
 import { Suspense, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
+import { USDZExporter } from "three/examples/jsm/exporters/USDZExporter.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Box, LoaderCircle, Rotate3D } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,10 +20,6 @@ export function Furniture3DViewer({ modelUrl, onUsdExported }: { modelUrl: strin
     setExporting(true);
     setError("");
     try {
-      const [{ GLTFLoader }, { USDZExporter }] = await Promise.all([
-        import("three/examples/jsm/loaders/GLTFLoader.js"),
-        import("three/examples/jsm/exporters/USDZExporter.js"),
-      ]);
       const gltf = await new GLTFLoader().loadAsync(modelUrl);
       const bytes = await new USDZExporter().parseAsync(gltf.scene);
       const blob = new Blob([bytes], { type: "model/vnd.usdz+zip" });
