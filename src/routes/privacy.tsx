@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LegalPage, LegalSection } from "@/components/LegalPage";
 
 export const Route = createFileRoute("/privacy")({
-  head: () => ({ meta: [{ title: "Privacy Policy — FormAI STUDIO" }, { name: "description", content: "How FormAI STUDIO collects, uses, and protects your information." }] }),
+  head: () => ({ meta: [{ title: "Privacy Policy — FormAI STUDIO" }, { name: "description", content: "How FormAI STUDIO collects, uses, and protects your information." }, { property: "og:title", content: "FormAI STUDIO Privacy Policy" }, { property: "og:description", content: "Learn how FormAI STUDIO collects, uses, and protects your information." }] }),
   component: PrivacyPage,
 });
 

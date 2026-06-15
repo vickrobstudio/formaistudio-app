@@ -80,6 +80,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "FormAI STUDIO App" },
       { name: "description", content: "Interior AI STUDIO App with 3D proposals, photorealistic renderings and more. The future of visualizations." },
       { name: "author", content: "Forma Studio" },
+      { name: "google-site-verification", content: "dDJ8BTIOd5KMBg_8UnuCfzxFByXsFKFMAQioHsB-FZQ" },
       { property: "og:title", content: "FormAI STUDIO App" },
       { property: "og:description", content: "Interior AI STUDIO App with 3D proposals, photorealistic renderings and more. The future of visualizations." },
       { property: "og:type", content: "website" },
@@ -95,6 +96,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
     ],
+    scripts: [{
+      type: "application/ld+json",
+      children: JSON.stringify({
+        "@context": "https://schema.org",
+        "@graph": [
+          { "@type": "Organization", name: "FormAI STUDIO", url: "https://formaistudio.app", description: "AI-powered interior visualization, furniture design, image editing, and video creation by VICK ROB INC." },
+          { "@type": "WebSite", name: "FormAI STUDIO", url: "https://formaistudio.app", description: "Create photorealistic interiors, custom furniture, AI image edits, and cinematic design videos." },
+        ],
+      }),
+    }],
   }),
   shellComponent: RootShell,
   component: RootComponent,
