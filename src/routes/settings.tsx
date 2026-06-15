@@ -7,7 +7,7 @@ const settingsLinks = [
   { icon: WalletCards, label: "Wallet & payment methods", to: "/wallet" },
   { icon: BadgeDollarSign, label: "Subscriptions", note: "Active & cancelled", to: "/wallet" },
   { icon: ReceiptText, label: "Receipts", to: "/wallet" },
-  { icon: Info, label: "About FormAI STUDIO", to: "/contact" },
+  { icon: Info, label: "About FormAI STUDIO", to: "/about" },
   { icon: FileText, label: "Terms & conditions", to: "/terms" },
   { icon: LockKeyhole, label: "Privacy", to: "/privacy" },
   { icon: CircleHelp, label: "Contact & help", to: "/contact" },
