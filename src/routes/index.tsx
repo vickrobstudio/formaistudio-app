@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen overflow-hidden bg-landing-paper">
+  return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen touch-none overflow-hidden overscroll-none bg-landing-paper">
     <section className="relative h-full w-full overflow-hidden bg-landing-paper">
       <img src={landingArtwork.url} alt="Watercolor collection of sculptural furniture and interior objects" width="853" height="1844" fetchPriority="high" className="absolute inset-0 block size-full min-h-full min-w-full object-cover object-center" />
       <Link to="/dashboard" aria-label="Open FormAI Studio" className="absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-10 flex min-h-11 -translate-x-1/2 items-center justify-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
