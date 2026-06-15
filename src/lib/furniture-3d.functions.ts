@@ -35,7 +35,11 @@ export const generateFurniture3D = createServerFn({ method: "POST" })
       body: JSON.stringify({ input: { image: data.imageDataUrl, enable_pbr: true, face_count: 500000, generate_type: "Normal" } }),
     });
     if (!created.ok) {
-      console.error("3D prediction failed", created.status, await created.text());
+      const detail = await created.text();
+      console.error("3D prediction failed", created.status, detail);
+      if (created.status === 402) {
+        throw new Error("The 3D generation service is out of credit. Please top up your Replicate account and try again.");
+      }
       throw new Error("The furniture could not be converted to 3D.");
     }
 
