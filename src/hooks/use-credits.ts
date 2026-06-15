@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { getGuestCredits, spendGuestCredit } from "@/lib/guest-trial";
 import { supabase } from "@/integrations/supabase/client";
+import { consumeAccountCredit } from "@/lib/credits.functions";
 
 export function useCredits() {
+  const consumeAccountCreditFn = useServerFn(consumeAccountCredit);
   const [credits, setCredits] = useState(4);
   const [signedIn, setSignedIn] = useState(false);
   const [vip, setVip] = useState(false);
@@ -25,10 +28,13 @@ export function useCredits() {
       setCredits(remaining);
       return true;
     }
-    const { data, error } = await supabase.rpc("consume_starter_credit");
-    if (error || data === null) return false;
-    setCredits(data);
-    return true;
+    try {
+      const { remaining } = await consumeAccountCreditFn();
+      setCredits(remaining);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   return { credits, signedIn, vip, consume };
