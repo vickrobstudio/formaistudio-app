@@ -8,6 +8,8 @@ const FurnitureCreationInput = z.object({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000),
   imageUrl: z.string().min(1).max(8_000_000),
+  modelGlbPath: z.string().max(500).nullable(),
+  modelUsdzPath: z.string().max(500).nullable(),
   isPublic: z.boolean(),
 });
 
@@ -100,16 +102,16 @@ export const listReusableFurniture = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const [{ data: owned, error: ownedError }, { data: favorites, error: favoritesError }] = await Promise.all([
-      context.supabase.from("public_creations").select("id,title,image_url,creator_name,created_at").eq("user_id", context.userId).eq("creation_type", "furniture").order("created_at", { ascending: false }),
-      context.supabase.from("creation_favorites").select("created_at,public_creations(id,title,image_url,creator_name,creation_type)").eq("user_id", context.userId).order("created_at", { ascending: false }),
+      context.supabase.from("public_creations").select("id,title,image_url,creator_name,created_at,model_glb_path,model_usdz_path").eq("user_id", context.userId).eq("creation_type", "furniture").order("created_at", { ascending: false }),
+      context.supabase.from("creation_favorites").select("created_at,public_creations(id,title,image_url,creator_name,creation_type,model_glb_path,model_usdz_path)").eq("user_id", context.userId).order("created_at", { ascending: false }),
     ]);
     if (ownedError || favoritesError) throw new Error("Unable to load your furniture library.");
     const saved = (favorites ?? []).flatMap((favorite) => {
       const item = favorite.public_creations;
       if (!item || item.creation_type !== "furniture") return [];
-      return [{ id: item.id, title: item.title, imageUrl: item.image_url, creatorName: item.creator_name, source: "Saved" as const }];
+      return [{ id: item.id, title: item.title, imageUrl: item.image_url, modelGlbPath: item.model_glb_path, modelUsdzPath: item.model_usdz_path, creatorName: item.creator_name, source: "Saved" as const }];
     });
-    const mine = (owned ?? []).map((item) => ({ id: item.id, title: item.title, imageUrl: item.image_url, creatorName: item.creator_name, source: "Created" as const }));
+    const mine = (owned ?? []).map((item) => ({ id: item.id, title: item.title, imageUrl: item.image_url, modelGlbPath: item.model_glb_path, modelUsdzPath: item.model_usdz_path, creatorName: item.creator_name, source: "Created" as const }));
     return [...mine, ...saved.filter((savedItem) => !mine.some((ownedItem) => ownedItem.id === savedItem.id))];
   });
 
@@ -125,6 +127,8 @@ export const saveFurnitureCreation = createServerFn({ method: "POST" })
       title: data.title,
       description: data.description,
       image_url: data.imageUrl,
+      model_glb_path: data.modelGlbPath,
+      model_usdz_path: data.modelUsdzPath,
       creation_type: "furniture",
       is_public: data.isPublic,
     }).select("id").single();
