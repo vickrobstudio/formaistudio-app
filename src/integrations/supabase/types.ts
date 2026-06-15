@@ -30,7 +30,6 @@ export type Database = {
           rule: string
           scope: string
           status: string
-          submitted_by_email: string | null
           updated_at: string
           user_id: string
         }
@@ -49,7 +48,6 @@ export type Database = {
           rule: string
           scope?: string
           status?: string
-          submitted_by_email?: string | null
           updated_at?: string
           user_id: string
         }
@@ -68,7 +66,6 @@ export type Database = {
           rule?: string
           scope?: string
           status?: string
-          submitted_by_email?: string | null
           updated_at?: string
           user_id?: string
         }
