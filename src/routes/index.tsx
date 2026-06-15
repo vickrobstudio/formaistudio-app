@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { FormAILogo } from "@/components/FormaMobile";
+import { Button } from "@/components/ui/button";
 import landingArtwork from "@/assets/formai-landing-sharp.png.asset.json";
 
 export const Route = createFileRoute("/")({
@@ -20,6 +21,9 @@ function HomePage() {
         <FormAILogo className="w-16 sm:w-20" />
       </Link>
       <h1 className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-4xl font-bold tracking-tight text-primary-foreground sm:text-5xl">AI Studio</h1>
+      <Button asChild variant="studio" className="absolute left-1/2 top-[calc(50%+4rem)] z-10 min-w-36 -translate-x-1/2 border border-primary-foreground bg-primary-foreground text-primary-foreground-contrast">
+        <Link to="/dashboard">Enter</Link>
+      </Button>
       <nav aria-label="Legal" className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center whitespace-nowrap font-sans text-[9px] tracking-[0.04em] text-primary-foreground sm:text-[11px]">
         <Link to="/privacy" className="min-h-11 px-1.5 leading-[2.75rem]">Privacy Policy</Link><span aria-hidden="true">|</span>
         <Link to="/terms" className="min-h-11 px-1.5 leading-[2.75rem]">Terms of Use</Link><span aria-hidden="true">|</span>

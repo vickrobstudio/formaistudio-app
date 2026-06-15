@@ -25,10 +25,12 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   const path = useRouterState({ select: (state) => state.location.pathname });
   return (
     <>
-      <header className={`fixed inset-x-0 top-0 z-40 flex h-[calc(4rem+env(safe-area-inset-top))] transform-gpu items-center justify-center px-[max(1.25rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/95 text-foreground backdrop-blur"}`}>
-        <Link to="/" aria-label="FormAI STUDIO home"><FormAILogo inverse /></Link>
+      <header className={`fixed inset-x-0 top-0 z-50 flex h-[calc(3.25rem+env(safe-area-inset-top))] transform-gpu items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/90 text-foreground shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"}`}>
+        <Link to="/" aria-label="Return to FormAI STUDIO landing page" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+          <FormAILogo inverse className="w-12" />
+        </Link>
       </header>
-      {path !== "/" && <div className="h-[calc(4rem+env(safe-area-inset-top))]" />}
+      {path !== "/" && <div className="h-[calc(3.25rem+env(safe-area-inset-top))]" />}
     </>
   );
 }
@@ -53,10 +55,12 @@ export function ToolTabBar() {
             key={to}
             to={to}
             activeOptions={{ exact: true }}
-            className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl transition-colors active:scale-[0.96] ${isActive(label, to) ? "text-foreground" : "text-muted-foreground"}`}
+            aria-current={isActive(label, to) ? "page" : undefined}
+            className={`relative flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl transition-[color,transform] active:scale-[0.96] ${isActive(label, to) ? "font-bold text-foreground" : "font-normal text-muted-foreground"}`}
           >
-            <Icon className="size-[22px]" strokeWidth={1.8} />
-            <span className="text-[10px] font-semibold leading-none">{label}</span>
+            <Icon className="size-[22px]" strokeWidth={isActive(label, to) ? 2.8 : 1.7} />
+            <span className={`text-[10px] leading-none ${isActive(label, to) ? "font-bold" : "font-normal"}`}>{label}</span>
+            {isActive(label, to) && <span aria-hidden="true" className="absolute bottom-0 h-0.5 w-5 rounded-full bg-foreground" />}
           </Link>
         ))}
       </div>
