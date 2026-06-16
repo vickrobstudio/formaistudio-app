@@ -97,12 +97,18 @@ export const Route = createFileRoute("/api/generate-image")({
 
         if (!upstream.ok || !upstream.body) {
           const status = upstream.status === 402 ? 402 : upstream.status === 429 ? 429 : 502;
+          const detail = await upstream.text().catch(() => "");
+          console.error("generate-image upstream error", {
+            status: upstream.status,
+            endpoint,
+            detail: detail.slice(0, 500),
+          });
           const message =
             status === 402
               ? "AI credits are exhausted."
               : status === 429
                 ? "The studio is busy. Please retry shortly."
-                : "The rendering could not be created.";
+                : `The rendering could not be created (upstream ${upstream.status}: ${detail.slice(0, 200) || "no detail"}).`;
           return new Response(message, { status });
         }
 
