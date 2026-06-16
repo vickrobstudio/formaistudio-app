@@ -49,30 +49,34 @@ export const Route = createFileRoute("/api/generate-image")({
           (image): image is string => Boolean(image),
         );
         if (references.length > 0) {
-          const form = new FormData();
-          form.append("model", "openai/gpt-image-2");
-          form.append("prompt", renderPrompt);
-          form.append("size", "1536x1024");
-          form.append("quality", "medium");
-          form.append("stream", "true");
-          form.append("partial_images", "1");
-          for (const [index, reference] of references.entries()) {
-            const match = reference.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
-            if (!match) {
+          // The Lovable AI gateway has no /v1/images/edits route. For
+          // reference-image-conditioned renders, use Gemini's image model via
+          // the chat-completions endpoint, which accepts image_url parts and
+          // returns a generated image inline.
+          for (const reference of references) {
+            if (!/^data:image\/(?:png|jpeg|webp);base64,/.test(reference)) {
               return new Response("A reference image format is not supported.", {
                 status: 400,
               });
             }
-            const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
-            form.append(
-              "image",
-              new Blob([bytes], { type: match[1] }),
-              `reference-${index + 1}.png`,
-            );
           }
-          endpoint = "https://ai.gateway.lovable.dev/v1/images/edits";
-          body = form;
-          contentType = undefined;
+          endpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
+          body = JSON.stringify({
+            model: "google/gemini-2.5-flash-image",
+            modalities: ["image", "text"],
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: renderPrompt },
+                  ...references.map((image) => ({
+                    type: "image_url" as const,
+                    image_url: { url: image },
+                  })),
+                ],
+              },
+            ],
+          });
         } else {
           body = JSON.stringify({
             model: "openai/gpt-image-2",
@@ -110,6 +114,33 @@ export const Route = createFileRoute("/api/generate-image")({
                 ? "The studio is busy. Please retry shortly."
                 : `The rendering could not be created (upstream ${upstream.status}: ${detail.slice(0, 200) || "no detail"}).`;
           return new Response(message, { status });
+        }
+
+        // Chat-completions returns JSON, not SSE. Extract the generated image
+        // and return it as { image } so the client's JSON branch can pick it up.
+        if (endpoint.endsWith("/chat/completions")) {
+          const payload = (await upstream.json().catch(() => null)) as
+            | {
+                choices?: Array<{
+                  message?: {
+                    images?: Array<{ image_url?: { url?: string } }>;
+                    content?: string;
+                  };
+                }>;
+              }
+            | null;
+          const image =
+            payload?.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
+          if (!image) {
+            console.error("generate-image gemini response missing image", payload);
+            return new Response(
+              "The rendering response did not include an image.",
+              { status: 502 },
+            );
+          }
+          return new Response(JSON.stringify({ image }), {
+            headers: { "Content-Type": "application/json" },
+          });
         }
 
         return new Response(upstream.body, {
