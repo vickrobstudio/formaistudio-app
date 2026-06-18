@@ -284,6 +284,46 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
+function scallopedOutline(points = 96, lobes = 16): Array<[number, number]> {
+  return Array.from({ length: points }, (_, i) => {
+    const a = (i / points) * Math.PI * 2;
+    const r = 0.455 + 0.045 * Math.cos(lobes * a);
+    return [Math.cos(a) * r, Math.sin(a) * r];
+  });
+}
+
+function organicOutline(points = 72): Array<[number, number]> {
+  return Array.from({ length: points }, (_, i) => {
+    const a = (i / points) * Math.PI * 2;
+    const r = 0.42 + 0.055 * Math.sin(a) - 0.045 * Math.cos(2 * a) + 0.025 * Math.sin(3 * a);
+    return [Math.cos(a) * r + 0.035 * Math.sin(a), Math.sin(a) * r];
+  });
+}
+
+function enforcePromptShapeTraits(plan: FurniturePlan, masterPrompt?: string, approvedRenderUrl?: string): FurniturePlan {
+  if (!approvedRenderUrl || !masterPrompt || plan.parts.some((part) => part.shape === "custom_extrusion")) return plan;
+  const prompt = masterPrompt.toUpperCase();
+  const needsScallop = /SCALLOP|PIE-CRUST/.test(prompt);
+  const needsOrganic = /KIDNEY|BOOMERANG|ORGANIC|BIOMORPHIC|ASYMMETRIC|WAVY|LIVE EDGE|CURVED PLAN/.test(prompt);
+  if (!needsScallop && !needsOrganic) return plan;
+  let targetIndex = -1;
+  let targetScore = -Infinity;
+  plan.parts.forEach((part, index) => {
+    const score = part.width * part.depth * (1 + part.cz / Math.max(plan.bounds.height, 0.001));
+    if (score > targetScore) { targetScore = score; targetIndex = index; }
+  });
+  if (targetIndex < 0) return plan;
+  return {
+    ...plan,
+    parts: plan.parts.map((part, index) => index === targetIndex ? {
+      ...part,
+      shape: "custom_extrusion" as const,
+      outline: needsScallop ? scallopedOutline() : organicOutline(),
+      edgeRadius: part.edgeRadius ?? Math.min(part.height / 2, 0.025),
+    } : part),
+  };
+}
+
 type Group = { id: string; name: string; positions: number[]; indices: number[]; materialId: MaterialId };
 
 function makeGroupBuilder(id: string, name: string, scale: number, materialId: MaterialId = "other"): {
