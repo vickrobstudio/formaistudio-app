@@ -175,7 +175,12 @@ ${ACCURACY_RULES}`;
 }
 
 function furnitureInstruction(planUnits: z.infer<typeof PlanUnits>) {
-  return `You are a furniture vectorizer. Inspect the uploaded technical drawing of ONE furniture piece (TOP / PLAN view, FRONT view, SIDE view, and any reference photographs) and return STRICT JSON describing it as a set of 3D shape PRIMITIVES (parts) that together reproduce its REAL geometry — including round, elliptical, and scalloped shapes.
+  return `You are a senior furniture modeler. You receive a technical sheet of ONE furniture piece that includes a TOP/PLAN view, FRONT view, SIDE view, printed dimensions, callouts, AND one or more REFERENCE PHOTOGRAPHS / 3D renderings of the finished piece. Return STRICT JSON describing the piece as a rich set of 3D shape PRIMITIVES (parts) that faithfully reproduce its REAL shape — including round columns, oval tops, ring footrests, tapered pedestals, base discs, bullnose edges, glides, etc.
+
+REFERENCE IMAGE IS THE SOURCE OF TRUTH for SHAPE:
+- If the sheet contains a photograph or 3D render of the actual piece, USE IT as the primary guide for the overall silhouette, proportions, and which parts exist (ring footrest, tapered column, disc base, edge band, etc.).
+- Use the orthographic views (plan, front, side) and printed callouts for EXACT DIMENSIONS and positions.
+- DO NOT output a simplified blocky stand-in. If the reference shows a round disc, a brass ring, a tapered pedestal, a bullnose edge, model each of those as its own primitive.
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
@@ -185,7 +190,47 @@ Return JSON ONLY in this exact shape:
   "units": "meters",
   "bounds": { "width": <overall X m>, "depth": <overall Y m>, "height": <overall Z m> },
   "parts": [
-    { "name": "<part name>", "shape": "box"|"cylinder"|"ellipse_cylinder", "cx": <m>, "cy": <m>, "cz": <m>, "width": <X m>, "depth": <Y m>, "height": <Z m>, "rotationDegZ": <deg> }
+    {
+      "name": "<part name>",
+      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box",
+      "cx": <m>, "cy": <m>, "cz": <m>,
+      "width": <X m>, "depth": <Y m>, "height": <Z m>,
+      "rotationDegZ": <deg>,
+      "topDiameter": <m, tapered_cylinder only — diameter at the TOP>,
+      "tubeDiameter": <m, torus only — thickness of the ring>,
+      "edgeRadius": <m, optional bullnose/fillet radius>
+    }
+  ]
+}
+
+Shape primitive guide — pick the primitive that matches the PLAN view of that part:
+  * "cylinder"          — plan view is a CIRCLE. width = depth = diameter.
+  * "ellipse_cylinder"  — plan view is an ELLIPSE / OVAL. width = X diameter, depth = Y diameter.
+  * "tapered_cylinder"  — round in plan, diameter changes from bottom to top (pedestal, tapered column). width = depth = BOTTOM diameter, topDiameter = TOP diameter.
+  * "torus"             — RING in plan (e.g. brass footrest ring, metal hoop). width = depth = OUTER diameter, tubeDiameter = ring thickness, height ≈ tubeDiameter.
+  * "rounded_box"       — rectangular in plan with rounded corners. edgeRadius = corner radius.
+  * "box"               — only when the plan view is a true rectangle/square with sharp corners.
+NEVER substitute a box for a round, oval, ring, or tapered part — that destroys the shape.
+
+Bullnose / chamfered / scalloped horizontal edges (e.g. "full bullnose edge profile", "1/8 in. scalloped reveal"):
+- Model the part with the matching shape primitive (cylinder / ellipse_cylinder / rounded_box) at the correct overall diameter and thickness.
+- Set "edgeRadius" to half the part's thickness for a full bullnose, or to the printed reveal/radius. We render this as a smooth top/bottom fillet so the edge reads as rounded.
+
+Required decomposition (output every part that the piece actually has):
+- Table / pedestal piece example: stone TOP (ellipse_cylinder), wood EDGE BAND beneath the stone (ellipse_cylinder), central COLUMN / pedestal (cylinder or tapered_cylinder), metal RING footrest (torus), wood BASE PLATE / disc (cylinder), GLIDES (small cylinders under the base).
+- Chair example: seat, back, armrests, individual legs, stretchers, frame rails.
+- Case piece example: top, sides, back, drawers, shelves, base, kickplate, pulls.
+
+Rules:
+- World axes: +X = piece width (left→right of the front view), +Y = piece depth (front→back), +Z = piece height (floor→top). Origin (0,0,0) at the bottom-front-left corner of the bounding box.
+- (cx, cy, cz) is the CENTER of each part. (width, depth, height) are full extents along the local X/Y/Z BEFORE rotation. rotationDegZ rotates around the vertical Z axis, default 0.
+- Read the PLAN view to set each part's footprint and shape. Read the FRONT and SIDE views (and printed callouts) for vertical position, height, and thickness. Use the REFERENCE PHOTOGRAPH to confirm silhouette, materials, and which parts exist.
+- Capture EVERY distinct horizontal disc / oval / ring as its own part — e.g. stone top + wood edge band ⇒ two stacked ellipse_cylinders of matching X/Y diameter but different heights.
+- Use printed overall width/depth/height for "bounds" and printed part dimensions for each primitive. Convert diameters correctly (e.g. 3" Ø ⇒ 0.0762 m).
+- Use realistic typical thicknesses only when the drawing does not give them (e.g. 0.02 m panels, 0.05 m legs, 0.012 m metal ring tube).
+
+${ACCURACY_RULES}`;
+}
   ]
 }
 
