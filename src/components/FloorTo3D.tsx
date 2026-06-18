@@ -161,6 +161,7 @@ export function FloorTo3D() {
           // Only set referenceOnly when there's no separate 2D plan
           // (source equals the rendering itself).
           referenceOnly: Boolean(approvedRenderUrl && source === approvedRenderUrl),
+          referenceImages,
         },
       });
       if (!result.ok) { setError(result.error); return; }
