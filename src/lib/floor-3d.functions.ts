@@ -733,10 +733,33 @@ function buildDae(
     ? '<unit name="foot" meter="0.3048"/>'
     : '<unit name="meter" meter="1"/>';
 
+  // Collect every material actually used so each gets its own <effect> /
+  // <material> entry, and each geometry binds to its matching material.
+  const usedMaterialIds = Array.from(new Set(groups.map((g) => g.materialId)));
+  const matSymbol = (id: MaterialId) => `mat_${id}_sg`;
+  const matId = (id: MaterialId) => `mat_${id}`;
+  const matEffectId = (id: MaterialId) => `mat_${id}_fx`;
+
+  const effectsXml = usedMaterialIds.map((id) => {
+    const spec = MATERIAL_PALETTE[id];
+    const [r, g, b] = spec.color;
+    const transparency = spec.transmission && spec.transmission > 0 ? 1 - spec.transmission : 1;
+    return `    <effect id="${matEffectId(id)}"><profile_COMMON><technique sid="common"><lambert>
+      <diffuse><color>${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} ${transparency.toFixed(3)}</color></diffuse>
+      <transparency><float>${transparency.toFixed(3)}</float></transparency>
+    </lambert></technique></profile_COMMON></effect>`;
+  }).join("\n");
+
+  const materialsXml = usedMaterialIds.map((id) => {
+    const spec = MATERIAL_PALETTE[id];
+    return `    <material id="${matId(id)}" name="${spec.label}"><instance_effect url="#${matEffectId(id)}"/></material>`;
+  }).join("\n");
+
   const geometriesXml = groups.map((g) => {
     const positionText = g.positions.map((n) => n.toFixed(4)).join(" ");
     const triCount = g.indices.length / 3;
     const pIndex = g.indices.join(" ");
+    const sym = matSymbol(g.materialId);
     return `    <geometry id="${g.id}_geom" name="${g.name}">
       <mesh>
         <source id="${g.id}_pos">
@@ -744,7 +767,7 @@ function buildDae(
           <technique_common><accessor source="#${g.id}_pos_array" count="${g.positions.length / 3}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common>
         </source>
         <vertices id="${g.id}_vtx"><input semantic="POSITION" source="#${g.id}_pos"/></vertices>
-        <triangles material="solidMaterialSG" count="${triCount}">
+        <triangles material="${sym}" count="${triCount}">
           <input semantic="VERTEX" source="#${g.id}_vtx" offset="0"/>
           <p>${pIndex}</p>
         </triangles>
@@ -752,11 +775,14 @@ function buildDae(
     </geometry>`;
   }).join("\n");
 
-  const nodesXml = groups.map((g) => `      <node id="${g.id}_node" name="${g.name}">
+  const nodesXml = groups.map((g) => {
+    const sym = matSymbol(g.materialId);
+    return `      <node id="${g.id}_node" name="${g.name}">
         <instance_geometry url="#${g.id}_geom">
-          <bind_material><technique_common><instance_material symbol="solidMaterialSG" target="#solidMaterial"/></technique_common></bind_material>
+          <bind_material><technique_common><instance_material symbol="${sym}" target="#${matId(g.materialId)}"/></technique_common></bind_material>
         </instance_geometry>
-      </node>`).join("\n");
+      </node>`;
+  }).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
@@ -768,10 +794,10 @@ function buildDae(
     <up_axis>Z_UP</up_axis>
   </asset>
   <library_effects>
-    <effect id="solidEffect"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.85 0.85 0.85 1</color></diffuse></lambert></technique></profile_COMMON></effect>
+${effectsXml}
   </library_effects>
   <library_materials>
-    <material id="solidMaterial" name="Solid"><instance_effect url="#solidEffect"/></material>
+${materialsXml}
   </library_materials>
   <library_geometries>
 ${geometriesXml}
