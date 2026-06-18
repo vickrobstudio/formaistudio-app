@@ -874,5 +874,5 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const elementCount = plan.kind === "building"
       ? plan.walls.length + plan.columns.length + plan.stairs.length + plan.fixtures.length
       : plan.parts.length;
-    return { ok: true, daeDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits };
+    return { ok: true, daeDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan };
   });
