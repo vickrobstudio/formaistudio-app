@@ -403,7 +403,13 @@ function buildGroups(
     plan.parts.forEach((part, i) => {
       const safe = (part.name || `part_${i + 1}`).replace(/[^A-Za-z0-9]+/g, "_");
       const g = makeGroupBuilder(`group_${safe}_${i}`, part.name || `Part ${i + 1}`, scale);
-      addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
+      if (part.shape === "cylinder" || part.shape === "ellipse_cylinder") {
+        const dx = part.width;
+        const dy = part.shape === "cylinder" ? part.width : part.depth;
+        addEllipticalCylinder(g.group, part.cx, part.cy, part.cz, dx, dy, part.height, part.rotationDegZ, scale, 64);
+      } else {
+        addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
+      }
       groups.push(g.group);
     });
   }
