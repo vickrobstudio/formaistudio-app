@@ -59,21 +59,26 @@ function useDaeScene(daeDataUrl: string) {
   return scene;
 }
 
-export function Furniture3DPreview({ plan, daeDataUrl }: { plan: FurniturePlan; daeDataUrl: string }) {
+export function Furniture3DPreview({ plan, daeDataUrl }: { plan?: FurniturePlan; daeDataUrl: string }) {
   const scene = useDaeScene(daeDataUrl);
-  const cameraDist = Math.max(plan.bounds.width, plan.bounds.depth, plan.bounds.height) * 2.4;
 
-  // Centre the loaded scene on the ground plane (Y up after our rotation).
-  const [centerOffset, height] = useMemo(() => {
-    if (!scene) return [new THREE.Vector3(), plan.bounds.height] as const;
+  // Centre the loaded scene on the ground plane (Y up after our rotation) and
+  // derive bounds straight from the geometry so the preview works for any .dae
+  // (furniture OR building), not just when a furniture plan is available.
+  const [centerOffset, sceneSize] = useMemo(() => {
+    if (!scene) return [new THREE.Vector3(), new THREE.Vector3(1, 1, 1)] as const;
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3(); box.getSize(size);
     const center = new THREE.Vector3(); box.getCenter(center);
-    // Move so model is centred on X/Z and sitting on Y=0.
-    return [new THREE.Vector3(-center.x, -box.min.y, -center.z), size.y] as const;
-  }, [scene, plan.bounds.height]);
+    return [new THREE.Vector3(-center.x, -box.min.y, -center.z), size] as const;
+  }, [scene]);
+
+  const maxDim = Math.max(sceneSize.x, sceneSize.y, sceneSize.z, 1);
+  const cameraDist = maxDim * 2.4;
+  const height = sceneSize.y;
 
   const usedMaterials = useMemo(() => {
+    if (!plan) return [];
     const set = new Set(plan.parts.map((p) => p.material));
     return Array.from(set).map((id) => MATERIAL_PALETTE[id]);
   }, [plan]);
@@ -100,7 +105,7 @@ export function Furniture3DPreview({ plan, daeDataUrl }: { plan: FurniturePlan; 
             <ContactShadows
               position={[0, 0, 0]}
               opacity={0.45}
-              scale={Math.max(plan.bounds.width, plan.bounds.depth) * 3}
+              scale={Math.max(sceneSize.x, sceneSize.z) * 3}
               blur={2}
               far={4}
             />
