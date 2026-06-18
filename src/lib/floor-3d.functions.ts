@@ -96,12 +96,18 @@ const PartSchema = z.object({
     "tapered_cylinder",
     "torus",
     "rounded_box",
+    "custom_extrusion",
   ]).default("box"),
   cx: z.number(), cy: z.number(), cz: z.number(),
   width: z.number().positive(),   // along X
   depth: z.number().positive(),   // along Y
   height: z.number().positive(),  // along Z
   rotationDegZ: z.number().default(0),
+  // custom_extrusion only: normalized plan-view outline points where [0,0]
+  // is part center and extents fit inside -0.5..0.5. Used for scalloped,
+  // kidney, boomerang, freeform, arched and asymmetric silhouettes from the
+  // approved render.
+  outline: z.array(z.tuple([z.number().min(-0.75).max(0.75), z.number().min(-0.75).max(0.75)])).min(3).max(96).optional(),
   // Optional shape-specific extras (in meters):
   // - tapered_cylinder: topDiameter (X diameter at the top, Y scales proportionally)
   // - torus: tubeDiameter (thickness of the ring)
