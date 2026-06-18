@@ -230,18 +230,21 @@ Return JSON ONLY in this exact shape:
       "height": <optional m>,
       "openings": [
         { "kind": "door"|"window", "position": <m from wall start>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
-      ]
+      ],
+      "material": "stone_white"|"stone_dark"|"wood_oak"|"wood_walnut"|"wood_dark"|"metal_brass"|"metal_chrome"|"metal_black"|"fabric_neutral"|"leather_dark"|"glass"|"plastic_white"|"plastic_black"|"other",
+      "materialNote": "<finish from the rendering, e.g. 'limewashed plaster', 'travertine'>"
     }
   ],
-  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
-  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
-  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ]
 }
 
 Rules:
 - Origin (0,0) at the lower-left of the reconstructed footprint, +x right, +y depth.
 - Include at least the main visible wall envelope. Use typical wall thickness 0.12–0.25 m if unknown.
 - Use realistic architectural scale: doors around 0.8–1.0 m wide and 2.1 m high, counters around 0.9 m high, rooms around 2.4–3.5 m high.
+- EVERY element MUST carry the "material" id whose visible finish in the rendering matches best, so the .dae imports with one selectable group per material (plaster walls separate from stone walls, wood cabinets separate from stone counters, brass hardware separate from chrome, etc.). Never default to "other" when a finish is clearly visible.
 - Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 }
 
