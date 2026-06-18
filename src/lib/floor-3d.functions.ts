@@ -15,6 +15,16 @@ const FloorTo3DInput = z.object({
   planUnits: PlanUnits.default("meters"),
   outputUnits: OutputUnits.default("meters"),
   subject: Subject.default("building"),
+  // OPTIONAL — the approved hero rendering and its master prompt. When
+  // provided, the geometry model treats the rendering as the SOURCE OF TRUTH
+  // for silhouette, part grouping and proportion, so the live 3D preview
+  // matches the image the user already approved.
+  approvedRenderUrl: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/)
+    .max(50_000_000)
+    .optional(),
+  masterPrompt: z.string().max(8000).optional(),
 });
 
 const OpeningSchema = z.object({
