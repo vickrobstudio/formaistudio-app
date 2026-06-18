@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader.js";
@@ -15,15 +15,40 @@ import {
  * downloaded geometry 1:1. No separate primitive build path lives in the
  * browser anymore.
  */
+function readDaeText(daeDataUrl: string) {
+  if (!daeDataUrl.startsWith("data:")) return fetch(daeDataUrl).then((res) => res.text());
+  const comma = daeDataUrl.indexOf(",");
+  const meta = daeDataUrl.slice(0, comma);
+  const payload = daeDataUrl.slice(comma + 1);
+  return Promise.resolve(meta.includes(";base64") ? atob(payload) : decodeURIComponent(payload));
+}
+
+function PreviewCamera({ maxDim, height }: { maxDim: number; height: number }) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    const dist = Math.max(maxDim * 2.8, 3);
+    camera.position.set(dist, Math.max(dist * 0.72, height + 1), dist);
+    camera.near = Math.max(dist / 1000, 0.01);
+    camera.far = Math.max(dist * 12, maxDim * 12, 100);
+    camera.lookAt(0, height / 2, 0);
+    camera.updateProjectionMatrix();
+  }, [camera, height, maxDim]);
+
+  return null;
+}
+
 function useDaeScene(daeDataUrl: string) {
   const [scene, setScene] = useState<THREE.Group | null>(null);
+  const [error, setError] = useState("");
   useEffect(() => {
     let cancelled = false;
     const loader = new ColladaLoader();
     const run = async () => {
       try {
-        const res = await fetch(daeDataUrl);
-        const text = await res.text();
+        setScene(null);
+        setError("");
+        const text = await readDaeText(daeDataUrl);
         if (cancelled) return;
         const collada = loader.parse(text, "");
         if (cancelled || !collada?.scene) return;
@@ -33,34 +58,49 @@ function useDaeScene(daeDataUrl: string) {
         root.rotation.x = -Math.PI / 2;
         // Upgrade Lambert materials to PBR-ish look using the colour the
         // exporter already wrote, so glass / metal read correctly.
+        let meshCount = 0;
         root.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
+          meshCount += 1;
           mesh.castShadow = true;
           mesh.receiveShadow = true;
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          mesh.material = mats.map((m) => {
-            const src = m as THREE.MeshBasicMaterial & { color?: THREE.Color };
-            const color = src.color ? src.color.clone() : new THREE.Color(0xcccccc);
-            return new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.0 });
-          }) as unknown as THREE.Material;
-          if (Array.isArray(mesh.material) && mesh.material.length === 1) {
-            mesh.material = mesh.material[0];
+          if (mesh.geometry) {
+            mesh.geometry.computeVertexNormals();
+            mesh.geometry.computeBoundingBox();
+            mesh.geometry.computeBoundingSphere();
           }
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material].filter(Boolean);
+          mesh.material = mats.map((m) => {
+            const src = m as THREE.MeshBasicMaterial & { color?: THREE.Color; opacity?: number; transparent?: boolean };
+            const color = src.color ? src.color.clone() : new THREE.Color(0xcccccc);
+            return new THREE.MeshStandardMaterial({
+              color,
+              roughness: 0.55,
+              metalness: 0.0,
+              side: THREE.DoubleSide,
+              transparent: Boolean(src.transparent) || (src.opacity ?? 1) < 1,
+              opacity: src.opacity ?? 1,
+            });
+          }) as unknown as THREE.Material;
+          if (Array.isArray(mesh.material) && mesh.material.length === 1) mesh.material = mesh.material[0];
+          if (Array.isArray(mesh.material) && mesh.material.length === 0) mesh.material = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
         });
+        if (meshCount === 0) throw new Error("The downloaded .dae did not contain visible mesh geometry.");
         setScene(root);
       } catch (err) {
         console.error("ColladaLoader failed", err);
+        if (!cancelled) setError(err instanceof Error ? err.message : "The .dae preview could not be loaded.");
       }
     };
     void run();
     return () => { cancelled = true; };
   }, [daeDataUrl]);
-  return scene;
+  return { scene, error };
 }
 
 export function Furniture3DPreview({ plan, daeDataUrl }: { plan?: FurniturePlan; daeDataUrl: string }) {
-  const scene = useDaeScene(daeDataUrl);
+  const { scene, error } = useDaeScene(daeDataUrl);
 
   // Centre the loaded scene on the ground plane (Y up after our rotation) and
   // derive bounds straight from the geometry so the preview works for any .dae
@@ -85,12 +125,13 @@ export function Furniture3DPreview({ plan, daeDataUrl }: { plan?: FurniturePlan;
 
   return (
     <div className="space-y-3">
-      <div className="relative aspect-square overflow-hidden rounded-2xl border border-border bg-secondary">
+      <div className="relative h-[420px] min-h-[320px] w-full overflow-hidden rounded-2xl border border-border bg-secondary sm:h-[560px]">
         <Canvas
           shadows
           dpr={[1, 2]}
           camera={{ position: [cameraDist, cameraDist * 0.8, cameraDist], fov: 35 }}
         >
+          <PreviewCamera maxDim={maxDim} height={height} />
           <ambientLight intensity={0.55} />
           <directionalLight
             position={[3, 6, 4]}
@@ -105,7 +146,7 @@ export function Furniture3DPreview({ plan, daeDataUrl }: { plan?: FurniturePlan;
             <ContactShadows
               position={[0, 0, 0]}
               opacity={0.45}
-              scale={Math.max(sceneSize.x, sceneSize.z) * 3}
+              scale={Math.max(sceneSize.x, sceneSize.z, 1) * 3}
               blur={2}
               far={4}
             />
@@ -119,9 +160,14 @@ export function Furniture3DPreview({ plan, daeDataUrl }: { plan?: FurniturePlan;
             maxDistance={cameraDist * 3}
           />
         </Canvas>
-        {!scene && (
+        {!scene && !error && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Loading .dae geometry…
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-destructive">
+            {error}
           </div>
         )}
         <p className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
