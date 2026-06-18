@@ -14,7 +14,8 @@ export const activateVerifiedVipAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const email = String(context.claims.email ?? "").trim().toLowerCase();
-    if (email !== "hello@vickrob.com") return { activated: false };
+    const VIP_EMAILS = new Set(["hello@vickrob.com", "tetiana.shanina@gmail.com"]);
+    if (!VIP_EMAILS.has(email)) return { activated: false };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("profiles").update({ has_free_access: true, updated_at: new Date().toISOString() }).eq("id", context.userId);
