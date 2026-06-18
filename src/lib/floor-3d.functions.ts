@@ -161,7 +161,7 @@ ${ACCURACY_RULES}`;
 }
 
 function furnitureInstruction(planUnits: z.infer<typeof PlanUnits>) {
-  return `You are a furniture vectorizer. Inspect the uploaded technical drawing of ONE furniture piece (top, front, side or orthographic views) and return STRICT JSON describing it as a set of axis-aligned 3D boxes (parts) that together approximate its real geometry.
+  return `You are a furniture vectorizer. Inspect the uploaded technical drawing of ONE furniture piece (TOP / PLAN view, FRONT view, SIDE view, and any reference photographs) and return STRICT JSON describing it as a set of 3D shape PRIMITIVES (parts) that together reproduce its REAL geometry — including round, elliptical, and scalloped shapes.
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
@@ -171,14 +171,22 @@ Return JSON ONLY in this exact shape:
   "units": "meters",
   "bounds": { "width": <overall X m>, "depth": <overall Y m>, "height": <overall Z m> },
   "parts": [
-    { "name": "<part name>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <X m>, "depth": <Y m>, "height": <Z m>, "rotationDegZ": <deg> }
+    { "name": "<part name>", "shape": "box"|"cylinder"|"ellipse_cylinder", "cx": <m>, "cy": <m>, "cz": <m>, "width": <X m>, "depth": <Y m>, "height": <Z m>, "rotationDegZ": <deg> }
   ]
 }
 
 Rules:
 - World axes: +X = piece width (left→right of the front view), +Y = piece depth (front→back), +Z = piece height (floor→top). Origin (0,0,0) at the bottom-front-left corner of the bounding box.
-- (cx, cy, cz) is the CENTER of each box. (width, depth, height) are full extents along the local X/Y/Z BEFORE rotation. rotationDegZ rotates the box around its vertical Z axis (positive = counter-clockwise viewed from above), default 0.
-- Decompose the piece into the smallest set of parts that reproduces its real shape: seat, back, armrests, legs, stretchers, frame rails, top, drawers, shelves, base, supports. Match each part's true thickness from the drawing.
+- (cx, cy, cz) is the CENTER of each part. (width, depth, height) are full extents along the local X/Y/Z BEFORE rotation. rotationDegZ rotates around the vertical Z axis (positive = counter-clockwise viewed from above), default 0.
+- SHAPE SELECTION IS MANDATORY — pick the primitive that matches the PLAN (top) view of that part:
+    * "cylinder" → the plan view is a CIRCLE. Set width = depth = the circle's diameter (e.g. a 3" Ø wood column ⇒ width = depth = 0.0762 m).
+    * "ellipse_cylinder" → the plan view is an ELLIPSE or OVAL (e.g. an oval table top, oval base plate, oval footrest). Use width = X-axis diameter, depth = Y-axis diameter from the printed dimensions.
+    * "box" → only when the plan view is a true rectangle or square.
+    NEVER substitute a box for a round or oval part — that destroys the shape.
+- READ THE PLAN VIEW FIRST to determine each part's footprint and shape, then use the elevation views only for vertical position and height/thickness. Reference photographs confirm the overall look.
+- Decompose the piece into the smallest set of parts that reproduces its real shape: top, edge profile, central column / pedestal, footrest ring, base plate, glides, legs, stretchers, frame rails, seat, back, armrests, drawers, shelves, supports. Match each part's true thickness, diameter, and dimensions from the drawing.
+- Capture EVERY distinct horizontal disc/oval AS ITS OWN PART (e.g. a stone top + wood edge band ⇒ two stacked ellipse_cylinder parts of the same X/Y diameters but different heights and materials; a circular base plate ⇒ one cylinder part).
+- Scalloped / fluted / reeded edges: approximate as the underlying oval or circle of the part — do not try to model individual scallop teeth. Their overall diameter and thickness must still match.
 - Use the printed overall width/depth/height for "bounds" and the printed part dimensions for each box.
 - Use realistic typical thicknesses only when the drawing does not give them (e.g. 0.02 m panels, 0.05 m legs).
 
