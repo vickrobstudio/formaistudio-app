@@ -840,15 +840,19 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const instruction = data.subject === "furniture"
       ? furnitureInstruction(data.planUnits)
       : buildingInstruction(data.planUnits);
-    const userContent = isPdf
-      ? [
-          { type: "text", text: instruction },
-          { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } },
-        ]
-      : [
-          { type: "text", text: instruction },
-          { type: "image_url", image_url: { url: data.fileDataUrl } },
-        ];
+    const userContent: Array<Record<string, unknown>> = [
+      { type: "text", text: instruction },
+      isPdf
+        ? { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } }
+        : { type: "image_url", image_url: { url: data.fileDataUrl } },
+    ];
+    if (data.subject === "furniture" && data.approvedRenderUrl) {
+      userContent.push({
+        type: "text",
+        text: `APPROVED RENDERING follows — this is the final approved look of the piece. The 3D geometry MUST match this silhouette and grouping 1:1. Do not separate visually-continuous shapes into multiple parts and do not invent a different shape.${data.masterPrompt ? `\n\nMaster prompt used to create this rendering:\n"""\n${data.masterPrompt}\n"""` : ""}`,
+      });
+      userContent.push({ type: "image_url", image_url: { url: data.approvedRenderUrl } });
+    }
 
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
