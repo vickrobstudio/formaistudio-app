@@ -15,6 +15,16 @@ const FloorTo3DInput = z.object({
   planUnits: PlanUnits.default("meters"),
   outputUnits: OutputUnits.default("meters"),
   subject: Subject.default("building"),
+  // OPTIONAL — the approved hero rendering and its master prompt. When
+  // provided, the geometry model treats the rendering as the SOURCE OF TRUTH
+  // for silhouette, part grouping and proportion, so the live 3D preview
+  // matches the image the user already approved.
+  approvedRenderUrl: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/)
+    .max(50_000_000)
+    .optional(),
+  masterPrompt: z.string().max(8000).optional(),
 });
 
 const OpeningSchema = z.object({
@@ -186,6 +196,15 @@ REFERENCE IMAGE IS THE SOURCE OF TRUTH for SHAPE:
 - If the sheet contains a photograph or 3D render of the actual piece, USE IT as the primary guide for the overall silhouette, proportions, and which parts exist (ring footrest, tapered column, disc base, edge band, etc.).
 - Use the orthographic views (plan, front, side) and printed callouts for EXACT DIMENSIONS and positions.
 - DO NOT output a simplified blocky stand-in. If the reference shows a round disc, a brass ring, a tapered pedestal, a bullnose edge, model each of those as its own primitive.
+
+APPROVED RENDERING — ABSOLUTE PRIORITY:
+If a SECOND image labelled "APPROVED RENDERING" is attached after the technical sheet (and a "Master prompt" text block is provided), it is the FINAL approved look of this piece. The 3D geometry MUST match it 1:1:
+- The overall silhouette in the approved rendering is LAW. Do NOT add, remove, split or merge parts that change the silhouette.
+- Do NOT separate a single visually-continuous shape into multiple disjoint parts. If the approved rendering shows ONE flowing curved shell, model it as ONE primitive (or one group of primitives that read as one shell) — never break it into stacked boxes.
+- Do NOT invent a different shape (e.g. don't turn a curved organic top into a rectangle, don't turn a scalloped edge into a plain circle, don't turn a fluted column into a smooth one).
+- Match every UPPER-CASE feature from the master prompt (e.g. SCALLOPED BORDER, FLUTED PEDESTAL, CURVED PLAN) exactly. Choose the closest shape primitive and use rotationDegZ + multiple primitives to reproduce the feature.
+- Match the approved rendering's proportions (top vs base diameter, column taper, ring height) within the printed dimensional constraints.
+- The approved rendering OVERRIDES any conflicting reading from the orthographic views; the orthographic views only supply exact numerical dimensions.
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
@@ -821,15 +840,19 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const instruction = data.subject === "furniture"
       ? furnitureInstruction(data.planUnits)
       : buildingInstruction(data.planUnits);
-    const userContent = isPdf
-      ? [
-          { type: "text", text: instruction },
-          { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } },
-        ]
-      : [
-          { type: "text", text: instruction },
-          { type: "image_url", image_url: { url: data.fileDataUrl } },
-        ];
+    const userContent: Array<Record<string, unknown>> = [
+      { type: "text", text: instruction },
+      isPdf
+        ? { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } }
+        : { type: "image_url", image_url: { url: data.fileDataUrl } },
+    ];
+    if (data.subject === "furniture" && data.approvedRenderUrl) {
+      userContent.push({
+        type: "text",
+        text: `APPROVED RENDERING follows — this is the final approved look of the piece. The 3D geometry MUST match this silhouette and grouping 1:1. Do not separate visually-continuous shapes into multiple parts and do not invent a different shape.${data.masterPrompt ? `\n\nMaster prompt used to create this rendering:\n"""\n${data.masterPrompt}\n"""` : ""}`,
+      });
+      userContent.push({ type: "image_url", image_url: { url: data.approvedRenderUrl } });
+    }
 
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

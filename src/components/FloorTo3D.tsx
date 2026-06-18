@@ -120,7 +120,17 @@ export function FloorTo3D() {
       setError("You have no credits left. Open your Wallet to continue."); return;
     }
     try {
-      const result = await generate({ data: { fileDataUrl, wallHeightMeters, planUnits, outputUnits, subject } });
+      const result = await generate({
+        data: {
+          fileDataUrl,
+          wallHeightMeters,
+          planUnits,
+          outputUnits,
+          subject,
+          approvedRenderUrl: subject === "furniture" && renderUrl ? renderUrl : undefined,
+          masterPrompt: subject === "furniture" && masterPrompt ? masterPrompt : undefined,
+        },
+      });
       if (!result.ok) { setError(result.error); return; }
       setDae(result.daeDataUrl);
       setSummary({ count: result.elementCount, subject: result.subject, outputUnits: result.outputUnits });
