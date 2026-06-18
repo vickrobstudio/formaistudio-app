@@ -78,12 +78,26 @@ const PartSchema = z.object({
   // Shape primitive: axis-aligned box, vertical cylinder, or vertical
   // elliptical cylinder (width = X diameter, depth = Y diameter). All shapes
   // are centered at (cx, cy, cz) and extruded along Z.
-  shape: z.enum(["box", "cylinder", "ellipse_cylinder"]).default("box"),
+  shape: z.enum([
+    "box",
+    "cylinder",
+    "ellipse_cylinder",
+    "tapered_cylinder",
+    "torus",
+    "rounded_box",
+  ]).default("box"),
   cx: z.number(), cy: z.number(), cz: z.number(),
   width: z.number().positive(),   // along X
   depth: z.number().positive(),   // along Y
   height: z.number().positive(),  // along Z
   rotationDegZ: z.number().default(0),
+  // Optional shape-specific extras (in meters):
+  // - tapered_cylinder: topDiameter (X diameter at the top, Y scales proportionally)
+  // - torus: tubeDiameter (thickness of the ring)
+  // - rounded_box / cylinder / ellipse_cylinder: edgeRadius for bullnose/fillet (visual approximation)
+  topDiameter: z.number().positive().optional(),
+  tubeDiameter: z.number().positive().optional(),
+  edgeRadius: z.number().min(0).optional(),
 });
 
 const FurniturePlanSchema = z.object({
