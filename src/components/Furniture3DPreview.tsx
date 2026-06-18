@@ -20,7 +20,10 @@ function readDaeText(daeDataUrl: string) {
   const comma = daeDataUrl.indexOf(",");
   const meta = daeDataUrl.slice(0, comma);
   const payload = daeDataUrl.slice(comma + 1);
-  return Promise.resolve(meta.includes(";base64") ? atob(payload) : decodeURIComponent(payload));
+  if (!meta.includes(";base64")) return Promise.resolve(decodeURIComponent(payload));
+  const binary = atob(payload);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return Promise.resolve(new TextDecoder("utf-8").decode(bytes));
 }
 
 function PreviewCamera({ maxDim, height }: { maxDim: number; height: number }) {
