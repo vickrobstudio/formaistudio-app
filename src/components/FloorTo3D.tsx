@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Check, Download, ImagePlus, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 export function FloorTo3D() {
   const fileRef = useRef<HTMLInputElement>(null);
   const referenceRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [fileName, setFileName] = useState("");
@@ -48,6 +49,12 @@ export function FloorTo3D() {
   const navigate = useNavigate();
   const generate = useServerFn(generateFloor3D);
   const writePrompt = useServerFn(buildMasterPrompt);
+
+  useEffect(() => {
+    if ((stage === "modeling" || stage === "ready") && previewRef.current) {
+      previewRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [stage, dae]);
 
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -121,14 +128,12 @@ export function FloorTo3D() {
   async function buildFromReferenceRendering() {
     const reference = referenceImages[0];
     if (!reference || !fileDataUrl) return;
-    // 2D plan is the SOURCE of geometry (walls, dimensions, parts).
-    // The reference rendering is the 100% fidelity visual target — its
-    // colors, materials and grouping drive the live preview's materials
-    // and .dae groups. Skip the master-prompt and render-approval steps.
+    // The reference rendering IS the geometry/material source for the live 3D
+    // preview and .dae. The required 2D plan only unlocks this workflow.
     setMasterPrompt("");
     setRenderUrl(reference);
     setRenderFinal(true);
-    await buildModel(reference, undefined, fileDataUrl);
+    await buildModel(reference, undefined, reference);
   }
 
   async function buildModel(approvedRenderUrl: string | undefined, prompt: string | undefined, source: string) {
@@ -184,6 +189,7 @@ export function FloorTo3D() {
       <span className={`flex size-5 items-center justify-center rounded-full border ${done ? "border-foreground bg-foreground text-background" : active ? "border-foreground" : "border-border"}`}>{done ? <Check className="size-3" /> : n}</span>
       {label}
     </div>;
+  const showLivePreview = stage === "modeling" || stage === "ready" || Boolean(dae);
 
   return <main className="min-h-screen bg-background"><FormaHeader /><div className="px-5 pt-7"><BackLink /></div>
     <PageIntro eyebrow="2D to 3D" title="2D plan to 3D model" description="Upload a fully dimensioned floor plan or furniture drawing. AI reads every printed dimension and exports an editable Collada .dae model in the units you choose.">
@@ -237,9 +243,9 @@ export function FloorTo3D() {
         </div>}
         {referenceImages.length > 0 && stage !== "modeling" && stage !== "ready" && <div className="mt-4 rounded-2xl border border-dashed border-foreground/40 p-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Plan + reference rendering detected</p>
-          <p className="mt-2 text-xs text-muted-foreground">{fileDataUrl ? "Skipping prompt and approval render. Geometry comes from your 2D plan; materials and groups in the live 3D preview match your reference rendering at 100% fidelity." : "Upload your 2D plan above to unlock direct 3D reconstruction."}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{fileDataUrl ? "Skipping prompt and approval render. The live 3D preview and .dae are reconstructed from your reference rendering at 100% fidelity, with matching materials and groups." : "Upload your 2D plan above to unlock direct 3D reconstruction."}</p>
           <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== "" || !fileDataUrl} onClick={() => void buildFromReferenceRendering()}>
-            <span>{busy === "model" ? "Reconstructing geometry…" : "Build 3D from plan + rendering"}</span>
+            <span>{busy === "model" ? "Reconstructing live preview…" : "Build live 3D from rendering"}</span>
             {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
           </Button>
         </div>}
@@ -315,18 +321,18 @@ export function FloorTo3D() {
       </>}
 
       {/* Step 4 — Live 3D + download */}
-      {(stage === "modeling" || stage === "ready") && <>
-        <div className="mt-8">{stepHeading(4, "Live 3D preview", stage === "modeling" || stage === "ready", stage === "ready")}</div>
+      {showLivePreview && <div ref={previewRef}>
+        <div className="mt-8">{stepHeading(4, "Live 3D preview", stage === "modeling" || stage === "ready", Boolean(dae))}</div>
         {busy === "model" && <div className="mt-3 flex h-56 items-center justify-center rounded-2xl border border-border text-xs text-muted-foreground">
           <LoaderCircle className="mr-2 animate-spin" /> Reconstructing geometry…
         </div>}
-        {dae && stage === "ready" && <div className="mt-3"><Furniture3DPreview plan={plan ?? undefined} daeDataUrl={dae} /></div>}
-        {dae && summary && stage === "ready" && <div className="mt-4 rounded-2xl border border-border p-4">
+        {dae && <div className="mt-3"><Furniture3DPreview key={dae} plan={plan ?? undefined} daeDataUrl={dae} /></div>}
+        {dae && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
           <p className="mt-2 text-xs text-muted-foreground">{summary.count} {summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · {summary.outputUnits} · grouped by material</p>
           <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={download}><span>Download .dae</span><Download /></Button>
         </div>}
-      </>}
+      </div>}
 
       <ToolInformation sections={information} />
     </section>
