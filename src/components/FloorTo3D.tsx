@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState, type ChangeEvent } from "react";
-import { Check, Download, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Check, Download, ImagePlus, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +24,9 @@ type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 
 export function FloorTo3D() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const referenceRef = useRef<HTMLInputElement>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [fileName, setFileName] = useState("");
   const [isPdf, setIsPdf] = useState(false);
   const [subject, setSubject] = useState<"building" | "furniture">("building");
@@ -69,6 +71,7 @@ export function FloorTo3D() {
   function clearFile() {
     setFileName("");
     setFileDataUrl(null);
+    setReferenceImages([]);
     setStage("upload");
     setMasterPrompt("");
     setRenderUrl(null);
@@ -83,7 +86,7 @@ export function FloorTo3D() {
     if (!fileDataUrl) return;
     setBusy("prompt"); setError("");
     try {
-      const result = await writePrompt({ data: { fileDataUrl, subject } });
+      const result = await writePrompt({ data: { fileDataUrl, subject, referenceImages } });
       if (!result.ok) { setError(result.error); return; }
       setMasterPrompt(result.prompt);
       setStage("prompted");
@@ -100,7 +103,7 @@ export function FloorTo3D() {
       await streamImage(masterPrompt, fileDataUrl, (src, isFinal) => {
         setRenderUrl(src);
         if (isFinal) { setRenderFinal(true); setStage("rendered"); }
-      });
+      }, referenceImages);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The rendering could not be created.");
     } finally { setBusy(""); }
@@ -183,6 +186,32 @@ export function FloorTo3D() {
             </span>}
       </Button>
       {fileName && <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={clearFile}><X />Remove file</Button>}
+
+      {/* Optional reference photos — drive the master prompt's shape fidelity */}
+      <div className="mt-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Reference photos (optional)</p>
+        <p className="mt-2 text-xs text-muted-foreground">Add up to 6 inspiration / shape reference images. AI will match the silhouette of the references and the dimensions of your drawing.</p>
+        <input ref={referenceRef} type="file" multiple accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => {
+          const files = Array.from(event.target.files ?? []).slice(0, 6);
+          if (files.some((file) => file.size > 8_000_000)) { setError("Each reference must be smaller than 8 MB."); return; }
+          setError("");
+          Promise.all(files.map((file) => new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+            reader.readAsDataURL(file);
+          }))).then((images) => setReferenceImages(images.filter(Boolean).slice(0, 6)));
+        }} />
+        <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => referenceRef.current?.click()}>
+          <span>{referenceImages.length ? `${referenceImages.length} reference${referenceImages.length === 1 ? "" : "s"} attached` : "Add reference photos"}</span>
+          <ImagePlus />
+        </Button>
+        {referenceImages.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2">
+          {referenceImages.map((image, index) => <div key={index} className="relative overflow-hidden rounded-xl border border-border">
+            <img src={image} alt={`Reference ${index + 1}`} className="aspect-square w-full object-cover" />
+            <button type="button" aria-label="Remove reference" className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-background/90 text-foreground" onClick={() => setReferenceImages((current) => current.filter((_, i) => i !== index))}><X className="size-3" /></button>
+          </div>)}
+        </div>}
+      </div>
 
       <div className="organic-divider py-8">
         <div className="flex items-end justify-between gap-4">
