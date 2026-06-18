@@ -229,6 +229,14 @@ export function FloorTo3D() {
             <button type="button" aria-label="Remove reference" className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-background/90 text-foreground" onClick={() => setReferenceImages((current) => current.filter((_, i) => i !== index))}><X className="size-3" /></button>
           </div>)}
         </div>}
+        {referenceImages.length > 0 && stage !== "modeling" && stage !== "ready" && <div className="mt-4 rounded-2xl border border-dashed border-foreground/40 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Already have a rendering?</p>
+          <p className="mt-2 text-xs text-muted-foreground">If your first reference is the finished rendering you want to model, skip the prompt and approval steps and go straight to the live 3D preview.</p>
+          <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void buildFromReferenceRendering()}>
+            <span>{busy === "model" ? "Reconstructing geometry…" : "Use reference rendering · skip to 3D"}</span>
+            {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+          </Button>
+        </div>}
       </div>
 
       <div className="organic-divider py-8">
