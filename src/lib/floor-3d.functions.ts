@@ -199,11 +199,13 @@ ${ACCURACY_RULES}`;
 function buildingReferenceRenderingInstruction() {
   return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
 
-REFERENCE RENDERING IS THE SOURCE OF TRUTH:
-- Reconstruct the visible walls, floor edges, columns, stairs, built-in fixtures, cabinetry and major furniture from the rendering.
-- There may be NO printed dimensions. In that case, infer realistic proportions from visible architectural scale and keep the model coherent.
+REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials, textures and grouping:
+- Reconstruct the visible walls, floor edges, columns, stairs, built-in fixtures, cabinetry and major furniture exactly as they appear in the rendering. Silhouette, count and arrangement of parts MUST match the image 1:1.
+- MATERIALS: assign each element the material id whose visible finish most closely matches the rendering (wood tone, stone color, metal finish, glass, fabric). Put the descriptive finish from the rendering ("warm white oak", "Calacatta marble", "brushed brass", "smoked glass") in "materialNote" so the live preview and .dae groups read with the same texture family as the rendering.
+- GROUPING: every visually distinct material region in the rendering must be its OWN entry so it imports as its own .dae group/layer (separate "exterior" vs "interior" walls, separate kitchen vs bath vs furniture fixtures, separate stair from slab). Never merge two different materials into one entry.
+- There may be NO printed dimensions. Infer realistic proportions from visible architectural scale and keep the model coherent.
 - Do not output annotations, text, dimension marks, cameras, lights, background scenery, plants, people, loose decor, shadows or image-plane billboards.
-- Use simple editable geometry: straight wall segments, rectangular columns, stairs, and fixture boxes. Each distinct visible element should be its own entry.
+- Use simple editable geometry: straight wall segments, rectangular columns, stairs, and fixture boxes. Each distinct visible element is its own entry.
 - If only a single room / partial scene is visible, model only that visible room/scene.
 
 Return JSON ONLY in this exact shape:
