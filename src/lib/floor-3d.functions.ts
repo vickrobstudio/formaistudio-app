@@ -16,17 +16,61 @@ const FloorTo3DInput = z.object({
   subject: Subject.default("building"),
 });
 
+const OpeningSchema = z.object({
+  kind: z.enum(["door", "window"]),
+  position: z.number().min(0),
+  width: z.number().positive(),
+  sillHeight: z.number().min(0).default(0),
+  headHeight: z.number().positive().default(2.1),
+});
+
 const WallSchema = z.object({
+  name: z.string().max(60).optional(),
+  layer: z.enum(["exterior", "interior"]).default("interior"),
   x1: z.number(), y1: z.number(),
   x2: z.number(), y2: z.number(),
   thickness: z.number().min(0.05).max(1).default(0.15),
+  height: z.number().min(0.5).max(15).optional(),
+  openings: z.array(OpeningSchema).max(20).default([]),
+});
+
+const ColumnSchema = z.object({
+  name: z.string().max(60).optional(),
+  cx: z.number(), cy: z.number(),
+  width: z.number().positive(),
+  depth: z.number().positive(),
+  height: z.number().positive(),
+  rotationDegZ: z.number().default(0),
+});
+
+const StairSchema = z.object({
+  name: z.string().max(60).optional(),
+  cx: z.number(), cy: z.number(),
+  width: z.number().positive(),
+  depth: z.number().positive(),
+  height: z.number().positive(),
+  steps: z.number().int().min(1).max(60).default(12),
+  rotationDegZ: z.number().default(0),
+});
+
+const FixtureSchema = z.object({
+  name: z.string().max(60).optional(),
+  layer: z.string().max(40).default("fixtures"),
+  cx: z.number(), cy: z.number(), cz: z.number(),
+  width: z.number().positive(),
+  depth: z.number().positive(),
+  height: z.number().positive(),
+  rotationDegZ: z.number().default(0),
 });
 
 const BuildingPlanSchema = z.object({
   kind: z.literal("building"),
   units: z.literal("meters"),
   bounds: z.object({ width: z.number().positive(), length: z.number().positive() }),
-  walls: z.array(WallSchema).min(1).max(400),
+  walls: z.array(WallSchema).min(1).max(600),
+  columns: z.array(ColumnSchema).max(200).default([]),
+  stairs: z.array(StairSchema).max(40).default([]),
+  fixtures: z.array(FixtureSchema).max(400).default([]),
 });
 
 const PartSchema = z.object({
@@ -80,14 +124,34 @@ Return JSON ONLY in this exact shape:
   "kind": "building",
   "units": "meters",
   "bounds": { "width": <plan width m>, "length": <plan length m> },
-  "walls": [ { "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m> } ]
+  "walls": [
+    {
+      "name": "<optional label>",
+      "layer": "exterior" | "interior",
+      "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>,
+      "thickness": <m>,
+      "height": <optional m, omit to use default ceiling>,
+      "openings": [
+        { "kind": "door"|"window", "position": <m from (x1,y1) along the wall>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
+      ]
+    }
+  ],
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
 }
 
 Rules:
 - Origin (0,0) at the bottom-left corner of the plan, +x right, +y up.
-- Trace every exterior and interior wall as one straight segment between endpoints. Split walls at every intersection and door opening.
+- Trace every exterior and interior wall as one straight segment between endpoints. Split walls at every intersection. Do NOT split a wall at a door or window — put the door/window in the wall's "openings" array so we can cut it cleanly.
+- For each opening, "position" is the distance from (x1,y1) along the wall to the START of the opening. Doors: sillHeight 0, headHeight ~2.1 m. Windows: sillHeight ~0.9 m, headHeight ~2.1 m. Use printed dimensions when shown.
 - Use the printed wall thickness when shown; otherwise 0.20 m exterior, 0.10 m interior.
-- Skip door swings, furniture, dimension lines, text, hatching, north arrows, columns, stairs.
+- Mark walls "exterior" if they form the building envelope, otherwise "interior".
+- Capture every structural column as a "columns" entry (rectangular or treat round columns as their bounding rectangle).
+- Capture every staircase as a "stairs" entry with overall run width, run depth, total rise (height) and number of steps.
+- Capture fixed furniture, kitchen cabinets, bath fixtures, appliances and plumbing as "fixtures" entries on the appropriate layer name so they import as separate SketchUp groups.
+- Skip door swings, dimension lines, text, hatching, north arrows. Do NOT simplify or omit walls, columns, stairs or fixtures that appear in the drawing.
+- Keep every distinct element as its own entry so each becomes a separate group / layer on import.
 
 ${ACCURACY_RULES}`;
 }
@@ -117,18 +181,17 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
-function buildMeshes(
-  plan: BuildingPlan | FurniturePlan,
-  wallHeightMeters: number,
-  outputUnits: "meters" | "feet",
-) {
-  const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
-  const positions: number[] = [];
-  const indices: number[] = [];
+type Group = { id: string; name: string; positions: number[]; indices: number[] };
 
+function makeGroupBuilder(id: string, name: string, scale: number): {
+  group: Group;
+  addCorners: (corners: [number, number, number][]) => void;
+  addBox: (minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number) => void;
+} {
+  const group: Group = { id, name, positions: [], indices: [] };
   function addCorners(corners: [number, number, number][]) {
-    const base = positions.length / 3;
-    for (const [x, y, z] of corners) positions.push(x * scale, y * scale, z * scale);
+    const base = group.positions.length / 3;
+    for (const [x, y, z] of corners) group.positions.push(x * scale, y * scale, z * scale);
     const faces: [number, number, number, number][] = [
       [0, 1, 2, 3],
       [4, 7, 6, 5],
@@ -138,57 +201,161 @@ function buildMeshes(
       [3, 7, 4, 0],
     ];
     for (const [a, b, c, d] of faces) {
-      indices.push(base + a, base + b, base + c, base + a, base + c, base + d);
+      group.indices.push(base + a, base + b, base + c, base + a, base + c, base + d);
     }
   }
-
-  function addAxisAlignedBox(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number) {
+  function addBox(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number) {
     addCorners([
       [minX, minY, minZ], [maxX, minY, minZ], [maxX, maxY, minZ], [minX, maxY, minZ],
       [minX, minY, maxZ], [maxX, minY, maxZ], [maxX, maxY, maxZ], [minX, maxY, maxZ],
     ]);
   }
+  return { group, addCorners, addBox };
+}
 
-  if (plan.kind === "building") {
-    const { width, length } = plan.bounds;
-    addAxisAlignedBox(0, 0, -0.05, width, length, 0);
-    for (const wall of plan.walls) {
-      const dx = wall.x2 - wall.x1;
-      const dy = wall.y2 - wall.y1;
-      const len = Math.hypot(dx, dy);
-      if (len < 0.05) continue;
-      const nx = -dy / len, ny = dx / len;
-      const t = wall.thickness / 2;
-      const p1: [number, number, number] = [wall.x1 + nx * t, wall.y1 + ny * t, 0];
-      const p2: [number, number, number] = [wall.x2 + nx * t, wall.y2 + ny * t, 0];
-      const p3: [number, number, number] = [wall.x2 - nx * t, wall.y2 - ny * t, 0];
-      const p4: [number, number, number] = [wall.x1 - nx * t, wall.y1 - ny * t, 0];
-      addCorners([
-        p1, p2, p3, p4,
-        [p1[0], p1[1], wallHeightMeters],
-        [p2[0], p2[1], wallHeightMeters],
-        [p3[0], p3[1], wallHeightMeters],
-        [p4[0], p4[1], wallHeightMeters],
-      ]);
-    }
-  } else {
-    for (const part of plan.parts) {
-      const hx = part.width / 2, hy = part.depth / 2, hz = part.height / 2;
-      const local: [number, number, number][] = [
-        [-hx, -hy, -hz], [hx, -hy, -hz], [hx, hy, -hz], [-hx, hy, -hz],
-        [-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz],
-      ];
-      const theta = (part.rotationDegZ * Math.PI) / 180;
-      const cos = Math.cos(theta), sin = Math.sin(theta);
-      addCorners(local.map(([x, y, z]) => [
-        part.cx + x * cos - y * sin,
-        part.cy + x * sin + y * cos,
-        part.cz + z,
-      ]));
-    }
+function addRotatedBox(
+  addCorners: (corners: [number, number, number][]) => void,
+  cx: number, cy: number, cz: number,
+  width: number, depth: number, height: number,
+  rotationDegZ: number,
+) {
+  const hx = width / 2, hy = depth / 2, hz = height / 2;
+  const local: [number, number, number][] = [
+    [-hx, -hy, -hz], [hx, -hy, -hz], [hx, hy, -hz], [-hx, hy, -hz],
+    [-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz],
+  ];
+  const theta = (rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  addCorners(local.map(([x, y, z]) => [
+    cx + x * cos - y * sin,
+    cy + x * sin + y * cos,
+    cz + z,
+  ]));
+}
+
+function addWallWithOpenings(
+  addCorners: (corners: [number, number, number][]) => void,
+  wall: z.infer<typeof WallSchema>,
+  defaultHeight: number,
+) {
+  const dx = wall.x2 - wall.x1;
+  const dy = wall.y2 - wall.y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.05) return;
+  const ux = dx / len, uy = dy / len;
+  const nx = -uy, ny = ux;
+  const t = wall.thickness / 2;
+  const top = wall.height ?? defaultHeight;
+
+  function piece(d0: number, d1: number, z0: number, z1: number) {
+    if (d1 - d0 < 0.01 || z1 - z0 < 0.01) return;
+    const sx = wall.x1 + ux * d0, sy = wall.y1 + uy * d0;
+    const ex = wall.x1 + ux * d1, ey = wall.y1 + uy * d1;
+    const p1: [number, number, number] = [sx + nx * t, sy + ny * t, z0];
+    const p2: [number, number, number] = [ex + nx * t, ey + ny * t, z0];
+    const p3: [number, number, number] = [ex - nx * t, ey - ny * t, z0];
+    const p4: [number, number, number] = [sx - nx * t, sy - ny * t, z0];
+    addCorners([
+      p1, p2, p3, p4,
+      [p1[0], p1[1], z1],
+      [p2[0], p2[1], z1],
+      [p3[0], p3[1], z1],
+      [p4[0], p4[1], z1],
+    ]);
   }
 
-  return { positions, indices };
+  const openings = [...wall.openings]
+    .map((o) => ({ ...o, start: Math.max(0, Math.min(len, o.position)), end: Math.max(0, Math.min(len, o.position + o.width)) }))
+    .filter((o) => o.end > o.start)
+    .sort((a, b) => a.start - b.start);
+
+  let cursor = 0;
+  for (const op of openings) {
+    if (op.start > cursor) piece(cursor, op.start, 0, top);
+    const sill = Math.min(op.sillHeight, top);
+    const head = Math.min(op.headHeight, top);
+    if (sill > 0) piece(op.start, op.end, 0, sill);
+    if (head < top) piece(op.start, op.end, head, top);
+    cursor = op.end;
+  }
+  if (cursor < len) piece(cursor, len, 0, top);
+}
+
+function buildGroups(
+  plan: BuildingPlan | FurniturePlan,
+  wallHeightMeters: number,
+  outputUnits: "meters" | "feet",
+): Group[] {
+  const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
+  const groups: Group[] = [];
+
+  if (plan.kind === "building") {
+    const slab = makeGroupBuilder("group_slab", "Slab", scale);
+    slab.addBox(0, 0, -0.05, plan.bounds.width, plan.bounds.length, 0);
+    groups.push(slab.group);
+
+    const exterior = makeGroupBuilder("group_walls_exterior", "Walls - Exterior", scale);
+    const interior = makeGroupBuilder("group_walls_interior", "Walls - Interior", scale);
+    for (const wall of plan.walls) {
+      const target = wall.layer === "exterior" ? exterior : interior;
+      addWallWithOpenings(target.addCorners, wall, wallHeightMeters);
+    }
+    if (exterior.group.positions.length) groups.push(exterior.group);
+    if (interior.group.positions.length) groups.push(interior.group);
+
+    if (plan.columns.length) {
+      const g = makeGroupBuilder("group_columns", "Columns", scale);
+      for (const c of plan.columns) {
+        addRotatedBox(g.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
+      }
+      groups.push(g.group);
+    }
+    if (plan.stairs.length) {
+      const g = makeGroupBuilder("group_stairs", "Stairs", scale);
+      for (const s of plan.stairs) {
+        const stepRise = s.height / s.steps;
+        const stepRun = s.depth / s.steps;
+        const theta = (s.rotationDegZ * Math.PI) / 180;
+        const cos = Math.cos(theta), sin = Math.sin(theta);
+        const halfW = s.width / 2;
+        for (let i = 0; i < s.steps; i++) {
+          const yLocal = -s.depth / 2 + i * stepRun;
+          const tread: [number, number][] = [[-halfW, yLocal], [halfW, yLocal], [halfW, s.depth / 2], [-halfW, s.depth / 2]];
+          const z0 = 0;
+          const z1 = (i + 1) * stepRise;
+          const world = tread.map(([lx, ly]) => [s.cx + lx * cos - ly * sin, s.cy + lx * sin + ly * cos] as [number, number]);
+          g.addCorners([
+            [world[0][0], world[0][1], z0], [world[1][0], world[1][1], z0], [world[2][0], world[2][1], z0], [world[3][0], world[3][1], z0],
+            [world[0][0], world[0][1], z1], [world[1][0], world[1][1], z1], [world[2][0], world[2][1], z1], [world[3][0], world[3][1], z1],
+          ]);
+        }
+      }
+      groups.push(g.group);
+    }
+    if (plan.fixtures.length) {
+      const byLayer = new Map<string, ReturnType<typeof makeGroupBuilder>>();
+      for (const f of plan.fixtures) {
+        const layerKey = (f.layer || "fixtures").trim().toLowerCase() || "fixtures";
+        let bucket = byLayer.get(layerKey);
+        if (!bucket) {
+          const safe = layerKey.replace(/[^a-z0-9]+/g, "_");
+          bucket = makeGroupBuilder(`group_fixtures_${safe}`, `Fixtures - ${layerKey}`, scale);
+          byLayer.set(layerKey, bucket);
+        }
+        addRotatedBox(bucket.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
+      }
+      for (const bucket of byLayer.values()) groups.push(bucket.group);
+    }
+  } else {
+    plan.parts.forEach((part, i) => {
+      const safe = (part.name || `part_${i + 1}`).replace(/[^A-Za-z0-9]+/g, "_");
+      const g = makeGroupBuilder(`group_${safe}_${i}`, part.name || `Part ${i + 1}`, scale);
+      addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
+      groups.push(g.group);
+    });
+  }
+
+  return groups.filter((g) => g.positions.length > 0);
 }
 
 function buildDae(
@@ -196,15 +363,36 @@ function buildDae(
   wallHeightMeters: number,
   outputUnits: "meters" | "feet",
 ) {
-  const { positions, indices } = buildMeshes(plan, wallHeightMeters, outputUnits);
-  const positionText = positions.map((n) => n.toFixed(4)).join(" ");
-  const triCount = indices.length / 3;
-  const pIndex = indices.join(" ");
+  const groups = buildGroups(plan, wallHeightMeters, outputUnits);
   const created = new Date().toISOString();
   const unitTag = outputUnits === "feet"
     ? '<unit name="foot" meter="0.3048"/>'
     : '<unit name="meter" meter="1"/>';
-  const subjectName = plan.kind === "building" ? "FloorPlan" : "Furniture";
+
+  const geometriesXml = groups.map((g) => {
+    const positionText = g.positions.map((n) => n.toFixed(4)).join(" ");
+    const triCount = g.indices.length / 3;
+    const pIndex = g.indices.join(" ");
+    return `    <geometry id="${g.id}_geom" name="${g.name}">
+      <mesh>
+        <source id="${g.id}_pos">
+          <float_array id="${g.id}_pos_array" count="${g.positions.length}">${positionText}</float_array>
+          <technique_common><accessor source="#${g.id}_pos_array" count="${g.positions.length / 3}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common>
+        </source>
+        <vertices id="${g.id}_vtx"><input semantic="POSITION" source="#${g.id}_pos"/></vertices>
+        <triangles material="solidMaterialSG" count="${triCount}">
+          <input semantic="VERTEX" source="#${g.id}_vtx" offset="0"/>
+          <p>${pIndex}</p>
+        </triangles>
+      </mesh>
+    </geometry>`;
+  }).join("\n");
+
+  const nodesXml = groups.map((g) => `      <node id="${g.id}_node" name="${g.name}">
+        <instance_geometry url="#${g.id}_geom">
+          <bind_material><technique_common><instance_material symbol="solidMaterialSG" target="#solidMaterial"/></technique_common></bind_material>
+        </instance_geometry>
+      </node>`).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
@@ -222,27 +410,11 @@ function buildDae(
     <material id="solidMaterial" name="Solid"><instance_effect url="#solidEffect"/></material>
   </library_materials>
   <library_geometries>
-    <geometry id="subjectGeom" name="${subjectName}">
-      <mesh>
-        <source id="subjectPositions">
-          <float_array id="subjectPositionsArray" count="${positions.length}">${positionText}</float_array>
-          <technique_common><accessor source="#subjectPositionsArray" count="${positions.length / 3}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common>
-        </source>
-        <vertices id="subjectVertices"><input semantic="POSITION" source="#subjectPositions"/></vertices>
-        <triangles material="solidMaterialSG" count="${triCount}">
-          <input semantic="VERTEX" source="#subjectVertices" offset="0"/>
-          <p>${pIndex}</p>
-        </triangles>
-      </mesh>
-    </geometry>
+${geometriesXml}
   </library_geometries>
   <library_visual_scenes>
     <visual_scene id="Scene" name="Scene">
-      <node id="SubjectNode" name="${subjectName}">
-        <instance_geometry url="#subjectGeom">
-          <bind_material><technique_common><instance_material symbol="solidMaterialSG" target="#solidMaterial"/></technique_common></bind_material>
-        </instance_geometry>
-      </node>
+${nodesXml}
     </visual_scene>
   </library_visual_scenes>
   <scene><instance_visual_scene url="#Scene"/></scene>
@@ -309,6 +481,8 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const plan = planResult.data;
     const dae = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
-    const elementCount = plan.kind === "building" ? plan.walls.length : plan.parts.length;
+    const elementCount = plan.kind === "building"
+      ? plan.walls.length + plan.columns.length + plan.stairs.length + plan.fixtures.length
+      : plan.parts.length;
     return { ok: true, daeDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits };
   });
