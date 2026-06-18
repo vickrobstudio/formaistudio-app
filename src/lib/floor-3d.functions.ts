@@ -324,6 +324,46 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
+function furnitureReferenceRenderingInstruction() {
+  return `You are a senior furniture 3D reconstruction modeler. Inspect the uploaded finished furniture rendering / reference image and return STRICT JSON describing the piece as editable 3D primitives for a live rotatable Collada .dae preview.
+
+REFERENCE RENDERING IS THE SOURCE OF TRUTH:
+- Reconstruct the visible furniture silhouette, part grouping, proportions, and material separation from the rendering.
+- There may be NO printed dimensions. Infer a realistic furniture scale and keep all parts proportionally coherent.
+- Do NOT output a simplified blocky stand-in. Round, oval, ring, tapered, scalloped, arched, wavy or asymmetric features must use the closest matching primitive.
+- Do not output annotations, labels, dimension marks, cameras, lights, background scenery, shadows or image-plane billboards.
+
+Return JSON ONLY in this exact shape:
+{
+  "kind": "furniture",
+  "units": "meters",
+  "bounds": { "width": <estimated overall X m>, "depth": <estimated overall Y m>, "height": <estimated overall Z m> },
+  "parts": [
+    {
+      "name": "<part name>",
+      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box" | "custom_extrusion",
+      "cx": <m>, "cy": <m>, "cz": <m>,
+      "width": <m>, "depth": <m>, "height": <m>,
+      "rotationDegZ": <deg>,
+      "outline": [[<x>, <y>], ...],
+      "topDiameter": <m>,
+      "tubeDiameter": <m>,
+      "edgeRadius": <m>,
+      "material": "stone_white" | "stone_dark" | "wood_oak" | "wood_walnut" | "wood_dark" | "metal_brass" | "metal_chrome" | "metal_black" | "fabric_neutral" | "leather_dark" | "glass" | "plastic_white" | "plastic_black" | "other",
+      "materialNote": "<optional finish description>"
+    }
+  ]
+}
+
+Shape rules:
+- Use cylinder / ellipse_cylinder / tapered_cylinder / torus for round or ring parts.
+- Use rounded_box for softened rectangular forms.
+- Use custom_extrusion with 16–96 outline points for scalloped, kidney, boomerang, organic, arched, wavy or asymmetric silhouettes.
+- Origin (0,0,0) at the bottom-front-left of the bounding box; +Z is height.
+- Include every visually distinct major part so materials import as separate editable groups.
+- Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
+}
+
 function scallopedOutline(points = 96, lobes = 16): Array<[number, number]> {
   return Array.from({ length: points }, (_, i) => {
     const a = (i / points) * Math.PI * 2;
@@ -962,16 +1002,16 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
-    const instruction = data.subject === "furniture"
-      ? furnitureInstruction(data.planUnits)
-      : buildingInstruction(data.planUnits);
+    const instruction = data.referenceOnly
+      ? (data.subject === "furniture" ? furnitureReferenceRenderingInstruction() : buildingReferenceRenderingInstruction())
+      : (data.subject === "furniture" ? furnitureInstruction(data.planUnits) : buildingInstruction(data.planUnits));
     const userContent: Array<Record<string, unknown>> = [
       { type: "text", text: instruction },
       isPdf
         ? { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } }
         : { type: "image_url", image_url: { url: data.fileDataUrl } },
     ];
-    if (data.subject === "furniture" && data.approvedRenderUrl) {
+    if (!data.referenceOnly && data.subject === "furniture" && data.approvedRenderUrl) {
       userContent.push({
         type: "text",
         text: `APPROVED RENDERING follows — this is the final approved look of the piece. The 3D geometry MUST match this silhouette and grouping 1:1. Do not separate visually-continuous shapes into multiple parts and do not invent a different shape.${data.masterPrompt ? `\n\nMaster prompt used to create this rendering:\n"""\n${data.masterPrompt}\n"""` : ""}`,
