@@ -774,6 +774,8 @@ function buildGroups(
         addTorus(g.group, part.cx, part.cy, part.cz, dx, dy, tube, part.rotationDegZ, scale, 64, 16);
       } else if (part.shape === "rounded_box") {
         addRoundedBox(g.group, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ, scale, edge || 0.01);
+      } else if (part.shape === "custom_extrusion") {
+        addCustomExtrusion(g.group, part, scale);
       } else {
         addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
       }
