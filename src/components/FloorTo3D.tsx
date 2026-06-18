@@ -100,7 +100,9 @@ export function FloorTo3D() {
     setBusy("render"); setError("");
     setRenderUrl(null); setRenderFinal(false);
     try {
-      await streamImage(masterPrompt, fileDataUrl, (src, isFinal) => {
+      const noDimensionsDirective = "\n\nCRITICAL — CLEAN PHOTOREAL OUTPUT: The rendered image MUST NOT contain any dimensions, measurement annotations, dimension lines, leader lines, arrows, rulers, scale bars, tick marks, callouts, labels, numbers, units (mm, cm, m, ft, in), text overlays, watermarks, logos, grids, axis indicators, or any drafting markup whatsoever. Render ONLY the finished photoreal object/scene as a real-world photograph — no annotations of any kind.";
+      const finalPrompt = `${masterPrompt}${noDimensionsDirective}`;
+      await streamImage(finalPrompt, fileDataUrl, (src, isFinal) => {
         setRenderUrl(src);
         if (isFinal) { setRenderFinal(true); setStage("rendered"); }
       }, referenceImages);
