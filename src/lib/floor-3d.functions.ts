@@ -406,6 +406,15 @@ function enforcePromptShapeTraits(plan: FurniturePlan, masterPrompt?: string, ap
 
 type Group = { id: string; name: string; positions: number[]; indices: number[]; materialId: MaterialId };
 
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 function makeGroupBuilder(id: string, name: string, scale: number, materialId: MaterialId = "other"): {
   group: Group;
   addCorners: (corners: [number, number, number][]) => void;
@@ -936,7 +945,7 @@ function buildDae(
 
   const materialsXml = usedMaterialIds.map((id) => {
     const spec = MATERIAL_PALETTE[id];
-    return `    <material id="${matId(id)}" name="${spec.label}"><instance_effect url="#${matEffectId(id)}"/></material>`;
+    return `    <material id="${matId(id)}" name="${escapeXml(spec.label)}"><instance_effect url="#${matEffectId(id)}"/></material>`;
   }).join("\n");
 
   const geometriesXml = groups.map((g) => {
@@ -944,7 +953,7 @@ function buildDae(
     const triCount = g.indices.length / 3;
     const pIndex = g.indices.join(" ");
     const sym = matSymbol(g.materialId);
-    return `    <geometry id="${g.id}_geom" name="${g.name}">
+    return `    <geometry id="${g.id}_geom" name="${escapeXml(g.name)}">
       <mesh>
         <source id="${g.id}_pos">
           <float_array id="${g.id}_pos_array" count="${g.positions.length}">${positionText}</float_array>
@@ -961,7 +970,7 @@ function buildDae(
 
   const nodesXml = groups.map((g) => {
     const sym = matSymbol(g.materialId);
-    return `      <node id="${g.id}_node" name="${g.name}">
+    return `      <node id="${g.id}_node" name="${escapeXml(g.name)}">
         <instance_geometry url="#${g.id}_geom">
           <bind_material><technique_common><instance_material symbol="${sym}" target="#${matId(g.materialId)}"/></technique_common></bind_material>
         </instance_geometry>
