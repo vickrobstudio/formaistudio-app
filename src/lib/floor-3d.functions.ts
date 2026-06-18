@@ -481,6 +481,8 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const plan = planResult.data;
     const dae = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
-    const elementCount = plan.kind === "building" ? plan.walls.length : plan.parts.length;
+    const elementCount = plan.kind === "building"
+      ? plan.walls.length + plan.columns.length + plan.stairs.length + plan.fixtures.length
+      : plan.parts.length;
     return { ok: true, daeDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits };
   });
