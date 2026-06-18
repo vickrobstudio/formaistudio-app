@@ -118,13 +118,15 @@ export function FloorTo3D() {
 
   async function buildFromReferenceRendering() {
     const reference = referenceImages[0];
-    if (!reference) return;
-    // Use the uploaded rendering as both the source and the approved render —
-    // skip the master-prompt and render-preview steps entirely.
+    if (!reference || !fileDataUrl) return;
+    // 2D plan is the SOURCE of geometry (walls, dimensions, parts).
+    // The reference rendering is the 100% fidelity visual target — its
+    // colors, materials and grouping drive the live preview's materials
+    // and .dae groups. Skip the master-prompt and render-approval steps.
     setMasterPrompt("");
     setRenderUrl(reference);
     setRenderFinal(true);
-    await buildModel(reference, undefined, reference);
+    await buildModel(reference, undefined, fileDataUrl);
   }
 
   async function buildModel(approvedRenderUrl: string | undefined, prompt: string | undefined, source: string) {
@@ -149,7 +151,9 @@ export function FloorTo3D() {
           subject,
           approvedRenderUrl,
           masterPrompt: prompt,
-          referenceOnly: Boolean(approvedRenderUrl && !prompt),
+          // Only set referenceOnly when there's no separate 2D plan
+          // (source equals the rendering itself).
+          referenceOnly: Boolean(approvedRenderUrl && !prompt && source === approvedRenderUrl),
         },
       });
       if (!result.ok) { setError(result.error); return; }
