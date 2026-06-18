@@ -150,6 +150,7 @@ export function FloorTo3D() {
           subject,
           approvedRenderUrl,
           masterPrompt: prompt,
+          referenceOnly: Boolean(approvedRenderUrl && !prompt),
         },
       });
       if (!result.ok) { setError(result.error); return; }

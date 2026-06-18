@@ -25,6 +25,7 @@ const FloorTo3DInput = z.object({
     .max(50_000_000)
     .optional(),
   masterPrompt: z.string().max(8000).optional(),
+  referenceOnly: z.boolean().default(false).optional(),
 });
 
 const OpeningSchema = z.object({
@@ -193,6 +194,45 @@ Rules:
 - Keep the model SIMPLE: only walls, doors, windows, columns, stairs and visible furniture / cabinets / bath fixtures. Each distinct element is its own entry so it becomes its own group on import.
 
 ${ACCURACY_RULES}`;
+}
+
+function buildingReferenceRenderingInstruction() {
+  return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
+
+REFERENCE RENDERING IS THE SOURCE OF TRUTH:
+- Reconstruct the visible walls, floor edges, columns, stairs, built-in fixtures, cabinetry and major furniture from the rendering.
+- There may be NO printed dimensions. In that case, infer realistic proportions from visible architectural scale and keep the model coherent.
+- Do not output annotations, text, dimension marks, cameras, lights, background scenery, plants, people, loose decor, shadows or image-plane billboards.
+- Use simple editable geometry: straight wall segments, rectangular columns, stairs, and fixture boxes. Each distinct visible element should be its own entry.
+- If only a single room / partial scene is visible, model only that visible room/scene.
+
+Return JSON ONLY in this exact shape:
+{
+  "kind": "building",
+  "units": "meters",
+  "bounds": { "width": <estimated model width m>, "length": <estimated model length m> },
+  "walls": [
+    {
+      "name": "<optional label>",
+      "layer": "exterior" | "interior",
+      "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>,
+      "thickness": <m>,
+      "height": <optional m>,
+      "openings": [
+        { "kind": "door"|"window", "position": <m from wall start>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
+      ]
+    }
+  ],
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
+}
+
+Rules:
+- Origin (0,0) at the lower-left of the reconstructed footprint, +x right, +y depth.
+- Include at least the main visible wall envelope. Use typical wall thickness 0.12–0.25 m if unknown.
+- Use realistic architectural scale: doors around 0.8–1.0 m wide and 2.1 m high, counters around 0.9 m high, rooms around 2.4–3.5 m high.
+- Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 }
 
 function furnitureInstruction(planUnits: z.infer<typeof PlanUnits>) {
