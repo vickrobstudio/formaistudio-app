@@ -121,11 +121,10 @@ export function FloorTo3D() {
     if (!reference) return;
     // Use the uploaded rendering as both the source and the approved render —
     // skip the master-prompt and render-preview steps entirely.
-    const source = fileDataUrl ?? reference;
     setMasterPrompt("");
     setRenderUrl(reference);
     setRenderFinal(true);
-    await buildModel(reference, undefined, source);
+    await buildModel(reference, undefined, reference);
   }
 
   async function buildModel(approvedRenderUrl: string | undefined, prompt: string | undefined, source: string) {
@@ -150,6 +149,7 @@ export function FloorTo3D() {
           subject,
           approvedRenderUrl,
           masterPrompt: prompt,
+          referenceOnly: Boolean(approvedRenderUrl && !prompt),
         },
       });
       if (!result.ok) { setError(result.error); return; }
