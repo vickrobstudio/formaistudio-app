@@ -23,7 +23,7 @@ function useDaeScene(daeDataUrl: string) {
     loader.load(
       daeDataUrl,
       (collada) => {
-        if (cancelled) return;
+        if (cancelled || !collada?.scene) return;
         const root = collada.scene as unknown as THREE.Group;
         // .dae authored Z-up; rotate the whole group so three's Y-up scene
         // shows it standing on the ground plane.
