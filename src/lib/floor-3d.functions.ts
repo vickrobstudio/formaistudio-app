@@ -16,17 +16,61 @@ const FloorTo3DInput = z.object({
   subject: Subject.default("building"),
 });
 
+const OpeningSchema = z.object({
+  kind: z.enum(["door", "window"]),
+  position: z.number().min(0),
+  width: z.number().positive(),
+  sillHeight: z.number().min(0).default(0),
+  headHeight: z.number().positive().default(2.1),
+});
+
 const WallSchema = z.object({
+  name: z.string().max(60).optional(),
+  layer: z.enum(["exterior", "interior"]).default("interior"),
   x1: z.number(), y1: z.number(),
   x2: z.number(), y2: z.number(),
   thickness: z.number().min(0.05).max(1).default(0.15),
+  height: z.number().min(0.5).max(15).optional(),
+  openings: z.array(OpeningSchema).max(20).default([]),
+});
+
+const ColumnSchema = z.object({
+  name: z.string().max(60).optional(),
+  cx: z.number(), cy: z.number(),
+  width: z.number().positive(),
+  depth: z.number().positive(),
+  height: z.number().positive(),
+  rotationDegZ: z.number().default(0),
+});
+
+const StairSchema = z.object({
+  name: z.string().max(60).optional(),
+  cx: z.number(), cy: z.number(),
+  width: z.number().positive(),
+  depth: z.number().positive(),
+  height: z.number().positive(),
+  steps: z.number().int().min(1).max(60).default(12),
+  rotationDegZ: z.number().default(0),
+});
+
+const FixtureSchema = z.object({
+  name: z.string().max(60).optional(),
+  layer: z.string().max(40).default("fixtures"),
+  cx: z.number(), cy: z.number(), cz: z.number(),
+  width: z.number().positive(),
+  depth: z.number().positive(),
+  height: z.number().positive(),
+  rotationDegZ: z.number().default(0),
 });
 
 const BuildingPlanSchema = z.object({
   kind: z.literal("building"),
   units: z.literal("meters"),
   bounds: z.object({ width: z.number().positive(), length: z.number().positive() }),
-  walls: z.array(WallSchema).min(1).max(400),
+  walls: z.array(WallSchema).min(1).max(600),
+  columns: z.array(ColumnSchema).max(200).default([]),
+  stairs: z.array(StairSchema).max(40).default([]),
+  fixtures: z.array(FixtureSchema).max(400).default([]),
 });
 
 const PartSchema = z.object({
