@@ -124,14 +124,34 @@ Return JSON ONLY in this exact shape:
   "kind": "building",
   "units": "meters",
   "bounds": { "width": <plan width m>, "length": <plan length m> },
-  "walls": [ { "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m> } ]
+  "walls": [
+    {
+      "name": "<optional label>",
+      "layer": "exterior" | "interior",
+      "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>,
+      "thickness": <m>,
+      "height": <optional m, omit to use default ceiling>,
+      "openings": [
+        { "kind": "door"|"window", "position": <m from (x1,y1) along the wall>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
+      ]
+    }
+  ],
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
 }
 
 Rules:
 - Origin (0,0) at the bottom-left corner of the plan, +x right, +y up.
-- Trace every exterior and interior wall as one straight segment between endpoints. Split walls at every intersection and door opening.
+- Trace every exterior and interior wall as one straight segment between endpoints. Split walls at every intersection. Do NOT split a wall at a door or window — put the door/window in the wall's "openings" array so we can cut it cleanly.
+- For each opening, "position" is the distance from (x1,y1) along the wall to the START of the opening. Doors: sillHeight 0, headHeight ~2.1 m. Windows: sillHeight ~0.9 m, headHeight ~2.1 m. Use printed dimensions when shown.
 - Use the printed wall thickness when shown; otherwise 0.20 m exterior, 0.10 m interior.
-- Skip door swings, furniture, dimension lines, text, hatching, north arrows, columns, stairs.
+- Mark walls "exterior" if they form the building envelope, otherwise "interior".
+- Capture every structural column as a "columns" entry (rectangular or treat round columns as their bounding rectangle).
+- Capture every staircase as a "stairs" entry with overall run width, run depth, total rise (height) and number of steps.
+- Capture fixed furniture, kitchen cabinets, bath fixtures, appliances and plumbing as "fixtures" entries on the appropriate layer name so they import as separate SketchUp groups.
+- Skip door swings, dimension lines, text, hatching, north arrows. Do NOT simplify or omit walls, columns, stairs or fixtures that appear in the drawing.
+- Keep every distinct element as its own entry so each becomes a separate group / layer on import.
 
 ${ACCURACY_RULES}`;
 }
