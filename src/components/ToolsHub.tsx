@@ -3,7 +3,7 @@ import { ArrowRight, Box, Boxes, Camera, Film, ImagePlus, Sparkles } from "lucid
 import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 
 const tools = [
-  { icon: Boxes, name: "2D to 3D", description: "Lift a floor plan PDF or image into an editable 3D .dae model", to: "/floor-to-3d" },
+  { icon: Boxes, name: "2D to 3D", description: "Lift a floor plan PDF or image into an editable 3D .dae model", to: "/2d-to-3d" },
   { icon: Sparkles, name: "Studio AI", description: "Complete configured spaces with exact furniture references", to: "/studio" },
   { icon: Box, name: "3D to AI", description: "Turn any perspective into a photorealistic rendering", to: "/model-to-ai" },
   { icon: ImagePlus, name: "AI Edits", description: "Add, remove, relight and transform scene details", to: "/ai-edits" },
