@@ -435,7 +435,17 @@ function enforcePromptShapeTraits(plan: FurniturePlan, masterPrompt?: string, ap
   };
 }
 
-type Group = { id: string; name: string; positions: number[]; indices: number[]; materialId: MaterialId };
+type Group = {
+  id: string;
+  name: string;
+  positions: number[];
+  indices: number[];
+  materialId: MaterialId;
+  // Per-element sRGB colour sampled from the reference rendering. When set,
+  // this overrides the palette colour in both the .dae export and any client
+  // that reads the .dae effects (the live preview loads the .dae).
+  colorOverride?: [number, number, number];
+};
 
 function escapeXml(value: string) {
   return value
@@ -446,12 +456,18 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
-function makeGroupBuilder(id: string, name: string, scale: number, materialId: MaterialId = "other"): {
+function makeGroupBuilder(
+  id: string,
+  name: string,
+  scale: number,
+  materialId: MaterialId = "other",
+  colorOverride?: [number, number, number],
+): {
   group: Group;
   addCorners: (corners: [number, number, number][]) => void;
   addBox: (minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number) => void;
 } {
-  const group: Group = { id, name, positions: [], indices: [], materialId };
+  const group: Group = { id, name, positions: [], indices: [], materialId, colorOverride };
   function addCorners(corners: [number, number, number][]) {
     const base = group.positions.length / 3;
     for (const [x, y, z] of corners) group.positions.push(x * scale, y * scale, z * scale);
