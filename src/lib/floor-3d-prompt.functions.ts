@@ -7,6 +7,10 @@ const Input = z.object({
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
     .max(2_700_000_000),
   subject: z.enum(["building", "furniture"]).default("furniture"),
+  referenceImages: z
+    .array(z.string().regex(/^data:image\/(?:png|jpeg|webp);base64,/).max(8_000_000))
+    .max(6)
+    .optional(),
 });
 
 type Result = { ok: true; prompt: string } | { ok: false; error: string };
@@ -19,6 +23,9 @@ The paragraph must include:
 - Materials and finishes called out in the drawing or visible in reference photos (stone type, wood species, metal finish, leather/fabric, glass).
 - Lighting and camera: soft studio lighting, three-quarter view, neutral seamless background, 50mm lens, eye-level for furniture / interior architectural shot for buildings.
 - The look: photoreal, 8K, luxury editorial product photography, realistic warm white balance, accurate material reflectance, natural contact shadows, no text, no logos, no watermarks.
+
+CRITICAL — SHAPE FIDELITY:
+If reference images (photographs, renderings or inspiration shots) are attached AFTER the technical drawing, treat them together as the single source of truth for the final SHAPE, SILHOUETTE and PROPORTIONS of the piece. The technical drawing supplies dimensions, callouts and construction; the reference images supply the exact outline, curvature, edge profile, joinery and styling cues. Your description MUST match BOTH — the printed dimensions from the drawing AND the visible shape from the references. Do not default to a generic rectangular / cylindrical version when the references show a curved, scalloped, organic or otherwise non-standard outline.
 
 CRITICAL — UNIQUE SHAPE TRAITS:
 You MUST start the paragraph with any feature that makes this piece different from a generic version of itself — and write that feature in ALL CAPS so the renderer processes it first and never forgets it.
@@ -35,15 +42,22 @@ export const buildMasterPrompt = createServerFn({ method: "POST" })
     if (!key) return { ok: false, error: "The rendering service is unavailable." };
 
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
-    const userContent = isPdf
-      ? [
-          { type: "text", text: SYSTEM },
-          { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } },
-        ]
-      : [
-          { type: "text", text: SYSTEM },
-          { type: "image_url", image_url: { url: data.fileDataUrl } },
-        ];
+    const userContent: Array<Record<string, unknown>> = [{ type: "text", text: SYSTEM }];
+    if (isPdf) {
+      userContent.push({ type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } });
+    } else {
+      userContent.push({ type: "image_url", image_url: { url: data.fileDataUrl } });
+    }
+    const refs = data.referenceImages ?? [];
+    if (refs.length > 0) {
+      userContent.push({
+        type: "text",
+        text: `The following ${refs.length} image${refs.length === 1 ? " is a" : "s are"} REFERENCE PHOTO${refs.length === 1 ? "" : "S"} of the desired shape, silhouette and styling for this piece. Match their outline, curvature and proportions in your description — alongside the dimensions from the technical drawing above.`,
+      });
+      for (const ref of refs) {
+        userContent.push({ type: "image_url", image_url: { url: ref } });
+      }
+    }
 
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
