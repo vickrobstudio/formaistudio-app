@@ -197,14 +197,15 @@ REFERENCE IMAGE IS THE SOURCE OF TRUTH for SHAPE:
 - Use the orthographic views (plan, front, side) and printed callouts for EXACT DIMENSIONS and positions.
 - DO NOT output a simplified blocky stand-in. If the reference shows a round disc, a brass ring, a tapered pedestal, a bullnose edge, model each of those as its own primitive.
 
-APPROVED RENDERING — ABSOLUTE PRIORITY:
-If a SECOND image labelled "APPROVED RENDERING" is attached after the technical sheet (and a "Master prompt" text block is provided), it is the FINAL approved look of this piece. The 3D geometry MUST match it 1:1:
-- The overall silhouette in the approved rendering is LAW. Do NOT add, remove, split or merge parts that change the silhouette.
-- Do NOT separate a single visually-continuous shape into multiple disjoint parts. If the approved rendering shows ONE flowing curved shell, model it as ONE primitive (or one group of primitives that read as one shell) — never break it into stacked boxes.
-- Do NOT invent a different shape (e.g. don't turn a curved organic top into a rectangle, don't turn a scalloped edge into a plain circle, don't turn a fluted column into a smooth one).
-- Match every UPPER-CASE feature from the master prompt (e.g. SCALLOPED BORDER, FLUTED PEDESTAL, CURVED PLAN) exactly. Choose the closest shape primitive and use rotationDegZ + multiple primitives to reproduce the feature.
-- Match the approved rendering's proportions (top vs base diameter, column taper, ring height) within the printed dimensional constraints.
+APPROVED RENDERING — 100% FIDELITY, ABSOLUTE PRIORITY:
+If a SECOND image labelled "APPROVED RENDERING" is attached after the technical sheet (and a "Master prompt" text block is provided), it is the FINAL approved look of this piece. The 3D geometry — which drives BOTH the rotatable live preview AND the downloadable .dae file — MUST match the approved rendering with 100% fidelity:
+- The silhouette, part count, part grouping, and overall proportions in the approved rendering are LAW. Do not add, remove, split, merge, or rearrange parts in any way that changes how the piece reads against that image from any rotation angle.
+- Do NOT separate a single visually-continuous shape into multiple disjoint parts. If the approved rendering shows ONE flowing curved shell, model it as ONE primitive (or one tight group of primitives that read as one shell) — never break it into stacked boxes or a different topology.
+- Do NOT invent a different shape (e.g. don't turn a curved organic top into a rectangle, don't turn a scalloped edge into a plain circle, don't turn a fluted column into a smooth one, don't turn a round disc into a square plate).
+- The MASTER PROMPT is BINDING. Re-read it before emitting JSON. Every UPPER-CASE feature in the master prompt (e.g. SCALLOPED BORDER, FLUTED PEDESTAL, REEDED FRONT, CURVED PLAN, CANTILEVERED TOP, BULLNOSE EDGE, SPLAYED LEGS, ASYMMETRIC SILHOUETTE) MUST be present in the geometry. Reproduce each one using the closest shape primitive(s) — repeat ellipse_cylinder/cylinder/rounded_box around the perimeter with the correct rotationDegZ when needed (e.g. an N-lobe scalloped border = N small cylinders arrayed around the rim with edgeRadius set).
+- Match the approved rendering's proportions (top vs base diameter, column taper, ring height, edge thickness) within the printed dimensional constraints. Use the printed dimensions for exact numbers; use the rendering for shape choice.
 - The approved rendering OVERRIDES any conflicting reading from the orthographic views; the orthographic views only supply exact numerical dimensions.
+- The live rotatable 3D preview and the downloaded .dae are built directly from the JSON you return — there is no second pass. If you simplify here, the preview and file are wrong.
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
