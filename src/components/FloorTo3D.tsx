@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState, type ChangeEvent } from "react";
-import { Box, Check, Download, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Check, Download, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
