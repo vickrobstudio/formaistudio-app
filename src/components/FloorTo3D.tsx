@@ -128,14 +128,12 @@ export function FloorTo3D() {
   async function buildFromReferenceRendering() {
     const reference = referenceImages[0];
     if (!reference || !fileDataUrl) return;
-    // 2D plan is the SOURCE of geometry (walls, dimensions, parts).
-    // The reference rendering is the 100% fidelity visual target — its
-    // colors, materials and grouping drive the live preview's materials
-    // and .dae groups. Skip the master-prompt and render-approval steps.
+    // The reference rendering IS the geometry/material source for the live 3D
+    // preview and .dae. The required 2D plan only unlocks this workflow.
     setMasterPrompt("");
     setRenderUrl(reference);
     setRenderFinal(true);
-    await buildModel(reference, undefined, fileDataUrl);
+    await buildModel(reference, undefined, reference);
   }
 
   async function buildModel(approvedRenderUrl: string | undefined, prompt: string | undefined, source: string) {
@@ -245,9 +243,9 @@ export function FloorTo3D() {
         </div>}
         {referenceImages.length > 0 && stage !== "modeling" && stage !== "ready" && <div className="mt-4 rounded-2xl border border-dashed border-foreground/40 p-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Plan + reference rendering detected</p>
-          <p className="mt-2 text-xs text-muted-foreground">{fileDataUrl ? "Skipping prompt and approval render. Geometry comes from your 2D plan; materials and groups in the live 3D preview match your reference rendering at 100% fidelity." : "Upload your 2D plan above to unlock direct 3D reconstruction."}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{fileDataUrl ? "Skipping prompt and approval render. The live 3D preview and .dae are reconstructed from your reference rendering at 100% fidelity, with matching materials and groups." : "Upload your 2D plan above to unlock direct 3D reconstruction."}</p>
           <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== "" || !fileDataUrl} onClick={() => void buildFromReferenceRendering()}>
-            <span>{busy === "model" ? "Reconstructing geometry…" : "Build 3D from plan + rendering"}</span>
+            <span>{busy === "model" ? "Reconstructing live preview…" : "Build live 3D from rendering"}</span>
             {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
           </Button>
         </div>}
