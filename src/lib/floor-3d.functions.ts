@@ -325,6 +325,229 @@ function addEllipticalCylinder(
   }
 }
 
+function addBullnoseCylinder(
+  group: Group,
+  cx: number, cy: number, cz: number,
+  diameterX: number, diameterY: number, height: number,
+  rotationDegZ: number,
+  scale: number,
+  edgeRadius: number,
+  segments = 64,
+  rings = 6,
+) {
+  // Stack rings: bottom fillet (rings) + cylinder middle + top fillet (rings).
+  // The fillet radius is clamped so it never exceeds half the height or half the smaller diameter.
+  const r = Math.max(0, Math.min(edgeRadius, height / 2, Math.min(diameterX, diameterY) / 2));
+  if (r <= 0.0005) {
+    addEllipticalCylinder(group, cx, cy, cz, diameterX, diameterY, height, rotationDegZ, scale, segments);
+    return;
+  }
+  const rx = diameterX / 2, ry = diameterY / 2, hz = height / 2;
+  const theta = (rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const base = group.positions.length / 3;
+
+  // Build profile rings from bottom to top.
+  const profile: Array<{ scale: number; z: number }> = [];
+  // Bottom fillet quarter circle: from z=0 angle -90° up to z=r angle 0°.
+  for (let i = 0; i <= rings; i++) {
+    const a = -Math.PI / 2 + (i / rings) * (Math.PI / 2);
+    const inset = r - r * Math.cos(a); // 0 at top of fillet, r at bottom
+    const dz = r + r * Math.sin(a);    // 0 at bottom, r at top of fillet
+    profile.push({ scale: (1 - inset / Math.max(rx, ry)), z: -hz + dz });
+  }
+  // Straight middle (just two anchors at fillet tops).
+  profile.push({ scale: 1, z: hz - r });
+  // Top fillet quarter circle: 0° to 90°.
+  for (let i = 0; i <= rings; i++) {
+    const a = (i / rings) * (Math.PI / 2);
+    const inset = r - r * Math.cos(a);
+    const dz = r * Math.sin(a);
+    profile.push({ scale: (1 - inset / Math.max(rx, ry)), z: hz - r + dz });
+  }
+
+  for (const ring of profile) {
+    const erx = rx * ring.scale;
+    const ery = ry * ring.scale;
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const lx = Math.cos(a) * erx;
+      const ly = Math.sin(a) * ery;
+      const wx = cx + lx * cos - ly * sin;
+      const wy = cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (cz + ring.z) * scale);
+    }
+  }
+  const bottomCenter = base + profile.length * segments;
+  const topCenter = bottomCenter + 1;
+  group.positions.push(cx * scale, cy * scale, (cz - hz) * scale);
+  group.positions.push(cx * scale, cy * scale, (cz + hz) * scale);
+  for (let ringIndex = 0; ringIndex < profile.length - 1; ringIndex++) {
+    const r0 = base + ringIndex * segments;
+    const r1 = base + (ringIndex + 1) * segments;
+    for (let i = 0; i < segments; i++) {
+      const next = (i + 1) % segments;
+      group.indices.push(r0 + i, r0 + next, r1 + next, r0 + i, r1 + next, r1 + i);
+    }
+  }
+  // Caps using innermost rings (top of bottom fillet and bottom of top fillet collapse to center).
+  const firstRing = base;
+  const lastRing = base + (profile.length - 1) * segments;
+  for (let i = 0; i < segments; i++) {
+    const next = (i + 1) % segments;
+    group.indices.push(bottomCenter, firstRing + next, firstRing + i);
+    group.indices.push(topCenter, lastRing + i, lastRing + next);
+  }
+}
+
+function addTaperedCylinder(
+  group: Group,
+  cx: number, cy: number, cz: number,
+  bottomDiameter: number, topDiameter: number, height: number,
+  rotationDegZ: number,
+  scale: number,
+  segments = 64,
+) {
+  const rb = bottomDiameter / 2, rt = topDiameter / 2, hz = height / 2;
+  const theta = (rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const base = group.positions.length / 3;
+  for (let level = 0; level < 2; level++) {
+    const r = level === 0 ? rb : rt;
+    const z = level === 0 ? -hz : hz;
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const lx = Math.cos(a) * r, ly = Math.sin(a) * r;
+      const wx = cx + lx * cos - ly * sin;
+      const wy = cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (cz + z) * scale);
+    }
+  }
+  const bottomCenter = base + segments * 2;
+  const topCenter = bottomCenter + 1;
+  group.positions.push(cx * scale, cy * scale, (cz - hz) * scale);
+  group.positions.push(cx * scale, cy * scale, (cz + hz) * scale);
+  for (let i = 0; i < segments; i++) {
+    const next = (i + 1) % segments;
+    const b0 = base + i, b1 = base + next;
+    const t0 = base + segments + i, t1 = base + segments + next;
+    group.indices.push(b0, b1, t1, b0, t1, t0);
+    if (rb > 0.0005) group.indices.push(bottomCenter, b1, b0);
+    if (rt > 0.0005) group.indices.push(topCenter, t0, t1);
+  }
+}
+
+function addTorus(
+  group: Group,
+  cx: number, cy: number, cz: number,
+  outerDiameterX: number, outerDiameterY: number,
+  tubeDiameter: number,
+  rotationDegZ: number,
+  scale: number,
+  majorSegments = 64,
+  minorSegments = 16,
+) {
+  const tubeR = tubeDiameter / 2;
+  const Rx = Math.max(outerDiameterX / 2 - tubeR, tubeR);
+  const Ry = Math.max(outerDiameterY / 2 - tubeR, tubeR);
+  const theta = (rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const base = group.positions.length / 3;
+  for (let i = 0; i < majorSegments; i++) {
+    const u = (i / majorSegments) * Math.PI * 2;
+    const cu = Math.cos(u), su = Math.sin(u);
+    for (let j = 0; j < minorSegments; j++) {
+      const v = (j / minorSegments) * Math.PI * 2;
+      const cv = Math.cos(v), sv = Math.sin(v);
+      const lx = (Rx + tubeR * cv) * cu;
+      const ly = (Ry + tubeR * cv) * su;
+      const lz = tubeR * sv;
+      const wx = cx + lx * cos - ly * sin;
+      const wy = cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (cz + lz) * scale);
+    }
+  }
+  for (let i = 0; i < majorSegments; i++) {
+    const iNext = (i + 1) % majorSegments;
+    for (let j = 0; j < minorSegments; j++) {
+      const jNext = (j + 1) % minorSegments;
+      const a = base + i * minorSegments + j;
+      const b = base + iNext * minorSegments + j;
+      const c = base + iNext * minorSegments + jNext;
+      const d = base + i * minorSegments + jNext;
+      group.indices.push(a, b, c, a, c, d);
+    }
+  }
+}
+
+function addRoundedBox(
+  group: Group,
+  cx: number, cy: number, cz: number,
+  width: number, depth: number, height: number,
+  rotationDegZ: number,
+  scale: number,
+  cornerRadius: number,
+  cornerSegments = 8,
+) {
+  const r = Math.max(0, Math.min(cornerRadius, width / 2, depth / 2));
+  if (r <= 0.0005) {
+    const hx = width / 2, hy = depth / 2, hz = height / 2;
+    const theta = (rotationDegZ * Math.PI) / 180;
+    const cos = Math.cos(theta), sin = Math.sin(theta);
+    const corners: [number, number, number][] = [
+      [-hx, -hy, -hz], [hx, -hy, -hz], [hx, hy, -hz], [-hx, hy, -hz],
+      [-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz],
+    ].map(([x, y, z]) => [cx + x * cos - y * sin, cy + x * sin + y * cos, cz + z]);
+    const baseIdx = group.positions.length / 3;
+    for (const [x, y, z] of corners) group.positions.push(x * scale, y * scale, z * scale);
+    const faces: [number, number, number, number][] = [
+      [0, 1, 2, 3], [4, 7, 6, 5], [0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [3, 7, 4, 0],
+    ];
+    for (const [a, b, c, d] of faces) {
+      group.indices.push(baseIdx + a, baseIdx + b, baseIdx + c, baseIdx + a, baseIdx + c, baseIdx + d);
+    }
+    return;
+  }
+  const hx = width / 2, hy = depth / 2, hz = height / 2;
+  const theta = (rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  // Build a stadium-style outline (rectangle with rounded corners) and extrude.
+  const outline: [number, number][] = [];
+  const corners: Array<{ cx: number; cy: number; start: number }> = [
+    { cx: hx - r, cy: hy - r, start: 0 },
+    { cx: -hx + r, cy: hy - r, start: Math.PI / 2 },
+    { cx: -hx + r, cy: -hy + r, start: Math.PI },
+    { cx: hx - r, cy: -hy + r, start: (3 * Math.PI) / 2 },
+  ];
+  for (const c of corners) {
+    for (let i = 0; i <= cornerSegments; i++) {
+      const a = c.start + (i / cornerSegments) * (Math.PI / 2);
+      outline.push([c.cx + Math.cos(a) * r, c.cy + Math.sin(a) * r]);
+    }
+  }
+  const base = group.positions.length / 3;
+  for (let level = 0; level < 2; level++) {
+    const z = level === 0 ? -hz : hz;
+    for (const [lx, ly] of outline) {
+      const wx = cx + lx * cos - ly * sin;
+      const wy = cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (cz + z) * scale);
+    }
+  }
+  const n = outline.length;
+  for (let i = 0; i < n; i++) {
+    const next = (i + 1) % n;
+    const b0 = base + i, b1 = base + next;
+    const t0 = base + n + i, t1 = base + n + next;
+    group.indices.push(b0, b1, t1, b0, t1, t0);
+  }
+  // Fan caps from first vertex.
+  for (let i = 1; i < n - 1; i++) {
+    group.indices.push(base, base + i + 1, base + i);          // bottom (face down)
+    group.indices.push(base + n, base + n + i, base + n + i + 1); // top (face up)
+  }
+}
+
 function addWallWithOpenings(
   addCorners: (corners: [number, number, number][]) => void,
   wall: z.infer<typeof WallSchema>,
