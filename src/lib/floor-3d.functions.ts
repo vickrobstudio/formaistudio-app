@@ -26,6 +26,15 @@ const FloorTo3DInput = z.object({
     .optional(),
   masterPrompt: z.string().max(8000).optional(),
   referenceOnly: z.boolean().default(false).optional(),
+  // Additional reference renderings/photographs the user attached. In
+  // referenceOnly mode every one of these is sent to the modeler so the
+  // reconstructed 3D piece matches the references at 100% fidelity from
+  // every visible angle.
+  referenceImages: z
+    .array(z.string().regex(/^data:image\/(png|jpeg|webp);base64,/).max(50_000_000))
+    .max(6)
+    .default([])
+    .optional(),
 });
 
 const OpeningSchema = z.object({
