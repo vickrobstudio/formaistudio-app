@@ -1,74 +1,137 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+const Subject = z.enum(["building", "furniture"]);
+const PlanUnits = z.enum(["meters", "feet-inches"]);
+const OutputUnits = z.enum(["meters", "feet"]);
+
 const FloorTo3DInput = z.object({
   fileDataUrl: z
     .string()
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
     .max(20_000_000),
-  wallHeightMeters: z.number().min(1).max(10).default(2.7),
-  planUnits: z.enum(["meters", "feet-inches"]).default("meters"),
+  wallHeightMeters: z.number().min(0.1).max(15).default(2.7),
+  planUnits: PlanUnits.default("meters"),
+  outputUnits: OutputUnits.default("meters"),
+  subject: Subject.default("building"),
 });
 
 const WallSchema = z.object({
-  x1: z.number(),
-  y1: z.number(),
-  x2: z.number(),
-  y2: z.number(),
+  x1: z.number(), y1: z.number(),
+  x2: z.number(), y2: z.number(),
   thickness: z.number().min(0.05).max(1).default(0.15),
 });
 
-const PlanSchema = z.object({
+const BuildingPlanSchema = z.object({
+  kind: z.literal("building"),
   units: z.literal("meters"),
   bounds: z.object({ width: z.number().positive(), length: z.number().positive() }),
   walls: z.array(WallSchema).min(1).max(400),
 });
 
+const PartSchema = z.object({
+  name: z.string().max(60).optional(),
+  // Axis-aligned 3D box in meters, centered at (cx, cy, cz).
+  cx: z.number(), cy: z.number(), cz: z.number(),
+  width: z.number().positive(),   // along X
+  depth: z.number().positive(),   // along Y
+  height: z.number().positive(),  // along Z
+  rotationDegZ: z.number().default(0),
+});
+
+const FurniturePlanSchema = z.object({
+  kind: z.literal("furniture"),
+  units: z.literal("meters"),
+  bounds: z.object({
+    width: z.number().positive(),
+    depth: z.number().positive(),
+    height: z.number().positive(),
+  }),
+  parts: z.array(PartSchema).min(1).max(200),
+});
+
+type BuildingPlan = z.infer<typeof BuildingPlanSchema>;
+type FurniturePlan = z.infer<typeof FurniturePlanSchema>;
+
 type GenerateFloor3DResult =
-  | { ok: true; daeDataUrl: string; wallCount: number }
+  | { ok: true; daeDataUrl: string; elementCount: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet" }
   | { ok: false; error: string };
 
-function extractInstruction(planUnits: "meters" | "feet-inches") {
-  const printedUnits = planUnits === "feet-inches"
-    ? "The printed dimensions on this plan are in FEET AND INCHES (e.g. 12'-6\", 8 ft, 14'). Convert every dimension you read to meters using 1 foot = 0.3048 m and 1 inch = 0.0254 m before placing coordinates."
-    : "The printed dimensions on this plan are in METERS (or millimeters/centimeters — convert mm→m by /1000 and cm→m by /100).";
-  const fallback = planUnits === "feet-inches"
-    ? "If no scale is shown, assume the longest exterior side is 40 feet (12.192 meters) and scale everything proportionally."
-    : "If no scale is shown, assume the longest exterior side is 12 meters and scale everything proportionally.";
-  return `You are an architectural CAD vectorizer. Inspect the uploaded floor plan (a residential, office, or other architectural building plan) and return STRICT JSON describing every wall as a straight line segment.
+const PRINTED_UNITS_NOTE: Record<z.infer<typeof PlanUnits>, string> = {
+  "feet-inches": "The printed dimensions in the source are in FEET AND INCHES (e.g. 12'-6\", 8 ft, 14', 2'-3 1/2\"). Convert every dimension to meters precisely using 1 foot = 0.3048 m and 1 inch = 0.0254 m before placing coordinates.",
+  meters: "The printed dimensions in the source are in METERS, millimeters or centimeters. Convert mm→m by /1000 and cm→m by /100.",
+};
 
-${printedUnits}
+const ACCURACY_RULES = `ACCURACY IS CRITICAL:
+- Read EVERY printed dimension (lengths, widths, depths, heights, thicknesses, diameters) and use those values exactly.
+- Cross-check each dimension against the drawn geometry; if they disagree, trust the printed numerical dimension.
+- Preserve every angle, alignment, parallel and perpendicular relationship.
+- Round to no more than 3 decimal meters; do not round entire dimensions to whole numbers.
+- Use a scale bar, grid or known reference if explicit dimensions are missing.
+- Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 
-Return JSON ONLY, no prose, matching this exact shape:
+function buildingInstruction(planUnits: z.infer<typeof PlanUnits>) {
+  return `You are an architectural CAD vectorizer. Inspect the uploaded floor plan of a building (residential, office, retail, hospitality, industrial, etc.) and return STRICT JSON describing every wall.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
 {
+  "kind": "building",
   "units": "meters",
-  "bounds": { "width": <plan width in meters>, "length": <plan length in meters> },
-  "walls": [ { "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m, default 0.15> } ]
+  "bounds": { "width": <plan width m>, "length": <plan length m> },
+  "walls": [ { "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m> } ]
 }
-
-All output coordinates and thicknesses MUST be in meters regardless of the printed units.
 
 Rules:
-- Coordinates in meters with origin (0,0) at the bottom-left corner of the plan and +x going right, +y going up.
-- Read any printed scale, dimensions or grid to infer real-world size, then convert to meters as instructed above.
-- ${fallback}
-- Trace every exterior and interior wall as one straight segment from endpoint to endpoint. Split walls at every intersection or door opening so each segment is a clean straight line.
-- Skip door swings, furniture, dimension lines, text, hatching, north arrows, columns and stairs.
-- Use 0.20 m thickness for exterior walls and 0.10 m for interior partitions when unsure.
-- Output must be valid JSON parseable by JSON.parse. No comments, no trailing commas, no Markdown fences.`;
+- Origin (0,0) at the bottom-left corner of the plan, +x right, +y up.
+- Trace every exterior and interior wall as one straight segment between endpoints. Split walls at every intersection and door opening.
+- Use the printed wall thickness when shown; otherwise 0.20 m exterior, 0.10 m interior.
+- Skip door swings, furniture, dimension lines, text, hatching, north arrows, columns, stairs.
+
+${ACCURACY_RULES}`;
 }
 
-function buildDae(plan: z.infer<typeof PlanSchema>, wallHeight: number) {
+function furnitureInstruction(planUnits: z.infer<typeof PlanUnits>) {
+  return `You are a furniture vectorizer. Inspect the uploaded technical drawing of ONE furniture piece (top, front, side or orthographic views) and return STRICT JSON describing it as a set of axis-aligned 3D boxes (parts) that together approximate its real geometry.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{
+  "kind": "furniture",
+  "units": "meters",
+  "bounds": { "width": <overall X m>, "depth": <overall Y m>, "height": <overall Z m> },
+  "parts": [
+    { "name": "<part name>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <X m>, "depth": <Y m>, "height": <Z m>, "rotationDegZ": <deg> }
+  ]
+}
+
+Rules:
+- World axes: +X = piece width (left→right of the front view), +Y = piece depth (front→back), +Z = piece height (floor→top). Origin (0,0,0) at the bottom-front-left corner of the bounding box.
+- (cx, cy, cz) is the CENTER of each box. (width, depth, height) are full extents along the local X/Y/Z BEFORE rotation. rotationDegZ rotates the box around its vertical Z axis (positive = counter-clockwise viewed from above), default 0.
+- Decompose the piece into the smallest set of parts that reproduces its real shape: seat, back, armrests, legs, stretchers, frame rails, top, drawers, shelves, base, supports. Match each part's true thickness from the drawing.
+- Use the printed overall width/depth/height for "bounds" and the printed part dimensions for each box.
+- Use realistic typical thicknesses only when the drawing does not give them (e.g. 0.02 m panels, 0.05 m legs).
+
+${ACCURACY_RULES}`;
+}
+
+function buildMeshes(
+  plan: BuildingPlan | FurniturePlan,
+  wallHeightMeters: number,
+  outputUnits: "meters" | "feet",
+) {
+  const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
   const positions: number[] = [];
   const indices: number[] = [];
 
-  function addBox(corners: [number, number, number][]) {
+  function addCorners(corners: [number, number, number][]) {
     const base = positions.length / 3;
-    for (const [x, y, z] of corners) positions.push(x, y, z);
-    // 6 faces, 2 tris each. corners order: 0-3 bottom (CCW), 4-7 top (CCW)
+    for (const [x, y, z] of corners) positions.push(x * scale, y * scale, z * scale);
     const faces: [number, number, number, number][] = [
-      [0, 1, 2, 3], // bottom
-      [4, 7, 6, 5], // top (reversed for outward normal)
+      [0, 1, 2, 3],
+      [4, 7, 6, 5],
       [0, 4, 5, 1],
       [1, 5, 6, 2],
       [2, 6, 7, 3],
@@ -79,48 +142,69 @@ function buildDae(plan: z.infer<typeof PlanSchema>, wallHeight: number) {
     }
   }
 
-  // Floor slab
-  const { width, length } = plan.bounds;
-  addBox([
-    [0, 0, -0.05],
-    [width, 0, -0.05],
-    [width, length, -0.05],
-    [0, length, -0.05],
-    [0, 0, 0],
-    [width, 0, 0],
-    [width, length, 0],
-    [0, length, 0],
-  ]);
-
-  for (const wall of plan.walls) {
-    const dx = wall.x2 - wall.x1;
-    const dy = wall.y2 - wall.y1;
-    const len = Math.hypot(dx, dy);
-    if (len < 0.05) continue;
-    const nx = -dy / len;
-    const ny = dx / len;
-    const t = wall.thickness / 2;
-    const p1x = wall.x1 + nx * t, p1y = wall.y1 + ny * t;
-    const p2x = wall.x2 + nx * t, p2y = wall.y2 + ny * t;
-    const p3x = wall.x2 - nx * t, p3y = wall.y2 - ny * t;
-    const p4x = wall.x1 - nx * t, p4y = wall.y1 - ny * t;
-    addBox([
-      [p1x, p1y, 0],
-      [p2x, p2y, 0],
-      [p3x, p3y, 0],
-      [p4x, p4y, 0],
-      [p1x, p1y, wallHeight],
-      [p2x, p2y, wallHeight],
-      [p3x, p3y, wallHeight],
-      [p4x, p4y, wallHeight],
+  function addAxisAlignedBox(minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number) {
+    addCorners([
+      [minX, minY, minZ], [maxX, minY, minZ], [maxX, maxY, minZ], [minX, maxY, minZ],
+      [minX, minY, maxZ], [maxX, minY, maxZ], [maxX, maxY, maxZ], [minX, maxY, maxZ],
     ]);
   }
 
+  if (plan.kind === "building") {
+    const { width, length } = plan.bounds;
+    addAxisAlignedBox(0, 0, -0.05, width, length, 0);
+    for (const wall of plan.walls) {
+      const dx = wall.x2 - wall.x1;
+      const dy = wall.y2 - wall.y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 0.05) continue;
+      const nx = -dy / len, ny = dx / len;
+      const t = wall.thickness / 2;
+      const p1: [number, number, number] = [wall.x1 + nx * t, wall.y1 + ny * t, 0];
+      const p2: [number, number, number] = [wall.x2 + nx * t, wall.y2 + ny * t, 0];
+      const p3: [number, number, number] = [wall.x2 - nx * t, wall.y2 - ny * t, 0];
+      const p4: [number, number, number] = [wall.x1 - nx * t, wall.y1 - ny * t, 0];
+      addCorners([
+        p1, p2, p3, p4,
+        [p1[0], p1[1], wallHeightMeters],
+        [p2[0], p2[1], wallHeightMeters],
+        [p3[0], p3[1], wallHeightMeters],
+        [p4[0], p4[1], wallHeightMeters],
+      ]);
+    }
+  } else {
+    for (const part of plan.parts) {
+      const hx = part.width / 2, hy = part.depth / 2, hz = part.height / 2;
+      const local: [number, number, number][] = [
+        [-hx, -hy, -hz], [hx, -hy, -hz], [hx, hy, -hz], [-hx, hy, -hz],
+        [-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz],
+      ];
+      const theta = (part.rotationDegZ * Math.PI) / 180;
+      const cos = Math.cos(theta), sin = Math.sin(theta);
+      addCorners(local.map(([x, y, z]) => [
+        part.cx + x * cos - y * sin,
+        part.cy + x * sin + y * cos,
+        part.cz + z,
+      ]));
+    }
+  }
+
+  return { positions, indices };
+}
+
+function buildDae(
+  plan: BuildingPlan | FurniturePlan,
+  wallHeightMeters: number,
+  outputUnits: "meters" | "feet",
+) {
+  const { positions, indices } = buildMeshes(plan, wallHeightMeters, outputUnits);
   const positionText = positions.map((n) => n.toFixed(4)).join(" ");
   const triCount = indices.length / 3;
-  const pIndex: string[] = [];
-  for (let i = 0; i < indices.length; i += 1) pIndex.push(String(indices[i]));
+  const pIndex = indices.join(" ");
   const created = new Date().toISOString();
+  const unitTag = outputUnits === "feet"
+    ? '<unit name="foot" meter="0.3048"/>'
+    : '<unit name="meter" meter="1"/>';
+  const subjectName = plan.kind === "building" ? "FloorPlan" : "Furniture";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
@@ -128,35 +212,35 @@ function buildDae(plan: z.infer<typeof PlanSchema>, wallHeight: number) {
     <contributor><authoring_tool>FormAI STUDIO 2D to 3D</authoring_tool></contributor>
     <created>${created}</created>
     <modified>${created}</modified>
-    <unit name="meter" meter="1"/>
+    ${unitTag}
     <up_axis>Z_UP</up_axis>
   </asset>
   <library_effects>
-    <effect id="wallEffect"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.85 0.85 0.85 1</color></diffuse></lambert></technique></profile_COMMON></effect>
+    <effect id="solidEffect"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.85 0.85 0.85 1</color></diffuse></lambert></technique></profile_COMMON></effect>
   </library_effects>
   <library_materials>
-    <material id="wallMaterial" name="Wall"><instance_effect url="#wallEffect"/></material>
+    <material id="solidMaterial" name="Solid"><instance_effect url="#solidEffect"/></material>
   </library_materials>
   <library_geometries>
-    <geometry id="floorplanGeom" name="FloorPlan">
+    <geometry id="subjectGeom" name="${subjectName}">
       <mesh>
-        <source id="floorplanPositions">
-          <float_array id="floorplanPositionsArray" count="${positions.length}">${positionText}</float_array>
-          <technique_common><accessor source="#floorplanPositionsArray" count="${positions.length / 3}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common>
+        <source id="subjectPositions">
+          <float_array id="subjectPositionsArray" count="${positions.length}">${positionText}</float_array>
+          <technique_common><accessor source="#subjectPositionsArray" count="${positions.length / 3}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common>
         </source>
-        <vertices id="floorplanVertices"><input semantic="POSITION" source="#floorplanPositions"/></vertices>
-        <triangles material="wallMaterialSG" count="${triCount}">
-          <input semantic="VERTEX" source="#floorplanVertices" offset="0"/>
-          <p>${pIndex.join(" ")}</p>
+        <vertices id="subjectVertices"><input semantic="POSITION" source="#subjectPositions"/></vertices>
+        <triangles material="solidMaterialSG" count="${triCount}">
+          <input semantic="VERTEX" source="#subjectVertices" offset="0"/>
+          <p>${pIndex}</p>
         </triangles>
       </mesh>
     </geometry>
   </library_geometries>
   <library_visual_scenes>
     <visual_scene id="Scene" name="Scene">
-      <node id="FloorPlanNode" name="FloorPlan">
-        <instance_geometry url="#floorplanGeom">
-          <bind_material><technique_common><instance_material symbol="wallMaterialSG" target="#wallMaterial"/></technique_common></bind_material>
+      <node id="SubjectNode" name="${subjectName}">
+        <instance_geometry url="#subjectGeom">
+          <bind_material><technique_common><instance_material symbol="solidMaterialSG" target="#solidMaterial"/></technique_common></bind_material>
         </instance_geometry>
       </node>
     </visual_scene>
@@ -172,11 +256,13 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
-    const instruction = extractInstruction(data.planUnits);
+    const instruction = data.subject === "furniture"
+      ? furnitureInstruction(data.planUnits)
+      : buildingInstruction(data.planUnits);
     const userContent = isPdf
       ? [
           { type: "text", text: instruction },
-          { type: "file", file: { filename: "plan.pdf", file_data: data.fileDataUrl } },
+          { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } },
         ]
       : [
           { type: "text", text: instruction },
@@ -195,15 +281,15 @@ export const generateFloor3D = createServerFn({ method: "POST" })
 
     if (!upstream.ok) {
       const detail = await upstream.text().catch(() => "");
-      console.error("floor-3d extract failed", upstream.status, detail.slice(0, 400));
+      console.error("2d-to-3d extract failed", upstream.status, detail.slice(0, 400));
       if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
       if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      return { ok: false, error: "The floor plan could not be analysed." };
+      return { ok: false, error: "The drawing could not be analysed." };
     }
 
     const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const text = payload.choices?.[0]?.message?.content?.trim();
-    if (!text) return { ok: false, error: "The AI did not return a plan description." };
+    if (!text) return { ok: false, error: "The AI did not return a description." };
 
     let parsed: unknown;
     try {
@@ -213,13 +299,16 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       return { ok: false, error: "The AI response was not valid JSON." };
     }
 
-    const planResult = PlanSchema.safeParse(parsed);
+    const schema = data.subject === "furniture" ? FurniturePlanSchema : BuildingPlanSchema;
+    const planResult = schema.safeParse(parsed);
     if (!planResult.success) {
-      console.error("floor-3d plan invalid", planResult.error.issues.slice(0, 5));
-      return { ok: false, error: "The detected walls were incomplete. Try a clearer plan." };
+      console.error("2d-to-3d plan invalid", planResult.error.issues.slice(0, 5));
+      return { ok: false, error: "The detected geometry was incomplete. Try a clearer drawing with visible dimensions." };
     }
 
-    const dae = buildDae(planResult.data, data.wallHeightMeters);
+    const plan = planResult.data;
+    const dae = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
-    return { ok: true, daeDataUrl, wallCount: planResult.data.walls.length };
+    const elementCount = plan.kind === "building" ? plan.walls.length : plan.parts.length;
+    return { ok: true, daeDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits };
   });
