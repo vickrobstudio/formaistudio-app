@@ -665,10 +665,20 @@ function buildGroups(
     plan.parts.forEach((part, i) => {
       const safe = (part.name || `part_${i + 1}`).replace(/[^A-Za-z0-9]+/g, "_");
       const g = makeGroupBuilder(`group_${safe}_${i}`, part.name || `Part ${i + 1}`, scale);
+      const dx = part.width;
+      const dy = part.shape === "cylinder" || part.shape === "tapered_cylinder" ? part.width : part.depth;
+      const edge = part.edgeRadius ?? 0;
       if (part.shape === "cylinder" || part.shape === "ellipse_cylinder") {
-        const dx = part.width;
-        const dy = part.shape === "cylinder" ? part.width : part.depth;
-        addEllipticalCylinder(g.group, part.cx, part.cy, part.cz, dx, dy, part.height, part.rotationDegZ, scale, 64);
+        if (edge > 0.0005) addBullnoseCylinder(g.group, part.cx, part.cy, part.cz, dx, dy, part.height, part.rotationDegZ, scale, edge);
+        else addEllipticalCylinder(g.group, part.cx, part.cy, part.cz, dx, dy, part.height, part.rotationDegZ, scale, 64);
+      } else if (part.shape === "tapered_cylinder") {
+        const top = part.topDiameter ?? part.width * 0.6;
+        addTaperedCylinder(g.group, part.cx, part.cy, part.cz, dx, top, part.height, part.rotationDegZ, scale, 64);
+      } else if (part.shape === "torus") {
+        const tube = part.tubeDiameter ?? Math.min(part.height, 0.015);
+        addTorus(g.group, part.cx, part.cy, part.cz, dx, dy, tube, part.rotationDegZ, scale, 64, 16);
+      } else if (part.shape === "rounded_box") {
+        addRoundedBox(g.group, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ, scale, edge || 0.01);
       } else {
         addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
       }
