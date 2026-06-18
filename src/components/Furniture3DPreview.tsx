@@ -60,8 +60,10 @@ function useDaeScene(daeDataUrl: string) {
         // .dae authored Z-up; rotate the whole group so three's Y-up scene
         // shows it standing on the ground plane.
         root.rotation.x = -Math.PI / 2;
-        // Upgrade Lambert materials to PBR-ish look using the colour the
-        // exporter already wrote, so glass / metal read correctly.
+        // Keep the EXACT materials authored in the .dae so the preview
+        // matches the downloaded file 1:1. We only ensure normals exist
+        // and shadows are enabled — no colour, roughness or metalness
+        // overrides.
         let meshCount = 0;
         root.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
@@ -75,20 +77,14 @@ function useDaeScene(daeDataUrl: string) {
             mesh.geometry.computeBoundingSphere();
           }
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material].filter(Boolean);
-          mesh.material = mats.map((m) => {
-            const src = m as THREE.MeshBasicMaterial & { color?: THREE.Color; opacity?: number; transparent?: boolean };
-            const color = src.color ? src.color.clone() : new THREE.Color(0xcccccc);
-            return new THREE.MeshStandardMaterial({
-              color,
-              roughness: 0.55,
-              metalness: 0.0,
-              side: THREE.DoubleSide,
-              transparent: Boolean(src.transparent) || (src.opacity ?? 1) < 1,
-              opacity: src.opacity ?? 1,
-            });
-          }) as unknown as THREE.Material;
-          if (Array.isArray(mesh.material) && mesh.material.length === 1) mesh.material = mesh.material[0];
-          if (Array.isArray(mesh.material) && mesh.material.length === 0) mesh.material = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+          mats.forEach((m) => {
+            const mat = m as THREE.Material & { side?: THREE.Side };
+            mat.side = THREE.DoubleSide;
+            mat.needsUpdate = true;
+          });
+          if (mats.length === 0) {
+            mesh.material = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+          }
         });
         if (meshCount === 0) throw new Error("The downloaded .dae did not contain visible mesh geometry.");
         setScene(root);
