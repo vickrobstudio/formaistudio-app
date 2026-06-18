@@ -245,6 +245,47 @@ function addRotatedBox(
   ]));
 }
 
+function addEllipticalCylinder(
+  group: Group,
+  cx: number, cy: number, cz: number,
+  diameterX: number, diameterY: number, height: number,
+  rotationDegZ: number,
+  scale: number,
+  segments = 64,
+) {
+  const rx = diameterX / 2, ry = diameterY / 2, hz = height / 2;
+  const theta = (rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const base = group.positions.length / 3;
+  // Ring vertices: 0..segments-1 = bottom ring, segments..2*segments-1 = top ring
+  for (let level = 0; level < 2; level++) {
+    const z = level === 0 ? -hz : hz;
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const lx = Math.cos(a) * rx;
+      const ly = Math.sin(a) * ry;
+      const wx = cx + lx * cos - ly * sin;
+      const wy = cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (cz + z) * scale);
+    }
+  }
+  const bottomCenter = base + segments * 2;
+  const topCenter = bottomCenter + 1;
+  group.positions.push(cx * scale, cy * scale, (cz - hz) * scale);
+  group.positions.push(cx * scale, cy * scale, (cz + hz) * scale);
+  for (let i = 0; i < segments; i++) {
+    const next = (i + 1) % segments;
+    const b0 = base + i, b1 = base + next;
+    const t0 = base + segments + i, t1 = base + segments + next;
+    // Side quad (two triangles, CCW from outside)
+    group.indices.push(b0, b1, t1, b0, t1, t0);
+    // Bottom cap (face down)
+    group.indices.push(bottomCenter, b1, b0);
+    // Top cap (face up)
+    group.indices.push(topCenter, t0, t1);
+  }
+}
+
 function addWallWithOpenings(
   addCorners: (corners: [number, number, number][]) => void,
   wall: z.infer<typeof WallSchema>,
