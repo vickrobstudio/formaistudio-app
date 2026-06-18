@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState, type ChangeEvent } from "react";
-import { Check, Download, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Check, Download, ImagePlus, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,7 +24,9 @@ type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 
 export function FloorTo3D() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const referenceRef = useRef<HTMLInputElement>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [fileName, setFileName] = useState("");
   const [isPdf, setIsPdf] = useState(false);
   const [subject, setSubject] = useState<"building" | "furniture">("building");
@@ -69,6 +71,7 @@ export function FloorTo3D() {
   function clearFile() {
     setFileName("");
     setFileDataUrl(null);
+    setReferenceImages([]);
     setStage("upload");
     setMasterPrompt("");
     setRenderUrl(null);
@@ -83,7 +86,7 @@ export function FloorTo3D() {
     if (!fileDataUrl) return;
     setBusy("prompt"); setError("");
     try {
-      const result = await writePrompt({ data: { fileDataUrl, subject } });
+      const result = await writePrompt({ data: { fileDataUrl, subject, referenceImages } });
       if (!result.ok) { setError(result.error); return; }
       setMasterPrompt(result.prompt);
       setStage("prompted");
@@ -100,7 +103,7 @@ export function FloorTo3D() {
       await streamImage(masterPrompt, fileDataUrl, (src, isFinal) => {
         setRenderUrl(src);
         if (isFinal) { setRenderFinal(true); setStage("rendered"); }
-      });
+      }, referenceImages);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The rendering could not be created.");
     } finally { setBusy(""); }
