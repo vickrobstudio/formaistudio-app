@@ -203,10 +203,28 @@ Return JSON ONLY in this exact shape:
       "rotationDegZ": <deg>,
       "topDiameter": <m, tapered_cylinder only — diameter at the TOP>,
       "tubeDiameter": <m, torus only — thickness of the ring>,
-      "edgeRadius": <m, optional bullnose/fillet radius>
+      "edgeRadius": <m, optional bullnose/fillet radius>,
+      "material": "stone_white" | "stone_dark" | "wood_oak" | "wood_walnut" | "wood_dark" | "metal_brass" | "metal_chrome" | "metal_black" | "fabric_neutral" | "leather_dark" | "glass" | "plastic_white" | "plastic_black" | "other",
+      "materialNote": "<optional free-text material description, e.g. 'Calacatta marble', 'white oak'>"
     }
   ]
 }
+
+MATERIALS — assign a "material" id to EVERY part using the visible finish/material in the drawing or reference photo:
+  * stone_white      — white/cream marble or stone (e.g. Calacatta, Carrara, white quartz)
+  * stone_dark       — dark stone (charcoal granite, soapstone, black marble)
+  * wood_oak         — light/medium warm wood (white oak, ash, maple, light teak)
+  * wood_walnut      — medium-dark brown wood (walnut, cherry, mahogany)
+  * wood_dark        — very dark wood (ebony, blackened oak)
+  * metal_brass      — brass / bronze / brushed gold
+  * metal_chrome     — polished chrome / nickel / stainless steel
+  * metal_black      — blackened / powder-coated black metal
+  * fabric_neutral   — upholstery, linen, boucle
+  * leather_dark     — leather, cognac/saddle
+  * glass            — transparent glass
+  * plastic_white / plastic_black — molded plastic
+  * other            — only when nothing else fits
+Include the spec/material code from the drawing (e.g. "ST-05", "WD-09", "MT-02") in "materialNote".
 
 Shape primitive guide — pick the primitive that matches the PLAN view of that part:
   * "cylinder"          — plan view is a CIRCLE. width = depth = diameter.
