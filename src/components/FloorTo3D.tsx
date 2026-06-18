@@ -113,6 +113,22 @@ export function FloorTo3D() {
 
   async function approveAndBuild() {
     if (!fileDataUrl) return;
+    await buildModel(renderUrl || undefined, masterPrompt || undefined, fileDataUrl);
+  }
+
+  async function buildFromReferenceRendering() {
+    const reference = referenceImages[0];
+    if (!reference) return;
+    // Use the uploaded rendering as both the source and the approved render —
+    // skip the master-prompt and render-preview steps entirely.
+    const source = fileDataUrl ?? reference;
+    setMasterPrompt("");
+    setRenderUrl(reference);
+    setRenderFinal(true);
+    await buildModel(reference, undefined, source);
+  }
+
+  async function buildModel(approvedRenderUrl: string | undefined, prompt: string | undefined, source: string) {
     const rawMeters = planUnits === "meters"
       ? Number(heightMeters) || 2.7
       : ((Number(heightFeet) || 0) * 0.3048) + ((Number(heightInches) || 0) * 0.0254);
@@ -127,13 +143,13 @@ export function FloorTo3D() {
     try {
       const result = await generate({
         data: {
-          fileDataUrl,
+          fileDataUrl: source,
           wallHeightMeters,
           planUnits,
           outputUnits,
           subject,
-          approvedRenderUrl: renderUrl || undefined,
-          masterPrompt: masterPrompt || undefined,
+          approvedRenderUrl,
+          masterPrompt: prompt,
         },
       });
       if (!result.ok) { setError(result.error); return; }
