@@ -9,7 +9,7 @@ const FloorTo3DInput = z.object({
   fileDataUrl: z
     .string()
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
-    .max(20_000_000),
+    .max(2_700_000_000),
   wallHeightMeters: z.number().min(0.1).max(15).default(2.7),
   planUnits: PlanUnits.default("meters"),
   outputUnits: OutputUnits.default("meters"),
