@@ -384,7 +384,8 @@ Return JSON ONLY in this exact shape:
       "tubeDiameter": <m>,
       "edgeRadius": <m>,
       "material": "stone_white" | "stone_dark" | "wood_oak" | "wood_walnut" | "wood_dark" | "metal_brass" | "metal_chrome" | "metal_black" | "fabric_neutral" | "leather_dark" | "glass" | "plastic_white" | "plastic_black" | "other",
-      "materialNote": "<optional finish description>"
+      "materialNote": "<optional finish description>",
+      "colorHex": "#RRGGBB"
     }
   ]
 }
