@@ -223,10 +223,11 @@ Return JSON ONLY in this exact shape:
   "parts": [
     {
       "name": "<part name>",
-      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box",
+      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box" | "custom_extrusion",
       "cx": <m>, "cy": <m>, "cz": <m>,
       "width": <X m>, "depth": <Y m>, "height": <Z m>,
       "rotationDegZ": <deg>,
+      "outline": [[<x>, <y>], ...],
       "topDiameter": <m, tapered_cylinder only — diameter at the TOP>,
       "tubeDiameter": <m, torus only — thickness of the ring>,
       "edgeRadius": <m, optional bullnose/fillet radius>,
@@ -258,8 +259,9 @@ Shape primitive guide — pick the primitive that matches the PLAN view of that 
   * "tapered_cylinder"  — round in plan, diameter changes from bottom to top (pedestal, tapered column). width = depth = BOTTOM diameter, topDiameter = TOP diameter.
   * "torus"             — RING in plan (e.g. brass footrest ring, metal hoop). width = depth = OUTER diameter, tubeDiameter = ring thickness, height ≈ tubeDiameter.
   * "rounded_box"       — rectangular in plan with rounded corners. edgeRadius = corner radius.
+  * "custom_extrusion"  — REQUIRED for non-standard silhouettes that cannot be represented by the above primitives: SCALLOPED BORDER, PIE-CRUST EDGE, KIDNEY / BOOMERANG / ORGANIC PLAN, ASYMMETRIC SILHOUETTE, arched panels, wavy fronts, irregular live edges. Provide "outline" as 16–96 normalized [x,y] points, ordered around the plan-view perimeter, where [0,0] is the part center and -0.5..0.5 spans the full width/depth.
   * "box"               — only when the plan view is a true rectangle/square with sharp corners.
-NEVER substitute a box for a round, oval, ring, or tapered part — that destroys the shape.
+NEVER substitute a box for a round, oval, ring, tapered, scalloped, wavy, organic, kidney, boomerang, arched, or asymmetric part — that destroys the shape. If the approved rendering shows a unique outline, use custom_extrusion with enough outline points to match that outline.
 
 Bullnose / chamfered / scalloped horizontal edges (e.g. "full bullnose edge profile", "1/8 in. scalloped reveal"):
 - Model the part with the matching shape primitive (cylinder / ellipse_cylinder / rounded_box) at the correct overall diameter and thickness.
