@@ -37,7 +37,7 @@ export function FloorTo3D() {
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 20_000_000) { setError("Use a file smaller than 20 MB."); return; }
+    if (file.size > 2_000_000_000) { setError("Use a file smaller than 2 GB."); return; }
     setError("");
     setFileName(file.name);
     setIsPdf(file.type === "application/pdf");
@@ -99,7 +99,7 @@ export function FloorTo3D() {
           : <span className="px-6 text-center">
               <Upload className="mx-auto size-6" />
               <span className="mt-3 block text-sm font-bold">{fileName || (subject === "furniture" ? "Upload your furniture drawing" : "Upload your floor plan")}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">PDF, JPG or PNG · up to 20 MB</span>
+              <span className="mt-1 block text-xs text-muted-foreground">PDF, JPG or PNG · up to 2 GB</span>
             </span>}
       </Button>
       {fileName && <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => { setFileName(""); setFileDataUrl(null); setDae(null); if (fileRef.current) fileRef.current.value = ""; }}><X />Remove file</Button>}
