@@ -1048,10 +1048,10 @@ function buildDae(
   }).join("\n");
 
   const nodesXml = groups.map((g) => {
-    const sym = matSymbol(g.materialId);
+    const sym = matSymbol(g.id);
     return `      <node id="${g.id}_node" name="${escapeXml(g.name)}">
         <instance_geometry url="#${g.id}_geom">
-          <bind_material><technique_common><instance_material symbol="${sym}" target="#${matId(g.materialId)}"/></technique_common></bind_material>
+          <bind_material><technique_common><instance_material symbol="${sym}" target="#${matIdOf(g.id)}"/></technique_common></bind_material>
         </instance_geometry>
       </node>`;
   }).join("\n");
