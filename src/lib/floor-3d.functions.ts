@@ -199,11 +199,13 @@ ${ACCURACY_RULES}`;
 function buildingReferenceRenderingInstruction() {
   return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
 
-REFERENCE RENDERING IS THE SOURCE OF TRUTH:
-- Reconstruct the visible walls, floor edges, columns, stairs, built-in fixtures, cabinetry and major furniture from the rendering.
-- There may be NO printed dimensions. In that case, infer realistic proportions from visible architectural scale and keep the model coherent.
+REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials, textures and grouping:
+- Reconstruct the visible walls, floor edges, columns, stairs, built-in fixtures, cabinetry and major furniture exactly as they appear in the rendering. Silhouette, count and arrangement of parts MUST match the image 1:1.
+- MATERIALS: assign each element the material id whose visible finish most closely matches the rendering (wood tone, stone color, metal finish, glass, fabric). Put the descriptive finish from the rendering ("warm white oak", "Calacatta marble", "brushed brass", "smoked glass") in "materialNote" so the live preview and .dae groups read with the same texture family as the rendering.
+- GROUPING: every visually distinct material region in the rendering must be its OWN entry so it imports as its own .dae group/layer (separate "exterior" vs "interior" walls, separate kitchen vs bath vs furniture fixtures, separate stair from slab). Never merge two different materials into one entry.
+- There may be NO printed dimensions. Infer realistic proportions from visible architectural scale and keep the model coherent.
 - Do not output annotations, text, dimension marks, cameras, lights, background scenery, plants, people, loose decor, shadows or image-plane billboards.
-- Use simple editable geometry: straight wall segments, rectangular columns, stairs, and fixture boxes. Each distinct visible element should be its own entry.
+- Use simple editable geometry: straight wall segments, rectangular columns, stairs, and fixture boxes. Each distinct visible element is its own entry.
 - If only a single room / partial scene is visible, model only that visible room/scene.
 
 Return JSON ONLY in this exact shape:
@@ -327,10 +329,14 @@ ${ACCURACY_RULES}`;
 function furnitureReferenceRenderingInstruction() {
   return `You are a senior furniture 3D reconstruction modeler. Inspect the uploaded finished furniture rendering / reference image and return STRICT JSON describing the piece as editable 3D primitives for a live rotatable Collada .dae preview.
 
-REFERENCE RENDERING IS THE SOURCE OF TRUTH:
-- Reconstruct the visible furniture silhouette, part grouping, proportions, and material separation from the rendering.
-- There may be NO printed dimensions. Infer a realistic furniture scale and keep all parts proportionally coherent.
-- Do NOT output a simplified blocky stand-in. Round, oval, ring, tapered, scalloped, arched, wavy or asymmetric features must use the closest matching primitive.
+REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials, textures and grouping:
+- The silhouette, part count, part grouping, proportions and material separation in the rendering are LAW. The reconstructed 3D piece must read identically to the rendering from any angle.
+- MATERIALS / TEXTURES: every part MUST carry the "material" id whose visible finish most closely matches the rendering (stone_white, stone_dark, wood_oak, wood_walnut, wood_dark, metal_brass, metal_chrome, metal_black, fabric_neutral, leather_dark, glass, plastic_white, plastic_black, other). Describe the finish from the rendering ("Calacatta marble", "warm white oak", "brushed brass", "smoked glass") in "materialNote" so the live preview and the .dae groups carry the same texture family as the rendering.
+- GROUPING: every visually distinct material region in the rendering is its OWN part so each material imports as its own selectable .dae group/layer (e.g. stone top + wood edge band + metal ring + wood base + brass glides = 5 parts, never merged). NEVER fuse two different materials/finishes into one part.
+- Do NOT separate a single visually-continuous shape into multiple disjoint parts. If the rendering shows ONE flowing curved shell in ONE material, model it as ONE primitive (or one tight group of primitives that read as one shell).
+- Trace the rendering's OUTER CONTOUR first. For any silhouette that is not a simple box/circle/oval, use "custom_extrusion" with 16–96 outline points that match the render's outline (scallops, waves, kidney, boomerang, asymmetry).
+- There may be NO printed dimensions. Infer a realistic furniture scale (use the rendering's visible context: floor, surrounding objects, human-scale cues) and keep all parts proportionally coherent.
+- Do NOT output a simplified blocky stand-in. Round, oval, ring, tapered, scalloped, arched, wavy or asymmetric features MUST use the closest matching primitive (cylinder / ellipse_cylinder / tapered_cylinder / torus / rounded_box / custom_extrusion) — never substitute a box.
 - Do not output annotations, labels, dimension marks, cameras, lights, background scenery, shadows or image-plane billboards.
 
 Return JSON ONLY in this exact shape:
