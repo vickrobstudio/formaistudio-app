@@ -840,25 +840,45 @@ function buildGroups(
     slab.addBox(0, 0, -0.05, plan.bounds.width, plan.bounds.length, 0);
     groups.push(slab.group);
 
-    const exterior = makeGroupBuilder("group_walls_exterior", "Walls - Exterior", scale);
-    const interior = makeGroupBuilder("group_walls_interior", "Walls - Interior", scale);
+    // Group by (category, material) so each visually distinct material region
+    // in the rendering becomes its own selectable .dae layer.
+    const bucketFor = (
+      cache: Map<string, ReturnType<typeof makeGroupBuilder>>,
+      key: string,
+      label: string,
+      matId: MaterialId,
+    ) => {
+      const full = `${key}__${matId}`;
+      let b = cache.get(full);
+      if (!b) {
+        const matLabel = MATERIAL_PALETTE[matId]?.label ?? matId;
+        const safe = full.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+        b = makeGroupBuilder(`group_${safe}`, `${label} — ${matLabel}`, scale, matId);
+        cache.set(full, b);
+      }
+      return b;
+    };
+
+    const wallBuckets = new Map<string, ReturnType<typeof makeGroupBuilder>>();
     for (const wall of plan.walls) {
-      const target = wall.layer === "exterior" ? exterior : interior;
-      addWallWithOpenings(target.addCorners, wall, wallHeightMeters);
+      const label = wall.layer === "exterior" ? "Walls - Exterior" : "Walls - Interior";
+      const b = bucketFor(wallBuckets, `walls_${wall.layer}`, label, wall.material);
+      addWallWithOpenings(b.addCorners, wall, wallHeightMeters);
     }
-    if (exterior.group.positions.length) groups.push(exterior.group);
-    if (interior.group.positions.length) groups.push(interior.group);
+    for (const b of wallBuckets.values()) groups.push(b.group);
 
     if (plan.columns.length) {
-      const g = makeGroupBuilder("group_columns", "Columns", scale);
+      const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const c of plan.columns) {
-        addRotatedBox(g.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
+        const b = bucketFor(cache, "columns", "Columns", c.material);
+        addRotatedBox(b.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
       }
-      groups.push(g.group);
+      for (const b of cache.values()) groups.push(b.group);
     }
     if (plan.stairs.length) {
-      const g = makeGroupBuilder("group_stairs", "Stairs", scale);
+      const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const s of plan.stairs) {
+        const g = bucketFor(cache, "stairs", "Stairs", s.material);
         const stepRise = s.height / s.steps;
         const stepRun = s.depth / s.steps;
         const theta = (s.rotationDegZ * Math.PI) / 180;
@@ -876,21 +896,16 @@ function buildGroups(
           ]);
         }
       }
-      groups.push(g.group);
+      for (const b of cache.values()) groups.push(b.group);
     }
     if (plan.fixtures.length) {
-      const byLayer = new Map<string, ReturnType<typeof makeGroupBuilder>>();
+      const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const f of plan.fixtures) {
         const layerKey = (f.layer || "fixtures").trim().toLowerCase() || "fixtures";
-        let bucket = byLayer.get(layerKey);
-        if (!bucket) {
-          const safe = layerKey.replace(/[^a-z0-9]+/g, "_");
-          bucket = makeGroupBuilder(`group_fixtures_${safe}`, `Fixtures - ${layerKey}`, scale);
-          byLayer.set(layerKey, bucket);
-        }
-        addRotatedBox(bucket.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
+        const b = bucketFor(cache, `fixtures_${layerKey}`, `Fixtures - ${layerKey}`, f.material);
+        addRotatedBox(b.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
       }
-      for (const bucket of byLayer.values()) groups.push(bucket.group);
+      for (const b of cache.values()) groups.push(b.group);
     }
   } else {
     // Group furniture parts by MATERIAL so each material becomes its own
