@@ -10,7 +10,7 @@ import { useCredits } from "@/hooks/use-credits";
 import { generateFloor3D } from "@/lib/floor-3d.functions";
 
 const information: ToolInfoSection[] = [
-  { title: "What to upload", description: "Upload a fully dimensioned PDF, JPG or PNG of either a floor plan or a single furniture piece.", items: ["Building floor plan with walls, openings and printed dimensions", "Or furniture drawing with top, front and side views and printed width, depth, height", "PDF, JPG or PNG up to 20 MB"] },
+  { title: "What to upload", description: "Upload a fully dimensioned PDF, JPG or PNG of either a floor plan or a single furniture piece.", items: ["Building floor plan with walls, openings and printed dimensions", "Or furniture drawing with top, front and side views and printed width, depth, height", "PDF, JPG or PNG up to 2 GB", "MEP content (HVAC, plumbing, electrical, lighting) is ignored on purpose for a clean simple model"] },
   { title: "Accuracy first", items: ["AI reads every printed dimension and respects the units you choose", "Heights, widths, depths and thicknesses are preserved to the millimetre", "Angles, alignments and parallelisms are preserved"] },
   { title: "Output", items: ["Editable Collada .dae model exported in the units you choose (meters or feet)", "Z-up, single mesh combining all walls or all furniture parts", "Opens in Blender, SketchUp, Rhino, Cinema 4D, Unity or Unreal"] },
 ];
