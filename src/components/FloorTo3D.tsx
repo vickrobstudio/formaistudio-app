@@ -112,8 +112,10 @@ export function FloorTo3D() {
   }
 
   async function approveAndBuild() {
-    if (!fileDataUrl) return;
-    await buildModel(renderUrl || undefined, masterPrompt || undefined, fileDataUrl);
+    if (!renderUrl) return;
+    // The approved rendering IS the source of geometry for the 3D model.
+    // The 2D plan was only used to author the rendering.
+    await buildModel(renderUrl, undefined, renderUrl);
   }
 
   async function buildFromReferenceRendering() {
@@ -153,7 +155,7 @@ export function FloorTo3D() {
           masterPrompt: prompt,
           // Only set referenceOnly when there's no separate 2D plan
           // (source equals the rendering itself).
-          referenceOnly: Boolean(approvedRenderUrl && !prompt && source === approvedRenderUrl),
+          referenceOnly: Boolean(approvedRenderUrl && source === approvedRenderUrl),
         },
       });
       if (!result.ok) { setError(result.error); return; }
