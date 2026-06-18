@@ -113,6 +113,22 @@ export function FloorTo3D() {
 
   async function approveAndBuild() {
     if (!fileDataUrl) return;
+    await buildModel(renderUrl || undefined, masterPrompt || undefined, fileDataUrl);
+  }
+
+  async function buildFromReferenceRendering() {
+    const reference = referenceImages[0];
+    if (!reference) return;
+    // Use the uploaded rendering as both the source and the approved render —
+    // skip the master-prompt and render-preview steps entirely.
+    const source = fileDataUrl ?? reference;
+    setMasterPrompt("");
+    setRenderUrl(reference);
+    setRenderFinal(true);
+    await buildModel(reference, undefined, source);
+  }
+
+  async function buildModel(approvedRenderUrl: string | undefined, prompt: string | undefined, source: string) {
     const rawMeters = planUnits === "meters"
       ? Number(heightMeters) || 2.7
       : ((Number(heightFeet) || 0) * 0.3048) + ((Number(heightInches) || 0) * 0.0254);
@@ -127,13 +143,13 @@ export function FloorTo3D() {
     try {
       const result = await generate({
         data: {
-          fileDataUrl,
+          fileDataUrl: source,
           wallHeightMeters,
           planUnits,
           outputUnits,
           subject,
-          approvedRenderUrl: renderUrl || undefined,
-          masterPrompt: masterPrompt || undefined,
+          approvedRenderUrl,
+          masterPrompt: prompt,
         },
       });
       if (!result.ok) { setError(result.error); return; }
@@ -212,6 +228,14 @@ export function FloorTo3D() {
             <img src={image} alt={`Reference ${index + 1}`} className="aspect-square w-full object-cover" />
             <button type="button" aria-label="Remove reference" className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-background/90 text-foreground" onClick={() => setReferenceImages((current) => current.filter((_, i) => i !== index))}><X className="size-3" /></button>
           </div>)}
+        </div>}
+        {referenceImages.length > 0 && stage !== "modeling" && stage !== "ready" && <div className="mt-4 rounded-2xl border border-dashed border-foreground/40 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Already have a rendering?</p>
+          <p className="mt-2 text-xs text-muted-foreground">If your first reference is the finished rendering you want to model, skip the prompt and approval steps and go straight to the live 3D preview.</p>
+          <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void buildFromReferenceRendering()}>
+            <span>{busy === "model" ? "Reconstructing geometry…" : "Use reference rendering · skip to 3D"}</span>
+            {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+          </Button>
         </div>}
       </div>
 
