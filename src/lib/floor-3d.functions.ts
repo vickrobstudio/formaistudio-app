@@ -223,7 +223,8 @@ function buildingReferenceRenderingInstruction() {
 
 REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials, textures and grouping:
 - Reconstruct the visible walls, floor edges, columns, stairs, built-in fixtures, cabinetry and major furniture exactly as they appear in the rendering. Silhouette, count and arrangement of parts MUST match the image 1:1.
-- MATERIALS: assign each element the material id whose visible finish most closely matches the rendering (wood tone, stone color, metal finish, glass, fabric). Put the descriptive finish from the rendering ("warm white oak", "Calacatta marble", "brushed brass", "smoked glass") in "materialNote" so the live preview and .dae groups read with the same texture family as the rendering.
+- MATERIALS: assign each element the material id whose visible finish most closely matches the rendering (wood tone, stone color, metal finish, glass, fabric). Put the descriptive finish from the rendering ("warm white oak", "Calacatta marble", "brushed brass", "smoked glass") in "materialNote".
+- COLOR — MANDATORY: for EVERY element you output (walls, columns, stairs, fixtures) you MUST also include "colorHex": the EXACT sRGB hex (#RRGGBB) of the dominant visible surface color in the rendering for that element, sampled as if with an eyedropper at a representative lit (not shadowed, not blown-out highlight) area. This colour is rendered verbatim in the live 3D preview and the .dae export — it is how the model will look identical to the rendering. Do not invent a colour: pick what is actually in the pixels.
 - GROUPING: every visually distinct material region in the rendering must be its OWN entry so it imports as its own .dae group/layer (separate "exterior" vs "interior" walls, separate kitchen vs bath vs furniture fixtures, separate stair from slab). Never merge two different materials into one entry.
 - There may be NO printed dimensions. Infer realistic proportions from visible architectural scale and keep the model coherent.
 - Do not output annotations, text, dimension marks, cameras, lights, background scenery, plants, people, loose decor, shadows or image-plane billboards.
@@ -246,19 +247,20 @@ Return JSON ONLY in this exact shape:
         { "kind": "door"|"window", "position": <m from wall start>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
       ],
       "material": "stone_white"|"stone_dark"|"wood_oak"|"wood_walnut"|"wood_dark"|"metal_brass"|"metal_chrome"|"metal_black"|"fabric_neutral"|"leather_dark"|"glass"|"plastic_white"|"plastic_black"|"other",
-      "materialNote": "<finish from the rendering, e.g. 'limewashed plaster', 'travertine'>"
+      "materialNote": "<finish from the rendering, e.g. 'limewashed plaster', 'travertine'>",
+      "colorHex": "#RRGGBB"
     }
   ],
-  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
-  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
-  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ]
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>", "colorHex": "#RRGGBB" } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>", "colorHex": "#RRGGBB" } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>", "colorHex": "#RRGGBB" } ]
 }
 
 Rules:
 - Origin (0,0) at the lower-left of the reconstructed footprint, +x right, +y depth.
 - Include at least the main visible wall envelope. Use typical wall thickness 0.12–0.25 m if unknown.
 - Use realistic architectural scale: doors around 0.8–1.0 m wide and 2.1 m high, counters around 0.9 m high, rooms around 2.4–3.5 m high.
-- EVERY element MUST carry the "material" id whose visible finish in the rendering matches best, so the .dae imports with one selectable group per material (plaster walls separate from stone walls, wood cabinets separate from stone counters, brass hardware separate from chrome, etc.). Never default to "other" when a finish is clearly visible.
+- EVERY element MUST carry both the "material" id (closest finish family) AND a sampled "colorHex" so the .dae imports with one selectable group per (material × colour) and the rendered colour matches the reference image exactly. Never default to "other" when a finish is clearly visible, and never omit "colorHex".
 - Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 }
 
