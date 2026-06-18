@@ -143,17 +143,17 @@ export function Furniture3DPreview({ plan, daeDataUrl }: { plan?: FurniturePlan;
             castShadow
             shadow-mapSize={[1024, 1024]}
           />
+          {scene && (
+            <primitive object={scene} position={centerOffset.toArray()} />
+          )}
+          <ContactShadows
+            position={[0, 0, 0]}
+            opacity={0.45}
+            scale={Math.max(sceneSize.x, sceneSize.z, 1) * 3}
+            blur={2}
+            far={4}
+          />
           <Suspense fallback={null}>
-            {scene && (
-              <primitive object={scene} position={centerOffset.toArray()} />
-            )}
-            <ContactShadows
-              position={[0, 0, 0]}
-              opacity={0.45}
-              scale={Math.max(sceneSize.x, sceneSize.z, 1) * 3}
-              blur={2}
-              far={4}
-            />
             <Environment preset="studio" />
           </Suspense>
           <OrbitControls
