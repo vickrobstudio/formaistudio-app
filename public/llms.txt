@@ -10,6 +10,7 @@ FormAI STUDIO helps designers and clients transform references, plans, photograp
 - [AI Tools](/tools): Explore the complete creative AI toolkit.
 - [Studio AI](/studio): Create interiors using exact furniture reference images.
 - [3D to AI](/model-to-ai): Transform design perspectives into photorealistic renderings.
+- [2D to 3D](/floor-to-3d): Convert architectural floor plans into editable 3D Collada .dae models.
 - [AI Edits](/ai-edits): Refine furniture, materials, textures, colors, and lighting.
 - [Photo to AI](/photo-to-ai): Edit room photographs through an AI conversation.
 - [AI to Video](/ai-to-video): Turn rendering sequences into cinematic design videos.

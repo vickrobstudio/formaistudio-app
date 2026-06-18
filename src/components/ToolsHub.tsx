@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Box, Camera, Film, ImagePlus, Sparkles } from "lucide-react";
+import { ArrowRight, Box, Boxes, Camera, Film, ImagePlus, Sparkles } from "lucide-react";
 import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 
 const tools = [
   { icon: Sparkles, name: "Studio AI", description: "Complete configured spaces with exact furniture references", to: "/studio" },
   { icon: Box, name: "3D to AI", description: "Turn any perspective into a photorealistic rendering", to: "/model-to-ai" },
+  { icon: Boxes, name: "2D to 3D", description: "Lift a floor plan PDF or image into an editable 3D .dae model", to: "/floor-to-3d" },
   { icon: ImagePlus, name: "AI Edits", description: "Add, remove, relight and transform scene details", to: "/ai-edits" },
   { icon: Camera, name: "Photo to AI", description: "Edit a real photo through an AI conversation", to: "/photo-to-ai" },
   { icon: Film, name: "AI to Video", description: "Create a 10-second virtual tour from 2–5 views", to: "/ai-to-video" },
