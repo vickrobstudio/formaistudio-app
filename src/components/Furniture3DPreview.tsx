@@ -28,11 +28,12 @@ function PreviewCamera({ maxDim, height }: { maxDim: number; height: number }) {
 
   useEffect(() => {
     const dist = Math.max(maxDim * 2.8, 3);
-    camera.position.set(dist, Math.max(dist * 0.72, height + 1), dist);
-    camera.near = Math.max(dist / 1000, 0.01);
-    camera.far = Math.max(dist * 12, maxDim * 12, 100);
-    camera.lookAt(0, height / 2, 0);
-    camera.updateProjectionMatrix();
+    const perspective = camera as THREE.PerspectiveCamera;
+    perspective.position.set(dist, Math.max(dist * 0.72, height + 1), dist);
+    perspective.near = Math.max(dist / 1000, 0.01);
+    perspective.far = Math.max(dist * 12, maxDim * 12, 100);
+    perspective.lookAt(0, height / 2, 0);
+    perspective.updateProjectionMatrix();
   }, [camera, height, maxDim]);
 
   return null;
