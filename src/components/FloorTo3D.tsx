@@ -20,7 +20,10 @@ export function FloorTo3D() {
   const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
   const [isPdf, setIsPdf] = useState(false);
-  const [height, setHeight] = useState("2.7");
+  const [unit, setUnit] = useState<"meters" | "feet-inches">("meters");
+  const [heightMeters, setHeightMeters] = useState("2.7");
+  const [heightFeet, setHeightFeet] = useState("9");
+  const [heightInches, setHeightInches] = useState("0");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dae, setDae] = useState<string | null>(null);
@@ -44,7 +47,10 @@ export function FloorTo3D() {
 
   async function run() {
     if (!fileDataUrl) return;
-    const wallHeightMeters = Math.min(10, Math.max(1, Number(height) || 2.7));
+    const rawMeters = unit === "meters"
+      ? Number(heightMeters) || 2.7
+      : ((Number(heightFeet) || 0) * 0.3048) + ((Number(heightInches) || 0) * 0.0254);
+    const wallHeightMeters = Math.min(10, Math.max(1, rawMeters));
     setBusy(true); setError(""); setDae(null);
     if (!(await consume())) {
       setBusy(false);
@@ -52,7 +58,7 @@ export function FloorTo3D() {
       setError("You have no credits left. Open your Wallet to continue."); return;
     }
     try {
-      const result = await generate({ data: { fileDataUrl, wallHeightMeters } });
+      const result = await generate({ data: { fileDataUrl, wallHeightMeters, planUnits: unit } });
       if (!result.ok) { setError(result.error); return; }
       setDae(result.daeDataUrl);
       setWallCount(result.wallCount);
@@ -90,9 +96,29 @@ export function FloorTo3D() {
       {fileName && <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => { setFileName(""); setFileDataUrl(null); setDae(null); if (fileRef.current) fileRef.current.value = ""; }}><X />Remove plan</Button>}
 
       <div className="organic-divider py-8">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Ceiling height</p>
-        <p className="mt-2 text-xs text-muted-foreground">Wall extrusion height in meters</p>
-        <Input value={height} onChange={(event) => setHeight(event.target.value)} type="number" min="1" max="10" step="0.1" inputMode="decimal" className="mt-3 h-12" />
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Plan units</p>
+            <p className="mt-2 text-xs text-muted-foreground">Choose the units printed on your floor plan</p>
+          </div>
+          <div className="flex rounded-xl border border-foreground p-1">
+            <Button type="button" size="sm" variant={unit === "feet-inches" ? "default" : "ghost"} onClick={() => setUnit("feet-inches")}>Feet & inches</Button>
+            <Button type="button" size="sm" variant={unit === "meters" ? "default" : "ghost"} onClick={() => setUnit("meters")}>Meters</Button>
+          </div>
+        </div>
+        <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em]">Ceiling height</p>
+        {unit === "meters"
+          ? <label className="mt-3 block text-xs">Meters
+              <Input value={heightMeters} onChange={(event) => setHeightMeters(event.target.value)} type="number" min="1" max="10" step="0.1" inputMode="decimal" className="mt-2 h-12" />
+            </label>
+          : <div className="mt-3 grid grid-cols-2 gap-3">
+              <label className="text-xs">Feet
+                <Input value={heightFeet} onChange={(event) => setHeightFeet(event.target.value)} type="number" min="0" max="33" step="1" inputMode="numeric" className="mt-2 h-12" />
+              </label>
+              <label className="text-xs">Inches
+                <Input value={heightInches} onChange={(event) => setHeightInches(event.target.value)} type="number" min="0" max="11" step="1" inputMode="numeric" className="mt-2 h-12" />
+              </label>
+            </div>}
       </div>
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}

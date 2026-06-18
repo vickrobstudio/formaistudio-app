@@ -7,6 +7,7 @@ const FloorTo3DInput = z.object({
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
     .max(20_000_000),
   wallHeightMeters: z.number().min(1).max(10).default(2.7),
+  planUnits: z.enum(["meters", "feet-inches"]).default("meters"),
 });
 
 const WallSchema = z.object({
@@ -27,7 +28,16 @@ type GenerateFloor3DResult =
   | { ok: true; daeDataUrl: string; wallCount: number }
   | { ok: false; error: string };
 
-const EXTRACT_INSTRUCTION = `You are an architectural CAD vectorizer. Inspect the uploaded floor plan (a residential, office, or other architectural building plan) and return STRICT JSON describing every wall as a straight line segment.
+function extractInstruction(planUnits: "meters" | "feet-inches") {
+  const printedUnits = planUnits === "feet-inches"
+    ? "The printed dimensions on this plan are in FEET AND INCHES (e.g. 12'-6\", 8 ft, 14'). Convert every dimension you read to meters using 1 foot = 0.3048 m and 1 inch = 0.0254 m before placing coordinates."
+    : "The printed dimensions on this plan are in METERS (or millimeters/centimeters — convert mm→m by /1000 and cm→m by /100).";
+  const fallback = planUnits === "feet-inches"
+    ? "If no scale is shown, assume the longest exterior side is 40 feet (12.192 meters) and scale everything proportionally."
+    : "If no scale is shown, assume the longest exterior side is 12 meters and scale everything proportionally.";
+  return `You are an architectural CAD vectorizer. Inspect the uploaded floor plan (a residential, office, or other architectural building plan) and return STRICT JSON describing every wall as a straight line segment.
+
+${printedUnits}
 
 Return JSON ONLY, no prose, matching this exact shape:
 {
@@ -36,13 +46,17 @@ Return JSON ONLY, no prose, matching this exact shape:
   "walls": [ { "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m, default 0.15> } ]
 }
 
+All output coordinates and thicknesses MUST be in meters regardless of the printed units.
+
 Rules:
 - Coordinates in meters with origin (0,0) at the bottom-left corner of the plan and +x going right, +y going up.
-- Read any printed scale, dimensions or grid to infer real-world meters. If no scale is shown, assume the longest exterior side is 12 meters and scale everything proportionally.
+- Read any printed scale, dimensions or grid to infer real-world size, then convert to meters as instructed above.
+- ${fallback}
 - Trace every exterior and interior wall as one straight segment from endpoint to endpoint. Split walls at every intersection or door opening so each segment is a clean straight line.
 - Skip door swings, furniture, dimension lines, text, hatching, north arrows, columns and stairs.
 - Use 0.20 m thickness for exterior walls and 0.10 m for interior partitions when unsure.
 - Output must be valid JSON parseable by JSON.parse. No comments, no trailing commas, no Markdown fences.`;
+}
 
 function buildDae(plan: z.infer<typeof PlanSchema>, wallHeight: number) {
   const positions: number[] = [];
@@ -158,13 +172,14 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
+    const instruction = extractInstruction(data.planUnits);
     const userContent = isPdf
       ? [
-          { type: "text", text: EXTRACT_INSTRUCTION },
+          { type: "text", text: instruction },
           { type: "file", file: { filename: "plan.pdf", file_data: data.fileDataUrl } },
         ]
       : [
-          { type: "text", text: EXTRACT_INSTRUCTION },
+          { type: "text", text: instruction },
           { type: "image_url", image_url: { url: data.fileDataUrl } },
         ];
 
