@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { MATERIAL_IDS, MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared";
 
 const Subject = z.enum(["building", "furniture"]);
 const PlanUnits = z.enum(["meters", "feet-inches"]);
@@ -98,6 +99,10 @@ const PartSchema = z.object({
   topDiameter: z.number().positive().optional(),
   tubeDiameter: z.number().positive().optional(),
   edgeRadius: z.number().min(0).optional(),
+  // Material slot — used both to render the live 3D preview and to group the
+  // .dae export into one selectable material layer per material.
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const FurniturePlanSchema = z.object({
