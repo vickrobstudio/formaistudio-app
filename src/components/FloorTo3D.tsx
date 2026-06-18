@@ -283,28 +283,33 @@ export function FloorTo3D() {
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
-      {/* Step 2 — Write master prompt */}
-      <div className="mt-8">{stepHeading(2, "Master rendering prompt", stage === "upload" || stage === "prompted", stage === "rendered" || stage === "modeling" || stage === "ready")}</div>
-      <Button variant="studio" className="mt-3 h-12 w-full justify-between" disabled={!fileDataUrl || busy !== ""} onClick={() => void generatePrompt()}>
-        <span>{busy === "prompt" ? "Reading your drawing…" : masterPrompt ? "Rewrite master prompt" : "Write master prompt"}</span>
-        {busy === "prompt" ? <LoaderCircle className="animate-spin" /> : <Wand2 />}
-      </Button>
-      {masterPrompt && <Textarea value={masterPrompt} onChange={(event) => setMasterPrompt(event.target.value)} className="mt-3 min-h-40 text-xs" placeholder="Master rendering prompt — edit if you want to tweak the look" />}
-
-      {/* Step 3 — Approval rendering */}
-      {masterPrompt && <>
-        <div className="mt-8">{stepHeading(3, "Approve the render", stage === "prompted" || stage === "rendered", stage === "modeling" || stage === "ready")}</div>
-        <Button variant={renderUrl ? "outline" : "studio"} className="mt-3 h-12 w-full justify-between" disabled={busy !== "" || !masterPrompt.trim()} onClick={() => void renderPreview()}>
-          <span>{busy === "render" ? "Rendering…" : renderUrl ? "Re-render" : "Render preview"}</span>
-          {busy === "render" ? <LoaderCircle className="animate-spin" /> : renderUrl ? <RefreshCw /> : <Sparkles />}
+      {/* When the user supplies BOTH a 2D plan and a reference rendering,
+          we bypass the master-prompt + approval render and go straight to
+          the live 3D preview using the rendering as the fidelity target. */}
+      {fileDataUrl && referenceImages.length === 0 && <>
+        {/* Step 2 — Write master prompt */}
+        <div className="mt-8">{stepHeading(2, "Master rendering prompt", stage === "upload" || stage === "prompted", stage === "rendered" || stage === "modeling" || stage === "ready")}</div>
+        <Button variant="studio" className="mt-3 h-12 w-full justify-between" disabled={!fileDataUrl || busy !== ""} onClick={() => void generatePrompt()}>
+          <span>{busy === "prompt" ? "Reading your drawing…" : masterPrompt ? "Rewrite master prompt" : "Write master prompt"}</span>
+          {busy === "prompt" ? <LoaderCircle className="animate-spin" /> : <Wand2 />}
         </Button>
-        {renderUrl && <div className="mt-3 overflow-hidden rounded-2xl border border-border">
-          <img src={renderUrl} alt="Approval rendering" className={`w-full object-cover transition-[filter] duration-500 ${renderFinal ? "blur-0" : "blur-2xl"}`} />
-        </div>}
-        {renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void approveAndBuild()}>
-          <span>Approve & build 3D model</span>
-          <Check />
-        </Button>}
+        {masterPrompt && <Textarea value={masterPrompt} onChange={(event) => setMasterPrompt(event.target.value)} className="mt-3 min-h-40 text-xs" placeholder="Master rendering prompt — edit if you want to tweak the look" />}
+
+        {/* Step 3 — Approval rendering */}
+        {masterPrompt && <>
+          <div className="mt-8">{stepHeading(3, "Approve the render", stage === "prompted" || stage === "rendered", stage === "modeling" || stage === "ready")}</div>
+          <Button variant={renderUrl ? "outline" : "studio"} className="mt-3 h-12 w-full justify-between" disabled={busy !== "" || !masterPrompt.trim()} onClick={() => void renderPreview()}>
+            <span>{busy === "render" ? "Rendering…" : renderUrl ? "Re-render" : "Render preview"}</span>
+            {busy === "render" ? <LoaderCircle className="animate-spin" /> : renderUrl ? <RefreshCw /> : <Sparkles />}
+          </Button>
+          {renderUrl && <div className="mt-3 overflow-hidden rounded-2xl border border-border">
+            <img src={renderUrl} alt="Approval rendering" className={`w-full object-cover transition-[filter] duration-500 ${renderFinal ? "blur-0" : "blur-2xl"}`} />
+          </div>}
+          {renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void approveAndBuild()}>
+            <span>Approve & build 3D model</span>
+            <Check />
+          </Button>}
+        </>}
       </>}
 
       {/* Step 4 — Live 3D + download */}
