@@ -9,7 +9,7 @@ const FloorTo3DInput = z.object({
   fileDataUrl: z
     .string()
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
-    .max(20_000_000),
+    .max(2_700_000_000),
   wallHeightMeters: z.number().min(0.1).max(15).default(2.7),
   planUnits: PlanUnits.default("meters"),
   outputUnits: OutputUnits.default("meters"),
@@ -150,8 +150,9 @@ Rules:
 - Capture every structural column as a "columns" entry (rectangular or treat round columns as their bounding rectangle).
 - Capture every staircase as a "stairs" entry with overall run width, run depth, total rise (height) and number of steps.
 - Capture fixed furniture, kitchen cabinets, bath fixtures, appliances and plumbing as "fixtures" entries on the appropriate layer name so they import as separate SketchUp groups.
-- Skip door swings, dimension lines, text, hatching, north arrows. Do NOT simplify or omit walls, columns, stairs or fixtures that appear in the drawing.
-- Keep every distinct element as its own entry so each becomes a separate group / layer on import.
+- IGNORE all MEP content entirely: HVAC ducts and diffusers, plumbing risers and waste lines, electrical outlets, switches, lighting fixtures, panels, conduit, fire sprinklers, data jacks, mechanical equipment schedules and any MEP legends. Do not output them as walls, columns or fixtures.
+- Skip door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
+- Keep the model SIMPLE: only walls, doors, windows, columns, stairs and visible furniture / cabinets / bath fixtures. Each distinct element is its own entry so it becomes its own group on import.
 
 ${ACCURACY_RULES}`;
 }

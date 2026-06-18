@@ -10,7 +10,7 @@ import { useCredits } from "@/hooks/use-credits";
 import { generateFloor3D } from "@/lib/floor-3d.functions";
 
 const information: ToolInfoSection[] = [
-  { title: "What to upload", description: "Upload a fully dimensioned PDF, JPG or PNG of either a floor plan or a single furniture piece.", items: ["Building floor plan with walls, openings and printed dimensions", "Or furniture drawing with top, front and side views and printed width, depth, height", "PDF, JPG or PNG up to 20 MB"] },
+  { title: "What to upload", description: "Upload a fully dimensioned PDF, JPG or PNG of either a floor plan or a single furniture piece.", items: ["Building floor plan with walls, openings and printed dimensions", "Or furniture drawing with top, front and side views and printed width, depth, height", "PDF, JPG or PNG up to 2 GB", "MEP content (HVAC, plumbing, electrical, lighting) is ignored on purpose for a clean simple model"] },
   { title: "Accuracy first", items: ["AI reads every printed dimension and respects the units you choose", "Heights, widths, depths and thicknesses are preserved to the millimetre", "Angles, alignments and parallelisms are preserved"] },
   { title: "Output", items: ["Editable Collada .dae model exported in the units you choose (meters or feet)", "Z-up, single mesh combining all walls or all furniture parts", "Opens in Blender, SketchUp, Rhino, Cinema 4D, Unity or Unreal"] },
 ];
@@ -37,7 +37,7 @@ export function FloorTo3D() {
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 20_000_000) { setError("Use a file smaller than 20 MB."); return; }
+    if (file.size > 2_000_000_000) { setError("Use a file smaller than 2 GB."); return; }
     setError("");
     setFileName(file.name);
     setIsPdf(file.type === "application/pdf");
@@ -99,7 +99,7 @@ export function FloorTo3D() {
           : <span className="px-6 text-center">
               <Upload className="mx-auto size-6" />
               <span className="mt-3 block text-sm font-bold">{fileName || (subject === "furniture" ? "Upload your furniture drawing" : "Upload your floor plan")}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">PDF, JPG or PNG · up to 20 MB</span>
+              <span className="mt-1 block text-xs text-muted-foreground">PDF, JPG or PNG · up to 2 GB</span>
             </span>}
       </Button>
       {fileName && <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={() => { setFileName(""); setFileDataUrl(null); setDae(null); if (fileRef.current) fileRef.current.value = ""; }}><X />Remove file</Button>}
