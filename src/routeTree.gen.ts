@@ -17,7 +17,6 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
-import { Route as FloorTo3dRouteImport } from './routes/floor-to-3d'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CreateRouteImport } from './routes/create'
@@ -26,6 +25,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as R2dTo3dRouteImport } from './routes/2d-to-3d'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
@@ -75,11 +75,6 @@ const ModelToAiRoute = ModelToAiRouteImport.update({
   path: '/model-to-ai',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FloorTo3dRoute = FloorTo3dRouteImport.update({
-  id: '/floor-to-3d',
-  path: '/floor-to-3d',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FeedRoute = FeedRouteImport.update({
   id: '/feed',
   path: '/feed',
@@ -118,6 +113,11 @@ const AiEditsRoute = AiEditsRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const R2dTo3dRoute = R2dTo3dRouteImport.update({
+  id: '/2d-to-3d',
+  path: '/2d-to-3d',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -162,6 +162,7 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
@@ -170,7 +171,6 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
-  '/floor-to-3d': typeof FloorTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -188,6 +188,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
@@ -196,7 +197,6 @@ export interface FileRoutesByTo {
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
-  '/floor-to-3d': typeof FloorTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -216,6 +216,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
   '/ai-to-video': typeof AiToVideoRoute
@@ -224,7 +225,6 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
-  '/floor-to-3d': typeof FloorTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -244,6 +244,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
     | '/ai-to-video'
@@ -252,7 +253,6 @@ export interface FileRouteTypes {
     | '/create'
     | '/dashboard'
     | '/feed'
-    | '/floor-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -270,6 +270,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
     | '/ai-to-video'
@@ -278,7 +279,6 @@ export interface FileRouteTypes {
     | '/create'
     | '/dashboard'
     | '/feed'
-    | '/floor-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -297,6 +297,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
     | '/ai-to-video'
@@ -305,7 +306,6 @@ export interface FileRouteTypes {
     | '/create'
     | '/dashboard'
     | '/feed'
-    | '/floor-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -325,6 +325,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  R2dTo3dRoute: typeof R2dTo3dRoute
   AboutRoute: typeof AboutRoute
   AiEditsRoute: typeof AiEditsRoute
   AiToVideoRoute: typeof AiToVideoRoute
@@ -333,7 +334,6 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   DashboardRoute: typeof DashboardRoute
   FeedRoute: typeof FeedRoute
-  FloorTo3dRoute: typeof FloorTo3dRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -404,13 +404,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModelToAiRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/floor-to-3d': {
-      id: '/floor-to-3d'
-      path: '/floor-to-3d'
-      fullPath: '/floor-to-3d'
-      preLoaderRoute: typeof FloorTo3dRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/feed': {
       id: '/feed'
       path: '/feed'
@@ -465,6 +458,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/2d-to-3d': {
+      id: '/2d-to-3d'
+      path: '/2d-to-3d'
+      fullPath: '/2d-to-3d'
+      preLoaderRoute: typeof R2dTo3dRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -546,6 +546,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  R2dTo3dRoute: R2dTo3dRoute,
   AboutRoute: AboutRoute,
   AiEditsRoute: AiEditsRoute,
   AiToVideoRoute: AiToVideoRoute,
@@ -554,7 +555,6 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   DashboardRoute: DashboardRoute,
   FeedRoute: FeedRoute,
-  FloorTo3dRoute: FloorTo3dRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
   PrivacyRoute: PrivacyRoute,
