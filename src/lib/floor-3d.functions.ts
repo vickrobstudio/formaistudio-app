@@ -96,12 +96,18 @@ const PartSchema = z.object({
     "tapered_cylinder",
     "torus",
     "rounded_box",
+    "custom_extrusion",
   ]).default("box"),
   cx: z.number(), cy: z.number(), cz: z.number(),
   width: z.number().positive(),   // along X
   depth: z.number().positive(),   // along Y
   height: z.number().positive(),  // along Z
   rotationDegZ: z.number().default(0),
+  // custom_extrusion only: normalized plan-view outline points where [0,0]
+  // is part center and extents fit inside -0.5..0.5. Used for scalloped,
+  // kidney, boomerang, freeform, arched and asymmetric silhouettes from the
+  // approved render.
+  outline: z.array(z.tuple([z.number().min(-0.75).max(0.75), z.number().min(-0.75).max(0.75)])).min(3).max(96).optional(),
   // Optional shape-specific extras (in meters):
   // - tapered_cylinder: topDiameter (X diameter at the top, Y scales proportionally)
   // - torus: tubeDiameter (thickness of the ring)
@@ -202,6 +208,7 @@ If a SECOND image labelled "APPROVED RENDERING" is attached after the technical 
 - The silhouette, part count, part grouping, and overall proportions in the approved rendering are LAW. Do not add, remove, split, merge, or rearrange parts in any way that changes how the piece reads against that image from any rotation angle.
 - Do NOT separate a single visually-continuous shape into multiple disjoint parts. If the approved rendering shows ONE flowing curved shell, model it as ONE primitive (or one tight group of primitives that read as one shell) — never break it into stacked boxes or a different topology.
 - Do NOT invent a different shape (e.g. don't turn a curved organic top into a rectangle, don't turn a scalloped edge into a plain circle, don't turn a fluted column into a smooth one, don't turn a round disc into a square plate).
+- Trace the approved render's OUTER CONTOUR first. For any visible silhouette that is not a simple box/circle/oval, use "custom_extrusion" and provide a normalized outline with enough points to match the render. This is mandatory for scallops, waves, arches, kidney/boomerang forms, freeform organic pieces and asymmetry.
 - The MASTER PROMPT is BINDING. Re-read it before emitting JSON. Every UPPER-CASE feature in the master prompt (e.g. SCALLOPED BORDER, FLUTED PEDESTAL, REEDED FRONT, CURVED PLAN, CANTILEVERED TOP, BULLNOSE EDGE, SPLAYED LEGS, ASYMMETRIC SILHOUETTE) MUST be present in the geometry. Reproduce each one using the closest shape primitive(s) — repeat ellipse_cylinder/cylinder/rounded_box around the perimeter with the correct rotationDegZ when needed (e.g. an N-lobe scalloped border = N small cylinders arrayed around the rim with edgeRadius set).
 - Match the approved rendering's proportions (top vs base diameter, column taper, ring height, edge thickness) within the printed dimensional constraints. Use the printed dimensions for exact numbers; use the rendering for shape choice.
 - The approved rendering OVERRIDES any conflicting reading from the orthographic views; the orthographic views only supply exact numerical dimensions.
@@ -217,10 +224,11 @@ Return JSON ONLY in this exact shape:
   "parts": [
     {
       "name": "<part name>",
-      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box",
+      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box" | "custom_extrusion",
       "cx": <m>, "cy": <m>, "cz": <m>,
       "width": <X m>, "depth": <Y m>, "height": <Z m>,
       "rotationDegZ": <deg>,
+      "outline": [[<x>, <y>], ...],
       "topDiameter": <m, tapered_cylinder only — diameter at the TOP>,
       "tubeDiameter": <m, torus only — thickness of the ring>,
       "edgeRadius": <m, optional bullnose/fillet radius>,
@@ -252,8 +260,9 @@ Shape primitive guide — pick the primitive that matches the PLAN view of that 
   * "tapered_cylinder"  — round in plan, diameter changes from bottom to top (pedestal, tapered column). width = depth = BOTTOM diameter, topDiameter = TOP diameter.
   * "torus"             — RING in plan (e.g. brass footrest ring, metal hoop). width = depth = OUTER diameter, tubeDiameter = ring thickness, height ≈ tubeDiameter.
   * "rounded_box"       — rectangular in plan with rounded corners. edgeRadius = corner radius.
+  * "custom_extrusion"  — REQUIRED for non-standard silhouettes that cannot be represented by the above primitives: SCALLOPED BORDER, PIE-CRUST EDGE, KIDNEY / BOOMERANG / ORGANIC PLAN, ASYMMETRIC SILHOUETTE, arched panels, wavy fronts, irregular live edges. Provide "outline" as 16–96 normalized [x,y] points, ordered around the plan-view perimeter, where [0,0] is the part center and -0.5..0.5 spans the full width/depth.
   * "box"               — only when the plan view is a true rectangle/square with sharp corners.
-NEVER substitute a box for a round, oval, ring, or tapered part — that destroys the shape.
+NEVER substitute a box for a round, oval, ring, tapered, scalloped, wavy, organic, kidney, boomerang, arched, or asymmetric part — that destroys the shape. If the approved rendering shows a unique outline, use custom_extrusion with enough outline points to match that outline.
 
 Bullnose / chamfered / scalloped horizontal edges (e.g. "full bullnose edge profile", "1/8 in. scalloped reveal"):
 - Model the part with the matching shape primitive (cylinder / ellipse_cylinder / rounded_box) at the correct overall diameter and thickness.
@@ -273,6 +282,46 @@ Rules:
 - Use realistic typical thicknesses only when the drawing does not give them (e.g. 0.02 m panels, 0.05 m legs, 0.012 m metal ring tube).
 
 ${ACCURACY_RULES}`;
+}
+
+function scallopedOutline(points = 96, lobes = 16): Array<[number, number]> {
+  return Array.from({ length: points }, (_, i) => {
+    const a = (i / points) * Math.PI * 2;
+    const r = 0.455 + 0.045 * Math.cos(lobes * a);
+    return [Math.cos(a) * r, Math.sin(a) * r];
+  });
+}
+
+function organicOutline(points = 72): Array<[number, number]> {
+  return Array.from({ length: points }, (_, i) => {
+    const a = (i / points) * Math.PI * 2;
+    const r = 0.42 + 0.055 * Math.sin(a) - 0.045 * Math.cos(2 * a) + 0.025 * Math.sin(3 * a);
+    return [Math.cos(a) * r + 0.035 * Math.sin(a), Math.sin(a) * r];
+  });
+}
+
+function enforcePromptShapeTraits(plan: FurniturePlan, masterPrompt?: string, approvedRenderUrl?: string): FurniturePlan {
+  if (!approvedRenderUrl || !masterPrompt || plan.parts.some((part) => part.shape === "custom_extrusion")) return plan;
+  const prompt = masterPrompt.toUpperCase();
+  const needsScallop = /SCALLOP|PIE-CRUST/.test(prompt);
+  const needsOrganic = /KIDNEY|BOOMERANG|ORGANIC|BIOMORPHIC|ASYMMETRIC|WAVY|LIVE EDGE|CURVED PLAN/.test(prompt);
+  if (!needsScallop && !needsOrganic) return plan;
+  let targetIndex = -1;
+  let targetScore = -Infinity;
+  plan.parts.forEach((part, index) => {
+    const score = part.width * part.depth * (1 + part.cz / Math.max(plan.bounds.height, 0.001));
+    if (score > targetScore) { targetScore = score; targetIndex = index; }
+  });
+  if (targetIndex < 0) return plan;
+  return {
+    ...plan,
+    parts: plan.parts.map((part, index) => index === targetIndex ? {
+      ...part,
+      shape: "custom_extrusion" as const,
+      outline: needsScallop ? scallopedOutline() : organicOutline(),
+      edgeRadius: part.edgeRadius ?? Math.min(part.height / 2, 0.025),
+    } : part),
+  };
 }
 
 type Group = { id: string; name: string; positions: number[]; indices: number[]; materialId: MaterialId };
@@ -591,6 +640,39 @@ function addRoundedBox(
   }
 }
 
+function addCustomExtrusion(
+  group: Group,
+  part: z.infer<typeof PartSchema>,
+  scale: number,
+) {
+  const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
+  const hz = part.height / 2;
+  const theta = (part.rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const base = group.positions.length / 3;
+  for (let level = 0; level < 2; level++) {
+    const z = level === 0 ? -hz : hz;
+    for (const [nx, ny] of outline) {
+      const lx = nx * part.width;
+      const ly = ny * part.depth;
+      const wx = part.cx + lx * cos - ly * sin;
+      const wy = part.cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (part.cz + z) * scale);
+    }
+  }
+  const n = outline.length;
+  for (let i = 0; i < n; i++) {
+    const next = (i + 1) % n;
+    const b0 = base + i, b1 = base + next;
+    const t0 = base + n + i, t1 = base + n + next;
+    group.indices.push(b0, b1, t1, b0, t1, t0);
+  }
+  for (let i = 1; i < n - 1; i++) {
+    group.indices.push(base, base + i + 1, base + i);
+    group.indices.push(base + n, base + n + i, base + n + i + 1);
+  }
+}
+
 function addWallWithOpenings(
   addCorners: (corners: [number, number, number][]) => void,
   wall: z.infer<typeof WallSchema>,
@@ -732,6 +814,8 @@ function buildGroups(
         addTorus(g.group, part.cx, part.cy, part.cz, dx, dy, tube, part.rotationDegZ, scale, 64, 16);
       } else if (part.shape === "rounded_box") {
         addRoundedBox(g.group, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ, scale, edge || 0.01);
+      } else if (part.shape === "custom_extrusion") {
+        addCustomExtrusion(g.group, part, scale);
       } else {
         addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
       }
@@ -892,7 +976,9 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       return { ok: false, error: "The detected geometry was incomplete. Try a clearer drawing with visible dimensions." };
     }
 
-    const plan = planResult.data;
+    const plan = planResult.data.kind === "furniture"
+      ? enforcePromptShapeTraits(planResult.data, data.masterPrompt, data.approvedRenderUrl)
+      : planResult.data;
     const dae = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
     const elementCount = plan.kind === "building"

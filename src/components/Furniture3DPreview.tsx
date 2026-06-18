@@ -13,6 +13,21 @@ import {
 
 function buildGeometry(part: FurniturePart): THREE.BufferGeometry {
   switch (part.shape) {
+    case "custom_extrusion": {
+      const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
+      const shape = new THREE.Shape();
+      outline.forEach(([x, y], index) => {
+        const sx = x * part.width;
+        const sy = y * part.depth;
+        if (index === 0) shape.moveTo(sx, sy);
+        else shape.lineTo(sx, sy);
+      });
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: part.height, bevelEnabled: Boolean(part.edgeRadius), bevelSize: part.edgeRadius ?? 0, bevelThickness: part.edgeRadius ?? 0, bevelSegments: 5 });
+      geo.translate(0, 0, -part.height / 2);
+      geo.rotateX(-Math.PI / 2);
+      return geo;
+    }
     case "cylinder": {
       const r = part.width / 2;
       return new THREE.CylinderGeometry(r, r, part.height, 64);
@@ -57,11 +72,12 @@ function buildGeometry(part: FurniturePart): THREE.BufferGeometry {
       const geo = new THREE.ExtrudeGeometry(shape, { depth: part.height, bevelEnabled: false });
       // ExtrudeGeometry extrudes along +Z; centre vertically.
       geo.translate(0, 0, -part.height / 2);
+      geo.rotateX(-Math.PI / 2);
       return geo;
     }
     case "box":
     default:
-      return new THREE.BoxGeometry(part.width, part.depth, part.height);
+      return new THREE.BoxGeometry(part.width, part.height, part.depth);
   }
 }
 
@@ -91,10 +107,6 @@ function PartMesh({ part }: { part: FurniturePart }) {
   const material = useMemo(() => makeMaterial(spec), [spec]);
   // Plan coordinates: cx/cy = plan, cz = height. Our scene up axis is Y, so map
   // (X, Y_plan, Z_height) → (X, Z_height, -Y_plan) for a familiar orientation.
-  const isVerticalPrimitive =
-    part.shape === "cylinder" ||
-    part.shape === "ellipse_cylinder" ||
-    part.shape === "tapered_cylinder";
   return (
     <mesh
       castShadow
@@ -103,7 +115,7 @@ function PartMesh({ part }: { part: FurniturePart }) {
       material={material}
       position={[part.cx, part.cz, -part.cy]}
       rotation={[
-        isVerticalPrimitive || part.shape === "torus" ? Math.PI / 2 : 0,
+        0,
         (-part.rotationDegZ * Math.PI) / 180,
         0,
       ]}

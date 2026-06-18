@@ -127,8 +127,8 @@ export function FloorTo3D() {
           planUnits,
           outputUnits,
           subject,
-          approvedRenderUrl: subject === "furniture" && renderUrl ? renderUrl : undefined,
-          masterPrompt: subject === "furniture" && masterPrompt ? masterPrompt : undefined,
+          approvedRenderUrl: renderUrl || undefined,
+          masterPrompt: masterPrompt || undefined,
         },
       });
       if (!result.ok) { setError(result.error); return; }
