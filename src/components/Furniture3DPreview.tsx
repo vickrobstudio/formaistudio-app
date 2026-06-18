@@ -1,133 +1,73 @@
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import { Rotate3D } from "lucide-react";
+import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader.js";
+import { Rotate3D, Loader2 } from "lucide-react";
 import {
   MATERIAL_PALETTE,
-  type FurniturePart,
   type FurniturePlan,
-  type MaterialSpec,
-  materialFor,
 } from "@/lib/floor-3d-shared";
 
-function buildGeometry(part: FurniturePart): THREE.BufferGeometry {
-  switch (part.shape) {
-    case "custom_extrusion": {
-      const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
-      const shape = new THREE.Shape();
-      outline.forEach(([x, y], index) => {
-        const sx = x * part.width;
-        const sy = y * part.depth;
-        if (index === 0) shape.moveTo(sx, sy);
-        else shape.lineTo(sx, sy);
-      });
-      shape.closePath();
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: part.height, bevelEnabled: Boolean(part.edgeRadius), bevelSize: part.edgeRadius ?? 0, bevelThickness: part.edgeRadius ?? 0, bevelSegments: 5 });
-      geo.translate(0, 0, -part.height / 2);
-      geo.rotateX(-Math.PI / 2);
-      return geo;
-    }
-    case "cylinder": {
-      const r = part.width / 2;
-      return new THREE.CylinderGeometry(r, r, part.height, 64);
-    }
-    case "ellipse_cylinder": {
-      const geo = new THREE.CylinderGeometry(part.width / 2, part.width / 2, part.height, 64);
-      const scaleMatrix = new THREE.Matrix4().makeScale(1, 1, part.depth / part.width);
-      geo.applyMatrix4(scaleMatrix);
-      return geo;
-    }
-    case "tapered_cylinder": {
-      const top = (part.topDiameter ?? part.width * 0.6) / 2;
-      const bottom = part.width / 2;
-      return new THREE.CylinderGeometry(top, bottom, part.height, 64);
-    }
-    case "torus": {
-      const tube = (part.tubeDiameter ?? Math.min(part.height, 0.015)) / 2;
-      const ringR = Math.max(part.width / 2 - tube, tube);
-      const geo = new THREE.TorusGeometry(ringR, tube, 16, 64);
-      // Torus in three is in XY plane; rotate so it lies flat in plan view.
-      geo.rotateX(Math.PI / 2);
-      // Ellipse stretch along depth axis.
-      const scaleY = part.depth / part.width;
-      if (Math.abs(scaleY - 1) > 0.01) {
-        geo.applyMatrix4(new THREE.Matrix4().makeScale(1, scaleY, 1));
-      }
-      return geo;
-    }
-    case "rounded_box": {
-      const r = Math.max(0, Math.min(part.edgeRadius ?? 0.01, part.width / 2, part.depth / 2));
-      const shape = new THREE.Shape();
-      const hw = part.width / 2, hd = part.depth / 2;
-      shape.moveTo(-hw + r, -hd);
-      shape.lineTo(hw - r, -hd);
-      shape.absarc(hw - r, -hd + r, r, -Math.PI / 2, 0, false);
-      shape.lineTo(hw, hd - r);
-      shape.absarc(hw - r, hd - r, r, 0, Math.PI / 2, false);
-      shape.lineTo(-hw + r, hd);
-      shape.absarc(-hw + r, hd - r, r, Math.PI / 2, Math.PI, false);
-      shape.lineTo(-hw, -hd + r);
-      shape.absarc(-hw + r, -hd + r, r, Math.PI, (3 * Math.PI) / 2, false);
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: part.height, bevelEnabled: false });
-      // ExtrudeGeometry extrudes along +Z; centre vertically.
-      geo.translate(0, 0, -part.height / 2);
-      geo.rotateX(-Math.PI / 2);
-      return geo;
-    }
-    case "box":
-    default:
-      return new THREE.BoxGeometry(part.width, part.height, part.depth);
-  }
+/**
+ * Loads the EXACT same Collada (.dae) file the user will download and renders
+ * it in the live preview — so the rotatable view is guaranteed to match the
+ * downloaded geometry 1:1. No separate primitive build path lives in the
+ * browser anymore.
+ */
+function useDaeScene(daeDataUrl: string) {
+  const [scene, setScene] = useState<THREE.Group | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new ColladaLoader();
+    loader.load(
+      daeDataUrl,
+      (collada) => {
+        if (cancelled || !collada?.scene) return;
+        const root = collada.scene as unknown as THREE.Group;
+        // .dae authored Z-up; rotate the whole group so three's Y-up scene
+        // shows it standing on the ground plane.
+        root.rotation.x = -Math.PI / 2;
+        // Upgrade Lambert materials to PBR-ish look using the colour the
+        // exporter already wrote, so glass / metal read correctly.
+        root.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          mesh.material = mats.map((m) => {
+            const src = m as THREE.MeshBasicMaterial & { color?: THREE.Color };
+            const color = src.color ? src.color.clone() : new THREE.Color(0xcccccc);
+            return new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.0 });
+          }) as unknown as THREE.Material;
+          if (Array.isArray(mesh.material) && mesh.material.length === 1) {
+            mesh.material = mesh.material[0];
+          }
+        });
+        setScene(root);
+      },
+      undefined,
+      (err) => console.error("ColladaLoader failed", err),
+    );
+    return () => { cancelled = true; };
+  }, [daeDataUrl]);
+  return scene;
 }
 
-function makeMaterial(spec: MaterialSpec): THREE.Material {
-  const color = new THREE.Color(spec.color[0], spec.color[1], spec.color[2]);
-  if (spec.transmission && spec.transmission > 0) {
-    return new THREE.MeshPhysicalMaterial({
-      color,
-      roughness: spec.roughness,
-      metalness: spec.metalness,
-      transmission: spec.transmission,
-      ior: spec.ior ?? 1.5,
-      transparent: true,
-      thickness: 0.01,
-    });
-  }
-  return new THREE.MeshStandardMaterial({
-    color,
-    roughness: spec.roughness,
-    metalness: spec.metalness,
-  });
-}
-
-function PartMesh({ part }: { part: FurniturePart }) {
-  const geometry = useMemo(() => buildGeometry(part), [part]);
-  const spec = materialFor(part.material);
-  const material = useMemo(() => makeMaterial(spec), [spec]);
-  // Plan coordinates: cx/cy = plan, cz = height. Our scene up axis is Y, so map
-  // (X, Y_plan, Z_height) → (X, Z_height, -Y_plan) for a familiar orientation.
-  return (
-    <mesh
-      castShadow
-      receiveShadow
-      geometry={geometry}
-      material={material}
-      position={[part.cx, part.cz, -part.cy]}
-      rotation={[
-        0,
-        (-part.rotationDegZ * Math.PI) / 180,
-        0,
-      ]}
-    />
-  );
-}
-
-export function Furniture3DPreview({ plan }: { plan: FurniturePlan }) {
-  // Centre the model. Bounds origin is bottom-front-left corner.
-  const centerX = plan.bounds.width / 2;
-  const centerY = plan.bounds.depth / 2;
+export function Furniture3DPreview({ plan, daeDataUrl }: { plan: FurniturePlan; daeDataUrl: string }) {
+  const scene = useDaeScene(daeDataUrl);
   const cameraDist = Math.max(plan.bounds.width, plan.bounds.depth, plan.bounds.height) * 2.4;
+
+  // Centre the loaded scene on the ground plane (Y up after our rotation).
+  const [centerOffset, height] = useMemo(() => {
+    if (!scene) return [new THREE.Vector3(), plan.bounds.height] as const;
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3(); box.getSize(size);
+    const center = new THREE.Vector3(); box.getCenter(center);
+    // Move so model is centred on X/Z and sitting on Y=0.
+    return [new THREE.Vector3(-center.x, -box.min.y, -center.z), size.y] as const;
+  }, [scene, plan.bounds.height]);
 
   const usedMaterials = useMemo(() => {
     const set = new Set(plan.parts.map((p) => p.material));
@@ -150,11 +90,9 @@ export function Furniture3DPreview({ plan }: { plan: FurniturePlan }) {
             shadow-mapSize={[1024, 1024]}
           />
           <Suspense fallback={null}>
-            <group position={[-centerX, 0, centerY]}>
-              {plan.parts.map((part, i) => (
-                <PartMesh key={`${part.material}_${i}_${part.shape}_${part.cx}_${part.cy}_${part.cz}`} part={part} />
-              ))}
-            </group>
+            {scene && (
+              <primitive object={scene} position={centerOffset.toArray()} />
+            )}
             <ContactShadows
               position={[0, 0, 0]}
               opacity={0.45}
@@ -167,11 +105,16 @@ export function Furniture3DPreview({ plan }: { plan: FurniturePlan }) {
           <OrbitControls
             makeDefault
             enablePan
-            target={[0, plan.bounds.height / 2, 0]}
+            target={[0, height / 2, 0]}
             minDistance={cameraDist * 0.4}
             maxDistance={cameraDist * 3}
           />
         </Canvas>
+        {!scene && (
+          <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Loading .dae geometry…
+          </div>
+        )}
         <p className="pointer-events-none absolute inset-x-0 bottom-3 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Rotate3D className="size-4" /> Drag to rotate · scroll to zoom · right-drag to pan
         </p>

@@ -254,7 +254,7 @@ export function FloorTo3D() {
         {busy === "model" && <div className="mt-3 flex h-56 items-center justify-center rounded-2xl border border-border text-xs text-muted-foreground">
           <LoaderCircle className="mr-2 animate-spin" /> Reconstructing geometry…
         </div>}
-        {plan && stage === "ready" && <div className="mt-3"><Furniture3DPreview plan={plan} /></div>}
+        {plan && dae && stage === "ready" && <div className="mt-3"><Furniture3DPreview plan={plan} daeDataUrl={dae} /></div>}
         {dae && summary && stage === "ready" && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
           <p className="mt-2 text-xs text-muted-foreground">{summary.count} {summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · {summary.outputUnits} · grouped by material</p>
