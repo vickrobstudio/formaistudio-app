@@ -600,6 +600,39 @@ function addRoundedBox(
   }
 }
 
+function addCustomExtrusion(
+  group: Group,
+  part: z.infer<typeof PartSchema>,
+  scale: number,
+) {
+  const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
+  const hz = part.height / 2;
+  const theta = (part.rotationDegZ * Math.PI) / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const base = group.positions.length / 3;
+  for (let level = 0; level < 2; level++) {
+    const z = level === 0 ? -hz : hz;
+    for (const [nx, ny] of outline) {
+      const lx = nx * part.width;
+      const ly = ny * part.depth;
+      const wx = part.cx + lx * cos - ly * sin;
+      const wy = part.cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (part.cz + z) * scale);
+    }
+  }
+  const n = outline.length;
+  for (let i = 0; i < n; i++) {
+    const next = (i + 1) % n;
+    const b0 = base + i, b1 = base + next;
+    const t0 = base + n + i, t1 = base + n + next;
+    group.indices.push(b0, b1, t1, b0, t1, t0);
+  }
+  for (let i = 1; i < n - 1; i++) {
+    group.indices.push(base, base + i + 1, base + i);
+    group.indices.push(base + n, base + n + i, base + n + i + 1);
+  }
+}
+
 function addWallWithOpenings(
   addCorners: (corners: [number, number, number][]) => void,
   wall: z.infer<typeof WallSchema>,
