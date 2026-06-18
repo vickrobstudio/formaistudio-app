@@ -403,7 +403,8 @@ export type PartShape =
   | "ellipse_cylinder"
   | "tapered_cylinder"
   | "torus"
-  | "rounded_box";
+  | "rounded_box"
+  | "custom_extrusion";
 
 export type FurniturePart = {
   name?: string;
@@ -411,6 +412,7 @@ export type FurniturePart = {
   cx: number; cy: number; cz: number;
   width: number; depth: number; height: number;
   rotationDegZ: number;
+  outline?: Array<[number, number]>;
   topDiameter?: number;
   tubeDiameter?: number;
   edgeRadius?: number;
