@@ -1061,6 +1061,20 @@ export const generateFloor3D = createServerFn({ method: "POST" })
         ? { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } }
         : { type: "image_url", image_url: { url: data.fileDataUrl } },
     ];
+    // In referenceOnly mode the source IS a finished rendering. Attach every
+    // additional reference the user supplied so the modeler can triangulate
+    // the silhouette, materials and grouping from multiple angles at 100%
+    // fidelity.
+    if (data.referenceOnly && data.referenceImages && data.referenceImages.length) {
+      userContent.push({
+        type: "text",
+        text: `ADDITIONAL REFERENCE IMAGES follow — they show the SAME piece/scene from different angles or lighting. Treat them together with the first image as the 100% fidelity source of truth for silhouette, part count, materials and grouping. Do not invent geometry that is not visible in any reference, and do not omit a feature that is visible in any reference.`,
+      });
+      for (const url of data.referenceImages) {
+        if (url === data.fileDataUrl) continue;
+        userContent.push({ type: "image_url", image_url: { url } });
+      }
+    }
     if (!data.referenceOnly && data.subject === "furniture" && data.approvedRenderUrl) {
       userContent.push({
         type: "text",
