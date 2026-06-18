@@ -877,13 +877,17 @@ function buildGroups(
       key: string,
       label: string,
       matId: MaterialId,
+      colorHex?: string,
     ) => {
-      const full = `${key}__${matId}`;
+      const color = parseHexColor(colorHex);
+      const colorKey = color ? `_${color.map((c) => Math.round(c * 255)).join("-")}` : "";
+      const full = `${key}__${matId}${colorKey}`;
       let b = cache.get(full);
       if (!b) {
         const matLabel = MATERIAL_PALETTE[matId]?.label ?? matId;
         const safe = full.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-        b = makeGroupBuilder(`group_${safe}`, `${label} — ${matLabel}`, scale, matId);
+        const niceLabel = colorHex ? `${label} — ${matLabel} (${colorHex.startsWith("#") ? colorHex : `#${colorHex}`})` : `${label} — ${matLabel}`;
+        b = makeGroupBuilder(`group_${safe}`, niceLabel, scale, matId, color);
         cache.set(full, b);
       }
       return b;
@@ -892,7 +896,7 @@ function buildGroups(
     const wallBuckets = new Map<string, ReturnType<typeof makeGroupBuilder>>();
     for (const wall of plan.walls) {
       const label = wall.layer === "exterior" ? "Walls - Exterior" : "Walls - Interior";
-      const b = bucketFor(wallBuckets, `walls_${wall.layer}`, label, wall.material);
+      const b = bucketFor(wallBuckets, `walls_${wall.layer}`, label, wall.material, wall.colorHex);
       addWallWithOpenings(b.addCorners, wall, wallHeightMeters);
     }
     for (const b of wallBuckets.values()) groups.push(b.group);
@@ -900,7 +904,7 @@ function buildGroups(
     if (plan.columns.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const c of plan.columns) {
-        const b = bucketFor(cache, "columns", "Columns", c.material);
+        const b = bucketFor(cache, "columns", "Columns", c.material, c.colorHex);
         addRotatedBox(b.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
       }
       for (const b of cache.values()) groups.push(b.group);
@@ -908,7 +912,7 @@ function buildGroups(
     if (plan.stairs.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const s of plan.stairs) {
-        const g = bucketFor(cache, "stairs", "Stairs", s.material);
+        const g = bucketFor(cache, "stairs", "Stairs", s.material, s.colorHex);
         const stepRise = s.height / s.steps;
         const stepRun = s.depth / s.steps;
         const theta = (s.rotationDegZ * Math.PI) / 180;
@@ -932,7 +936,7 @@ function buildGroups(
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const f of plan.fixtures) {
         const layerKey = (f.layer || "fixtures").trim().toLowerCase() || "fixtures";
-        const b = bucketFor(cache, `fixtures_${layerKey}`, `Fixtures - ${layerKey}`, f.material);
+        const b = bucketFor(cache, `fixtures_${layerKey}`, `Fixtures - ${layerKey}`, f.material, f.colorHex);
         addRotatedBox(b.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
       }
       for (const b of cache.values()) groups.push(b.group);
@@ -941,14 +945,18 @@ function buildGroups(
     // Group furniture parts by MATERIAL so each material becomes its own
     // selectable layer on .dae import (Stone — White, Wood — Oak, Metal —
     // Brass, …).
-    const byMaterial = new Map<MaterialId, ReturnType<typeof makeGroupBuilder>>();
+    const byMaterial = new Map<string, ReturnType<typeof makeGroupBuilder>>();
     plan.parts.forEach((part) => {
       const matId = part.material;
-      let bucket = byMaterial.get(matId);
+      const color = parseHexColor(part.colorHex);
+      const colorKey = color ? `_${color.map((c) => Math.round(c * 255)).join("-")}` : "";
+      const bucketKey = `${matId}${colorKey}`;
+      let bucket = byMaterial.get(bucketKey);
       if (!bucket) {
         const spec = MATERIAL_PALETTE[matId];
-        bucket = makeGroupBuilder(`group_mat_${matId}`, spec.label, scale, matId);
-        byMaterial.set(matId, bucket);
+        const label = part.colorHex ? `${spec.label} (${part.colorHex.startsWith("#") ? part.colorHex : `#${part.colorHex}`})` : spec.label;
+        bucket = makeGroupBuilder(`group_mat_${bucketKey}`, label, scale, matId, color);
+        byMaterial.set(bucketKey, bucket);
       }
       const g = bucket;
       const dx = part.width;
