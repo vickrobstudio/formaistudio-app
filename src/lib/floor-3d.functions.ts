@@ -976,7 +976,9 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       return { ok: false, error: "The detected geometry was incomplete. Try a clearer drawing with visible dimensions." };
     }
 
-    const plan = planResult.data;
+    const plan = planResult.data.kind === "furniture"
+      ? enforcePromptShapeTraits(planResult.data, data.masterPrompt, data.approvedRenderUrl)
+      : planResult.data;
     const dae = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
     const elementCount = plan.kind === "building"
