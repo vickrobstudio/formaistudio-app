@@ -456,6 +456,16 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
+function parseHexColor(hex?: string): [number, number, number] | undefined {
+  if (!hex) return undefined;
+  const clean = hex.replace(/^#/, "").trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return undefined;
+  const r = parseInt(clean.slice(0, 2), 16) / 255;
+  const g = parseInt(clean.slice(2, 4), 16) / 255;
+  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  return [r, g, b];
+}
+
 function makeGroupBuilder(
   id: string,
   name: string,
