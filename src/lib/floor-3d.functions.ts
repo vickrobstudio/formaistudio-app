@@ -685,9 +685,19 @@ function buildGroups(
       for (const bucket of byLayer.values()) groups.push(bucket.group);
     }
   } else {
-    plan.parts.forEach((part, i) => {
-      const safe = (part.name || `part_${i + 1}`).replace(/[^A-Za-z0-9]+/g, "_");
-      const g = makeGroupBuilder(`group_${safe}_${i}`, part.name || `Part ${i + 1}`, scale);
+    // Group furniture parts by MATERIAL so each material becomes its own
+    // selectable layer on .dae import (Stone — White, Wood — Oak, Metal —
+    // Brass, …).
+    const byMaterial = new Map<MaterialId, ReturnType<typeof makeGroupBuilder>>();
+    plan.parts.forEach((part) => {
+      const matId = part.material;
+      let bucket = byMaterial.get(matId);
+      if (!bucket) {
+        const spec = MATERIAL_PALETTE[matId];
+        bucket = makeGroupBuilder(`group_mat_${matId}`, spec.label, scale, matId);
+        byMaterial.set(matId, bucket);
+      }
+      const g = bucket;
       const dx = part.width;
       const dy = part.shape === "cylinder" || part.shape === "tapered_cylinder" ? part.width : part.depth;
       const edge = part.edgeRadius ?? 0;
@@ -705,8 +715,8 @@ function buildGroups(
       } else {
         addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
       }
-      groups.push(g.group);
     });
+    for (const bucket of byMaterial.values()) groups.push(bucket.group);
   }
 
   return groups.filter((g) => g.positions.length > 0);
