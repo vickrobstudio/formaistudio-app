@@ -234,10 +234,10 @@ export function FloorTo3D() {
           </div>)}
         </div>}
         {referenceImages.length > 0 && stage !== "modeling" && stage !== "ready" && <div className="mt-4 rounded-2xl border border-dashed border-foreground/40 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Already have a rendering?</p>
-          <p className="mt-2 text-xs text-muted-foreground">If your first reference is the finished rendering you want to model, skip the prompt and approval steps and go straight to the live 3D preview.</p>
-          <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void buildFromReferenceRendering()}>
-            <span>{busy === "model" ? "Reconstructing geometry…" : "Use reference rendering · skip to 3D"}</span>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Plan + reference rendering detected</p>
+          <p className="mt-2 text-xs text-muted-foreground">{fileDataUrl ? "Skipping prompt and approval render. Geometry comes from your 2D plan; materials and groups in the live 3D preview match your reference rendering at 100% fidelity." : "Upload your 2D plan above to unlock direct 3D reconstruction."}</p>
+          <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== "" || !fileDataUrl} onClick={() => void buildFromReferenceRendering()}>
+            <span>{busy === "model" ? "Reconstructing geometry…" : "Build 3D from plan + rendering"}</span>
             {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
           </Button>
         </div>}
