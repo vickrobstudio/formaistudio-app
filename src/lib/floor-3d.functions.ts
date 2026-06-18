@@ -255,14 +255,14 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
-type Group = { id: string; name: string; positions: number[]; indices: number[] };
+type Group = { id: string; name: string; positions: number[]; indices: number[]; materialId: MaterialId };
 
-function makeGroupBuilder(id: string, name: string, scale: number): {
+function makeGroupBuilder(id: string, name: string, scale: number, materialId: MaterialId = "other"): {
   group: Group;
   addCorners: (corners: [number, number, number][]) => void;
   addBox: (minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number) => void;
 } {
-  const group: Group = { id, name, positions: [], indices: [] };
+  const group: Group = { id, name, positions: [], indices: [], materialId };
   function addCorners(corners: [number, number, number][]) {
     const base = group.positions.length / 3;
     for (const [x, y, z] of corners) group.positions.push(x * scale, y * scale, z * scale);
