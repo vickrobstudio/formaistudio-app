@@ -15,7 +15,7 @@ const SYSTEM = `You read a technical drawing of a single furniture piece or a si
 
 The paragraph must include:
 - The object type and overall silhouette/shape (e.g. "oval bar-height pedestal table", "L-shaped sectional sofa").
-- EVERY distinct part with its real-world dimension and material — read printed callouts, dimensions and material codes (e.g. "ST-05 Calacatta stone top 2'-10\\" × 1'-8\\" with full bullnose oak edge profile WD-09, 3\\" Ø solid white oak tapered pedestal column 2'-4\\" tall, brass MT-02 footrest ring, 1'-0\\" diameter solid oak base disc, total height 3'-6\\"").
+- EVERY distinct part with its real-world dimension and material — read printed callouts, dimensions and material codes (e.g. "ST-05 Calacatta stone top 2'-10\" × 1'-8\" with full bullnose oak edge profile WD-09, 3\" Ø solid white oak tapered pedestal column 2'-4\" tall, brass MT-02 footrest ring, 1'-0\" diameter solid oak base disc, total height 3'-6\"").
 - Materials and finishes called out in the drawing or visible in reference photos (stone type, wood species, metal finish, leather/fabric, glass).
 - Lighting and camera: soft studio lighting, three-quarter view, neutral seamless background, 50mm lens, eye-level for furniture / interior architectural shot for buildings.
 - The look: photoreal, 8K, luxury editorial product photography, realistic warm white balance, accurate material reflectance, natural contact shadows, no text, no logos, no watermarks.
