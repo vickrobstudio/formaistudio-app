@@ -55,6 +55,7 @@ const WallSchema = z.object({
   openings: z.array(OpeningSchema).max(20).default([]),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const ColumnSchema = z.object({
@@ -66,6 +67,7 @@ const ColumnSchema = z.object({
   rotationDegZ: z.number().default(0),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const StairSchema = z.object({
@@ -78,6 +80,7 @@ const StairSchema = z.object({
   rotationDegZ: z.number().default(0),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const FixtureSchema = z.object({
@@ -90,6 +93,7 @@ const FixtureSchema = z.object({
   rotationDegZ: z.number().default(0),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const BuildingPlanSchema = z.object({
@@ -137,6 +141,7 @@ const PartSchema = z.object({
   // .dae export into one selectable material layer per material.
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const FurniturePlanSchema = z.object({
@@ -218,7 +223,8 @@ function buildingReferenceRenderingInstruction() {
 
 REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials, textures and grouping:
 - Reconstruct the visible walls, floor edges, columns, stairs, built-in fixtures, cabinetry and major furniture exactly as they appear in the rendering. Silhouette, count and arrangement of parts MUST match the image 1:1.
-- MATERIALS: assign each element the material id whose visible finish most closely matches the rendering (wood tone, stone color, metal finish, glass, fabric). Put the descriptive finish from the rendering ("warm white oak", "Calacatta marble", "brushed brass", "smoked glass") in "materialNote" so the live preview and .dae groups read with the same texture family as the rendering.
+- MATERIALS: assign each element the material id whose visible finish most closely matches the rendering (wood tone, stone color, metal finish, glass, fabric). Put the descriptive finish from the rendering ("warm white oak", "Calacatta marble", "brushed brass", "smoked glass") in "materialNote".
+- COLOR — MANDATORY: for EVERY element you output (walls, columns, stairs, fixtures) you MUST also include "colorHex": the EXACT sRGB hex (#RRGGBB) of the dominant visible surface color in the rendering for that element, sampled as if with an eyedropper at a representative lit (not shadowed, not blown-out highlight) area. This colour is rendered verbatim in the live 3D preview and the .dae export — it is how the model will look identical to the rendering. Do not invent a colour: pick what is actually in the pixels.
 - GROUPING: every visually distinct material region in the rendering must be its OWN entry so it imports as its own .dae group/layer (separate "exterior" vs "interior" walls, separate kitchen vs bath vs furniture fixtures, separate stair from slab). Never merge two different materials into one entry.
 - There may be NO printed dimensions. Infer realistic proportions from visible architectural scale and keep the model coherent.
 - Do not output annotations, text, dimension marks, cameras, lights, background scenery, plants, people, loose decor, shadows or image-plane billboards.
@@ -241,19 +247,20 @@ Return JSON ONLY in this exact shape:
         { "kind": "door"|"window", "position": <m from wall start>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
       ],
       "material": "stone_white"|"stone_dark"|"wood_oak"|"wood_walnut"|"wood_dark"|"metal_brass"|"metal_chrome"|"metal_black"|"fabric_neutral"|"leather_dark"|"glass"|"plastic_white"|"plastic_black"|"other",
-      "materialNote": "<finish from the rendering, e.g. 'limewashed plaster', 'travertine'>"
+      "materialNote": "<finish from the rendering, e.g. 'limewashed plaster', 'travertine'>",
+      "colorHex": "#RRGGBB"
     }
   ],
-  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
-  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
-  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ]
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>", "colorHex": "#RRGGBB" } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>", "colorHex": "#RRGGBB" } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>", "colorHex": "#RRGGBB" } ]
 }
 
 Rules:
 - Origin (0,0) at the lower-left of the reconstructed footprint, +x right, +y depth.
 - Include at least the main visible wall envelope. Use typical wall thickness 0.12–0.25 m if unknown.
 - Use realistic architectural scale: doors around 0.8–1.0 m wide and 2.1 m high, counters around 0.9 m high, rooms around 2.4–3.5 m high.
-- EVERY element MUST carry the "material" id whose visible finish in the rendering matches best, so the .dae imports with one selectable group per material (plaster walls separate from stone walls, wood cabinets separate from stone counters, brass hardware separate from chrome, etc.). Never default to "other" when a finish is clearly visible.
+- EVERY element MUST carry both the "material" id (closest finish family) AND a sampled "colorHex" so the .dae imports with one selectable group per (material × colour) and the rendered colour matches the reference image exactly. Never default to "other" when a finish is clearly visible, and never omit "colorHex".
 - Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 }
 
@@ -351,7 +358,8 @@ function furnitureReferenceRenderingInstruction() {
 
 REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials, textures and grouping:
 - The silhouette, part count, part grouping, proportions and material separation in the rendering are LAW. The reconstructed 3D piece must read identically to the rendering from any angle.
-- MATERIALS / TEXTURES: every part MUST carry the "material" id whose visible finish most closely matches the rendering (stone_white, stone_dark, wood_oak, wood_walnut, wood_dark, metal_brass, metal_chrome, metal_black, fabric_neutral, leather_dark, glass, plastic_white, plastic_black, other). Describe the finish from the rendering ("Calacatta marble", "warm white oak", "brushed brass", "smoked glass") in "materialNote" so the live preview and the .dae groups carry the same texture family as the rendering.
+- MATERIALS / TEXTURES: every part MUST carry the "material" id whose visible finish most closely matches the rendering (stone_white, stone_dark, wood_oak, wood_walnut, wood_dark, metal_brass, metal_chrome, metal_black, fabric_neutral, leather_dark, glass, plastic_white, plastic_black, other). Describe the finish from the rendering ("Calacatta marble", "warm white oak", "brushed brass", "smoked glass") in "materialNote".
+- COLOR — MANDATORY: every part MUST also include "colorHex": the EXACT sRGB hex (#RRGGBB) sampled from the rendering at a representative lit area of that part (not in shadow, not in a blown-out specular highlight). This colour is applied verbatim to the live 3D preview and the exported .dae so the model reads with the same shape, materials AND colours as the rendering. Never invent a colour and never omit this field.
 - GROUPING: every visually distinct material region in the rendering is its OWN part so each material imports as its own selectable .dae group/layer (e.g. stone top + wood edge band + metal ring + wood base + brass glides = 5 parts, never merged). NEVER fuse two different materials/finishes into one part.
 - Do NOT separate a single visually-continuous shape into multiple disjoint parts. If the rendering shows ONE flowing curved shell in ONE material, model it as ONE primitive (or one tight group of primitives that read as one shell).
 - Trace the rendering's OUTER CONTOUR first. For any silhouette that is not a simple box/circle/oval, use "custom_extrusion" with 16–96 outline points that match the render's outline (scallops, waves, kidney, boomerang, asymmetry).
@@ -376,7 +384,8 @@ Return JSON ONLY in this exact shape:
       "tubeDiameter": <m>,
       "edgeRadius": <m>,
       "material": "stone_white" | "stone_dark" | "wood_oak" | "wood_walnut" | "wood_dark" | "metal_brass" | "metal_chrome" | "metal_black" | "fabric_neutral" | "leather_dark" | "glass" | "plastic_white" | "plastic_black" | "other",
-      "materialNote": "<optional finish description>"
+      "materialNote": "<optional finish description>",
+      "colorHex": "#RRGGBB"
     }
   ]
 }
@@ -430,7 +439,17 @@ function enforcePromptShapeTraits(plan: FurniturePlan, masterPrompt?: string, ap
   };
 }
 
-type Group = { id: string; name: string; positions: number[]; indices: number[]; materialId: MaterialId };
+type Group = {
+  id: string;
+  name: string;
+  positions: number[];
+  indices: number[];
+  materialId: MaterialId;
+  // Per-element sRGB colour sampled from the reference rendering. When set,
+  // this overrides the palette colour in both the .dae export and any client
+  // that reads the .dae effects (the live preview loads the .dae).
+  colorOverride?: [number, number, number];
+};
 
 function escapeXml(value: string) {
   return value
@@ -441,12 +460,28 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
-function makeGroupBuilder(id: string, name: string, scale: number, materialId: MaterialId = "other"): {
+function parseHexColor(hex?: string): [number, number, number] | undefined {
+  if (!hex) return undefined;
+  const clean = hex.replace(/^#/, "").trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(clean)) return undefined;
+  const r = parseInt(clean.slice(0, 2), 16) / 255;
+  const g = parseInt(clean.slice(2, 4), 16) / 255;
+  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  return [r, g, b];
+}
+
+function makeGroupBuilder(
+  id: string,
+  name: string,
+  scale: number,
+  materialId: MaterialId = "other",
+  colorOverride?: [number, number, number],
+): {
   group: Group;
   addCorners: (corners: [number, number, number][]) => void;
   addBox: (minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number) => void;
 } {
-  const group: Group = { id, name, positions: [], indices: [], materialId };
+  const group: Group = { id, name, positions: [], indices: [], materialId, colorOverride };
   function addCorners(corners: [number, number, number][]) {
     const base = group.positions.length / 3;
     for (const [x, y, z] of corners) group.positions.push(x * scale, y * scale, z * scale);
@@ -856,13 +891,17 @@ function buildGroups(
       key: string,
       label: string,
       matId: MaterialId,
+      colorHex?: string,
     ) => {
-      const full = `${key}__${matId}`;
+      const color = parseHexColor(colorHex);
+      const colorKey = color ? `_${color.map((c) => Math.round(c * 255)).join("-")}` : "";
+      const full = `${key}__${matId}${colorKey}`;
       let b = cache.get(full);
       if (!b) {
         const matLabel = MATERIAL_PALETTE[matId]?.label ?? matId;
         const safe = full.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-        b = makeGroupBuilder(`group_${safe}`, `${label} — ${matLabel}`, scale, matId);
+        const niceLabel = colorHex ? `${label} — ${matLabel} (${colorHex.startsWith("#") ? colorHex : `#${colorHex}`})` : `${label} — ${matLabel}`;
+        b = makeGroupBuilder(`group_${safe}`, niceLabel, scale, matId, color);
         cache.set(full, b);
       }
       return b;
@@ -871,7 +910,7 @@ function buildGroups(
     const wallBuckets = new Map<string, ReturnType<typeof makeGroupBuilder>>();
     for (const wall of plan.walls) {
       const label = wall.layer === "exterior" ? "Walls - Exterior" : "Walls - Interior";
-      const b = bucketFor(wallBuckets, `walls_${wall.layer}`, label, wall.material);
+      const b = bucketFor(wallBuckets, `walls_${wall.layer}`, label, wall.material, wall.colorHex);
       addWallWithOpenings(b.addCorners, wall, wallHeightMeters);
     }
     for (const b of wallBuckets.values()) groups.push(b.group);
@@ -879,7 +918,7 @@ function buildGroups(
     if (plan.columns.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const c of plan.columns) {
-        const b = bucketFor(cache, "columns", "Columns", c.material);
+        const b = bucketFor(cache, "columns", "Columns", c.material, c.colorHex);
         addRotatedBox(b.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
       }
       for (const b of cache.values()) groups.push(b.group);
@@ -887,7 +926,7 @@ function buildGroups(
     if (plan.stairs.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const s of plan.stairs) {
-        const g = bucketFor(cache, "stairs", "Stairs", s.material);
+        const g = bucketFor(cache, "stairs", "Stairs", s.material, s.colorHex);
         const stepRise = s.height / s.steps;
         const stepRun = s.depth / s.steps;
         const theta = (s.rotationDegZ * Math.PI) / 180;
@@ -911,7 +950,7 @@ function buildGroups(
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const f of plan.fixtures) {
         const layerKey = (f.layer || "fixtures").trim().toLowerCase() || "fixtures";
-        const b = bucketFor(cache, `fixtures_${layerKey}`, `Fixtures - ${layerKey}`, f.material);
+        const b = bucketFor(cache, `fixtures_${layerKey}`, `Fixtures - ${layerKey}`, f.material, f.colorHex);
         addRotatedBox(b.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
       }
       for (const b of cache.values()) groups.push(b.group);
@@ -920,14 +959,18 @@ function buildGroups(
     // Group furniture parts by MATERIAL so each material becomes its own
     // selectable layer on .dae import (Stone — White, Wood — Oak, Metal —
     // Brass, …).
-    const byMaterial = new Map<MaterialId, ReturnType<typeof makeGroupBuilder>>();
+    const byMaterial = new Map<string, ReturnType<typeof makeGroupBuilder>>();
     plan.parts.forEach((part) => {
       const matId = part.material;
-      let bucket = byMaterial.get(matId);
+      const color = parseHexColor(part.colorHex);
+      const colorKey = color ? `_${color.map((c) => Math.round(c * 255)).join("-")}` : "";
+      const bucketKey = `${matId}${colorKey}`;
+      let bucket = byMaterial.get(bucketKey);
       if (!bucket) {
         const spec = MATERIAL_PALETTE[matId];
-        bucket = makeGroupBuilder(`group_mat_${matId}`, spec.label, scale, matId);
-        byMaterial.set(matId, bucket);
+        const label = part.colorHex ? `${spec.label} (${part.colorHex.startsWith("#") ? part.colorHex : `#${part.colorHex}`})` : spec.label;
+        bucket = makeGroupBuilder(`group_mat_${bucketKey}`, label, scale, matId, color);
+        byMaterial.set(bucketKey, bucket);
       }
       const g = bucket;
       const dx = part.width;
@@ -967,33 +1010,32 @@ function buildDae(
     ? '<unit name="foot" meter="0.3048"/>'
     : '<unit name="meter" meter="1"/>';
 
-  // Collect every material actually used so each gets its own <effect> /
-  // <material> entry, and each geometry binds to its matching material.
-  const usedMaterialIds = Array.from(new Set(groups.map((g) => g.materialId)));
-  const matSymbol = (id: MaterialId) => `mat_${id}_sg`;
-  const matId = (id: MaterialId) => `mat_${id}`;
-  const matEffectId = (id: MaterialId) => `mat_${id}_fx`;
+  // Emit one <effect> + <material> per GROUP so per-element colour overrides
+  // sampled from the reference rendering survive the export. Groups that share
+  // a material id + colour will reuse the same effect.
+  const matSymbol = (gid: string) => `${gid}_mat_sg`;
+  const matIdOf = (gid: string) => `${gid}_mat`;
+  const matEffectId = (gid: string) => `${gid}_mat_fx`;
 
-  const effectsXml = usedMaterialIds.map((id) => {
-    const spec = MATERIAL_PALETTE[id];
-    const [r, g, b] = spec.color;
+  const effectsXml = groups.map((g) => {
+    const spec = MATERIAL_PALETTE[g.materialId];
+    const [r, gr, b] = g.colorOverride ?? spec.color;
     const transparency = spec.transmission && spec.transmission > 0 ? 1 - spec.transmission : 1;
-    return `    <effect id="${matEffectId(id)}"><profile_COMMON><technique sid="common"><lambert>
-      <diffuse><color>${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} ${transparency.toFixed(3)}</color></diffuse>
+    return `    <effect id="${matEffectId(g.id)}"><profile_COMMON><technique sid="common"><lambert>
+      <diffuse><color>${r.toFixed(3)} ${gr.toFixed(3)} ${b.toFixed(3)} ${transparency.toFixed(3)}</color></diffuse>
       <transparency><float>${transparency.toFixed(3)}</float></transparency>
     </lambert></technique></profile_COMMON></effect>`;
   }).join("\n");
 
-  const materialsXml = usedMaterialIds.map((id) => {
-    const spec = MATERIAL_PALETTE[id];
-    return `    <material id="${matId(id)}" name="${escapeXml(spec.label)}"><instance_effect url="#${matEffectId(id)}"/></material>`;
+  const materialsXml = groups.map((g) => {
+    return `    <material id="${matIdOf(g.id)}" name="${escapeXml(g.name)}"><instance_effect url="#${matEffectId(g.id)}"/></material>`;
   }).join("\n");
 
   const geometriesXml = groups.map((g) => {
     const positionText = g.positions.map((n) => n.toFixed(4)).join(" ");
     const triCount = g.indices.length / 3;
     const pIndex = g.indices.join(" ");
-    const sym = matSymbol(g.materialId);
+    const sym = matSymbol(g.id);
     return `    <geometry id="${g.id}_geom" name="${escapeXml(g.name)}">
       <mesh>
         <source id="${g.id}_pos">
@@ -1010,10 +1052,10 @@ function buildDae(
   }).join("\n");
 
   const nodesXml = groups.map((g) => {
-    const sym = matSymbol(g.materialId);
+    const sym = matSymbol(g.id);
     return `      <node id="${g.id}_node" name="${escapeXml(g.name)}">
         <instance_geometry url="#${g.id}_geom">
-          <bind_material><technique_common><instance_material symbol="${sym}" target="#${matId(g.materialId)}"/></technique_common></bind_material>
+          <bind_material><technique_common><instance_material symbol="${sym}" target="#${matIdOf(g.id)}"/></technique_common></bind_material>
         </instance_geometry>
       </node>`;
   }).join("\n");
