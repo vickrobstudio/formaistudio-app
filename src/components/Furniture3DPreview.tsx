@@ -20,9 +20,12 @@ function useDaeScene(daeDataUrl: string) {
   useEffect(() => {
     let cancelled = false;
     const loader = new ColladaLoader();
-    loader.load(
-      daeDataUrl,
-      (collada) => {
+    const run = async () => {
+      try {
+        const res = await fetch(daeDataUrl);
+        const text = await res.text();
+        if (cancelled) return;
+        const collada = loader.parse(text, "");
         if (cancelled || !collada?.scene) return;
         const root = collada.scene as unknown as THREE.Group;
         // .dae authored Z-up; rotate the whole group so three's Y-up scene
@@ -46,10 +49,11 @@ function useDaeScene(daeDataUrl: string) {
           }
         });
         setScene(root);
-      },
-      undefined,
-      (err) => console.error("ColladaLoader failed", err),
-    );
+      } catch (err) {
+        console.error("ColladaLoader failed", err);
+      }
+    };
+    void run();
     return () => { cancelled = true; };
   }, [daeDataUrl]);
   return scene;
