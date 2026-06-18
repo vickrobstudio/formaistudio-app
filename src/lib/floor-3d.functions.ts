@@ -44,6 +44,8 @@ const WallSchema = z.object({
   thickness: z.number().min(0.05).max(1).default(0.15),
   height: z.number().min(0.5).max(15).optional(),
   openings: z.array(OpeningSchema).max(20).default([]),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const ColumnSchema = z.object({
@@ -53,6 +55,8 @@ const ColumnSchema = z.object({
   depth: z.number().positive(),
   height: z.number().positive(),
   rotationDegZ: z.number().default(0),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const StairSchema = z.object({
@@ -63,6 +67,8 @@ const StairSchema = z.object({
   height: z.number().positive(),
   steps: z.number().int().min(1).max(60).default(12),
   rotationDegZ: z.number().default(0),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const FixtureSchema = z.object({
@@ -73,6 +79,8 @@ const FixtureSchema = z.object({
   depth: z.number().positive(),
   height: z.number().positive(),
   rotationDegZ: z.number().default(0),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const BuildingPlanSchema = z.object({
