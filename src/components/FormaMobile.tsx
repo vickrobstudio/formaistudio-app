@@ -42,7 +42,7 @@ export function PageIntro({ eyebrow, title, description, children }: { eyebrow: 
 export function ToolTabBar() {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const isActive = (label: string, to: string) => {
-    if (label === "Tools") return ["/tools", "/studio", "/model-to-ai", "/floor-to-3d", "/ai-edits", "/photo-to-ai", "/ai-to-video"].includes(path);
+    if (label === "Tools") return ["/tools", "/studio", "/model-to-ai", "/2d-to-3d", "/ai-edits", "/photo-to-ai", "/ai-to-video"].includes(path);
     if (label === "Profile") return ["/dashboard", "/account", "/cloud", "/history"].includes(path);
     if (label === "Settings") return ["/settings", "/wallet", "/about", "/terms", "/privacy", "/contact"].includes(path);
     return path === to;
