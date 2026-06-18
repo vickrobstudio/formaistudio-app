@@ -55,6 +55,7 @@ const WallSchema = z.object({
   openings: z.array(OpeningSchema).max(20).default([]),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const ColumnSchema = z.object({
@@ -66,6 +67,7 @@ const ColumnSchema = z.object({
   rotationDegZ: z.number().default(0),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const StairSchema = z.object({
@@ -78,6 +80,7 @@ const StairSchema = z.object({
   rotationDegZ: z.number().default(0),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const FixtureSchema = z.object({
@@ -90,6 +93,7 @@ const FixtureSchema = z.object({
   rotationDegZ: z.number().default(0),
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const BuildingPlanSchema = z.object({
@@ -137,6 +141,7 @@ const PartSchema = z.object({
   // .dae export into one selectable material layer per material.
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
+  colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
 });
 
 const FurniturePlanSchema = z.object({
