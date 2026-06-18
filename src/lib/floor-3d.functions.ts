@@ -44,6 +44,8 @@ const WallSchema = z.object({
   thickness: z.number().min(0.05).max(1).default(0.15),
   height: z.number().min(0.5).max(15).optional(),
   openings: z.array(OpeningSchema).max(20).default([]),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const ColumnSchema = z.object({
@@ -53,6 +55,8 @@ const ColumnSchema = z.object({
   depth: z.number().positive(),
   height: z.number().positive(),
   rotationDegZ: z.number().default(0),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const StairSchema = z.object({
@@ -63,6 +67,8 @@ const StairSchema = z.object({
   height: z.number().positive(),
   steps: z.number().int().min(1).max(60).default(12),
   rotationDegZ: z.number().default(0),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const FixtureSchema = z.object({
@@ -73,6 +79,8 @@ const FixtureSchema = z.object({
   depth: z.number().positive(),
   height: z.number().positive(),
   rotationDegZ: z.number().default(0),
+  material: z.enum(MATERIAL_IDS).default("other"),
+  materialNote: z.string().max(120).optional(),
 });
 
 const BuildingPlanSchema = z.object({
@@ -222,18 +230,21 @@ Return JSON ONLY in this exact shape:
       "height": <optional m>,
       "openings": [
         { "kind": "door"|"window", "position": <m from wall start>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
-      ]
+      ],
+      "material": "stone_white"|"stone_dark"|"wood_oak"|"wood_walnut"|"wood_dark"|"metal_brass"|"metal_chrome"|"metal_black"|"fabric_neutral"|"leather_dark"|"glass"|"plastic_white"|"plastic_black"|"other",
+      "materialNote": "<finish from the rendering, e.g. 'limewashed plaster', 'travertine'>"
     }
   ],
-  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
-  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
-  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "material": "<id>", "materialNote": "<finish>" } ]
 }
 
 Rules:
 - Origin (0,0) at the lower-left of the reconstructed footprint, +x right, +y depth.
 - Include at least the main visible wall envelope. Use typical wall thickness 0.12–0.25 m if unknown.
 - Use realistic architectural scale: doors around 0.8–1.0 m wide and 2.1 m high, counters around 0.9 m high, rooms around 2.4–3.5 m high.
+- EVERY element MUST carry the "material" id whose visible finish in the rendering matches best, so the .dae imports with one selectable group per material (plaster walls separate from stone walls, wood cabinets separate from stone counters, brass hardware separate from chrome, etc.). Never default to "other" when a finish is clearly visible.
 - Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 }
 
@@ -829,25 +840,45 @@ function buildGroups(
     slab.addBox(0, 0, -0.05, plan.bounds.width, plan.bounds.length, 0);
     groups.push(slab.group);
 
-    const exterior = makeGroupBuilder("group_walls_exterior", "Walls - Exterior", scale);
-    const interior = makeGroupBuilder("group_walls_interior", "Walls - Interior", scale);
+    // Group by (category, material) so each visually distinct material region
+    // in the rendering becomes its own selectable .dae layer.
+    const bucketFor = (
+      cache: Map<string, ReturnType<typeof makeGroupBuilder>>,
+      key: string,
+      label: string,
+      matId: MaterialId,
+    ) => {
+      const full = `${key}__${matId}`;
+      let b = cache.get(full);
+      if (!b) {
+        const matLabel = MATERIAL_PALETTE[matId]?.label ?? matId;
+        const safe = full.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+        b = makeGroupBuilder(`group_${safe}`, `${label} — ${matLabel}`, scale, matId);
+        cache.set(full, b);
+      }
+      return b;
+    };
+
+    const wallBuckets = new Map<string, ReturnType<typeof makeGroupBuilder>>();
     for (const wall of plan.walls) {
-      const target = wall.layer === "exterior" ? exterior : interior;
-      addWallWithOpenings(target.addCorners, wall, wallHeightMeters);
+      const label = wall.layer === "exterior" ? "Walls - Exterior" : "Walls - Interior";
+      const b = bucketFor(wallBuckets, `walls_${wall.layer}`, label, wall.material);
+      addWallWithOpenings(b.addCorners, wall, wallHeightMeters);
     }
-    if (exterior.group.positions.length) groups.push(exterior.group);
-    if (interior.group.positions.length) groups.push(interior.group);
+    for (const b of wallBuckets.values()) groups.push(b.group);
 
     if (plan.columns.length) {
-      const g = makeGroupBuilder("group_columns", "Columns", scale);
+      const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const c of plan.columns) {
-        addRotatedBox(g.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
+        const b = bucketFor(cache, "columns", "Columns", c.material);
+        addRotatedBox(b.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
       }
-      groups.push(g.group);
+      for (const b of cache.values()) groups.push(b.group);
     }
     if (plan.stairs.length) {
-      const g = makeGroupBuilder("group_stairs", "Stairs", scale);
+      const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const s of plan.stairs) {
+        const g = bucketFor(cache, "stairs", "Stairs", s.material);
         const stepRise = s.height / s.steps;
         const stepRun = s.depth / s.steps;
         const theta = (s.rotationDegZ * Math.PI) / 180;
@@ -865,21 +896,16 @@ function buildGroups(
           ]);
         }
       }
-      groups.push(g.group);
+      for (const b of cache.values()) groups.push(b.group);
     }
     if (plan.fixtures.length) {
-      const byLayer = new Map<string, ReturnType<typeof makeGroupBuilder>>();
+      const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const f of plan.fixtures) {
         const layerKey = (f.layer || "fixtures").trim().toLowerCase() || "fixtures";
-        let bucket = byLayer.get(layerKey);
-        if (!bucket) {
-          const safe = layerKey.replace(/[^a-z0-9]+/g, "_");
-          bucket = makeGroupBuilder(`group_fixtures_${safe}`, `Fixtures - ${layerKey}`, scale);
-          byLayer.set(layerKey, bucket);
-        }
-        addRotatedBox(bucket.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
+        const b = bucketFor(cache, `fixtures_${layerKey}`, `Fixtures - ${layerKey}`, f.material);
+        addRotatedBox(b.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
       }
-      for (const bucket of byLayer.values()) groups.push(bucket.group);
+      for (const b of cache.values()) groups.push(b.group);
     }
   } else {
     // Group furniture parts by MATERIAL so each material becomes its own
