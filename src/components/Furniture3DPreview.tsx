@@ -13,6 +13,20 @@ import {
 
 function buildGeometry(part: FurniturePart): THREE.BufferGeometry {
   switch (part.shape) {
+    case "custom_extrusion": {
+      const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
+      const shape = new THREE.Shape();
+      outline.forEach(([x, y], index) => {
+        const sx = x * part.width;
+        const sy = y * part.depth;
+        if (index === 0) shape.moveTo(sx, sy);
+        else shape.lineTo(sx, sy);
+      });
+      shape.closePath();
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: part.height, bevelEnabled: Boolean(part.edgeRadius), bevelSize: part.edgeRadius ?? 0, bevelThickness: part.edgeRadius ?? 0, bevelSegments: 5 });
+      geo.translate(0, 0, -part.height / 2);
+      return geo;
+    }
     case "cylinder": {
       const r = part.width / 2;
       return new THREE.CylinderGeometry(r, r, part.height, 64);
