@@ -1006,33 +1006,32 @@ function buildDae(
     ? '<unit name="foot" meter="0.3048"/>'
     : '<unit name="meter" meter="1"/>';
 
-  // Collect every material actually used so each gets its own <effect> /
-  // <material> entry, and each geometry binds to its matching material.
-  const usedMaterialIds = Array.from(new Set(groups.map((g) => g.materialId)));
-  const matSymbol = (id: MaterialId) => `mat_${id}_sg`;
-  const matId = (id: MaterialId) => `mat_${id}`;
-  const matEffectId = (id: MaterialId) => `mat_${id}_fx`;
+  // Emit one <effect> + <material> per GROUP so per-element colour overrides
+  // sampled from the reference rendering survive the export. Groups that share
+  // a material id + colour will reuse the same effect.
+  const matSymbol = (gid: string) => `${gid}_mat_sg`;
+  const matIdOf = (gid: string) => `${gid}_mat`;
+  const matEffectId = (gid: string) => `${gid}_mat_fx`;
 
-  const effectsXml = usedMaterialIds.map((id) => {
-    const spec = MATERIAL_PALETTE[id];
-    const [r, g, b] = spec.color;
+  const effectsXml = groups.map((g) => {
+    const spec = MATERIAL_PALETTE[g.materialId];
+    const [r, gr, b] = g.colorOverride ?? spec.color;
     const transparency = spec.transmission && spec.transmission > 0 ? 1 - spec.transmission : 1;
-    return `    <effect id="${matEffectId(id)}"><profile_COMMON><technique sid="common"><lambert>
-      <diffuse><color>${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} ${transparency.toFixed(3)}</color></diffuse>
+    return `    <effect id="${matEffectId(g.id)}"><profile_COMMON><technique sid="common"><lambert>
+      <diffuse><color>${r.toFixed(3)} ${gr.toFixed(3)} ${b.toFixed(3)} ${transparency.toFixed(3)}</color></diffuse>
       <transparency><float>${transparency.toFixed(3)}</float></transparency>
     </lambert></technique></profile_COMMON></effect>`;
   }).join("\n");
 
-  const materialsXml = usedMaterialIds.map((id) => {
-    const spec = MATERIAL_PALETTE[id];
-    return `    <material id="${matId(id)}" name="${escapeXml(spec.label)}"><instance_effect url="#${matEffectId(id)}"/></material>`;
+  const materialsXml = groups.map((g) => {
+    return `    <material id="${matIdOf(g.id)}" name="${escapeXml(g.name)}"><instance_effect url="#${matEffectId(g.id)}"/></material>`;
   }).join("\n");
 
   const geometriesXml = groups.map((g) => {
     const positionText = g.positions.map((n) => n.toFixed(4)).join(" ");
     const triCount = g.indices.length / 3;
     const pIndex = g.indices.join(" ");
-    const sym = matSymbol(g.materialId);
+    const sym = matSymbol(g.id);
     return `    <geometry id="${g.id}_geom" name="${escapeXml(g.name)}">
       <mesh>
         <source id="${g.id}_pos">
