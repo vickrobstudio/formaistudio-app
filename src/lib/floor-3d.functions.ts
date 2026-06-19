@@ -1041,11 +1041,30 @@ function buildGroups(
         const tube = part.tubeDiameter ?? Math.min(part.height, 0.015);
         addTorus(g.group, part.cx, part.cy, part.cz, dx, dy, tube, part.rotationDegZ, scale, 64, 16);
       } else if (part.shape === "rounded_box") {
-        addRoundedBox(g.group, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ, scale, edge || 0.01);
+        addRoundedBox(
+          g.group,
+          part.cx, part.cy, part.cz,
+          part.width, part.depth, part.height,
+          part.rotationDegZ, scale,
+          edge || 0.01,
+          8,
+          edge || Math.min(0.01, part.height / 2),
+        );
       } else if (part.shape === "custom_extrusion") {
         addCustomExtrusion(g.group, part, scale);
       } else {
-        addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
+        // Sharp box. If the AI tagged a non-zero edgeRadius (e.g. softened
+        // tabletop edge visible in the rendering), promote it to a filleted
+        // extrusion so the .dae has the same rounded edge profile.
+        if (edge > 0.0005) {
+          const hx = part.width / 2, hy = part.depth / 2;
+          const rect: [number, number][] = [
+            [-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy],
+          ];
+          addFilletedExtrusion(g.group, rect, part.cx, part.cy, part.cz, part.height, edge, part.rotationDegZ, scale);
+        } else {
+          addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
+        }
       }
     });
     for (const bucket of byMaterial.values()) groups.push(bucket.group);
