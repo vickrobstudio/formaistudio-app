@@ -9,7 +9,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * the Vite client build output so `cap sync` is happy.
  */
 const config: CapacitorConfig = {
-  appId: "app.formaistudio",
+  appId: "app.formaistudio.formai",
   appName: "FormAI",
   webDir: "dist",
   server: {
