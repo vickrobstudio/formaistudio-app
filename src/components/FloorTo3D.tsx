@@ -224,8 +224,11 @@ export function FloorTo3D() {
     if (!glb && !dae) return;
     const baseName = (fileName.replace(/\.[^.]+$/, "") || (subject === "furniture" ? "furniture" : "floorplan"));
     const anchor = document.createElement("a");
-    if (glb) { anchor.href = glb; anchor.download = `${baseName}.glb`; }
-    else { anchor.href = dae!; anchor.download = `${baseName}.dae`; }
+    // Prefer .dae when we have one — including the mesh-reconstructed .dae
+    // converted from the Trellis GLB — so the downloaded file is the true 1:1
+    // mesh of the approved rendering in the requested CAD format.
+    if (dae) { anchor.href = dae; anchor.download = `${baseName}.dae`; }
+    else { anchor.href = glb!; anchor.download = `${baseName}.glb`; }
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
