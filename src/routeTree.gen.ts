@@ -15,6 +15,7 @@ import { Route as StudioRouteImport } from './routes/studio'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
 import { Route as FloorPlanTo3dRouteImport } from './routes/floor-plan-to-3d'
@@ -67,6 +68,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PhotoToAiRoute = PhotoToAiRouteImport.update({
@@ -201,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -231,6 +238,7 @@ export interface FileRoutesByTo {
   '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -263,6 +271,7 @@ export interface FileRoutesById {
   '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -295,6 +304,7 @@ export interface FileRouteTypes {
     | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/pricing'
     | '/privacy'
     | '/settings'
     | '/sitemap.xml'
@@ -325,6 +335,7 @@ export interface FileRouteTypes {
     | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/pricing'
     | '/privacy'
     | '/settings'
     | '/sitemap.xml'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
+    | '/pricing'
     | '/privacy'
     | '/settings'
     | '/sitemap.xml'
@@ -388,6 +400,7 @@ export interface RootRouteChildren {
   FloorPlanTo3dRoute: typeof FloorPlanTo3dRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
+  PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
   SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -441,6 +454,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/photo-to-ai': {
@@ -641,6 +661,7 @@ const rootRouteChildren: RootRouteChildren = {
   FloorPlanTo3dRoute: FloorPlanTo3dRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
+  PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
   SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
