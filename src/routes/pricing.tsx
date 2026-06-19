@@ -92,7 +92,7 @@ function PricingPage() {
                     </span>
                     <span className="block">
                       <span className="block text-5xl font-semibold leading-none">${plan.priceUsd}<span className="text-base font-normal text-muted-foreground">/mo</span></span>
-                      <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : "Subscribe"}</span>
+                      <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : signedIn === false ? "Sign in to subscribe" : "Subscribe"}</span>
                     </span>
                   </button>
                 );
