@@ -61,12 +61,14 @@ export const startMeshReconstruction = createServerFn({ method: "POST" })
           .string()
           .regex(/^data:image\/(png|jpeg|webp);base64,/)
           .max(50_000_000),
+        quality: z.enum(["low", "high"]).default("high").optional(),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
     try {
       const imageUrl = await uploadImageToReplicate(data.imageDataUrl);
+      const isHigh = (data.quality ?? "high") === "high";
       const res = await fetch(`${GATEWAY}/predictions`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -74,15 +76,18 @@ export const startMeshReconstruction = createServerFn({ method: "POST" })
           version: TRELLIS_VERSION,
           input: {
             images: [imageUrl],
-            texture_size: 1024,
-            mesh_simplify: 0.95,
+            // High poly = larger texture, far less aggressive simplification
+            // so the mesh keeps fine geometric detail. Low poly stays light
+            // for fast loading and game-engine use.
+            texture_size: isHigh ? 2048 : 1024,
+            mesh_simplify: isHigh ? 0.9 : 0.98,
             generate_color: true,
             generate_model: true,
             generate_normal: true,
             randomize_seed: true,
             save_gaussian_ply: false,
-            ss_sampling_steps: 38,
-            slat_sampling_steps: 12,
+            ss_sampling_steps: isHigh ? 50 : 38,
+            slat_sampling_steps: isHigh ? 18 : 12,
             ss_guidance_strength: 7.5,
             slat_guidance_strength: 3,
           },
