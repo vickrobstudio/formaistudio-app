@@ -62,6 +62,7 @@ function useDaeScene(daeDataUrl: string) {
       try {
         setScene(null);
         setError("");
+        if (!daeDataUrl) return;
         const text = await readDaeText(daeDataUrl);
         if (cancelled) return;
         const collada = loader.parse(text, "");
@@ -119,6 +120,7 @@ function useGlbScene(glbDataUrl: string) {
       try {
         setScene(null);
         setError("");
+        if (!glbDataUrl) return;
         const buf = await readBinary(glbDataUrl);
         if (cancelled) return;
         loader.parse(buf, "", (gltf) => {
