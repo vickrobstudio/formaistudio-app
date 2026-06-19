@@ -119,7 +119,12 @@ function pickGlbUrl(output: unknown): string | null {
 
 export const pollMeshReconstruction = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    z.object({ predictionId: z.string().min(1).max(200) }).parse(input),
+    z
+      .object({
+        predictionId: z.string().min(1).max(200),
+        outputUnits: z.enum(["meters", "feet"]).default("meters").optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data }) => {
     try {
@@ -135,7 +140,7 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         return { ok: false as const, error: typeof json.error === "string" ? json.error : `Reconstruction ${status}.` };
       }
       if (status !== "succeeded") {
-        return { ok: true as const, status, glbDataUrl: null };
+        return { ok: true as const, status, glbDataUrl: null, daeDataUrl: null };
       }
       const glbUrl = pickGlbUrl(json.output);
       if (!glbUrl) return { ok: false as const, error: "Reconstruction finished but no .glb file was produced." };
@@ -145,10 +150,23 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       let binary = "";
       for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
       const base64 = btoa(binary);
+      // Convert the SAME mesh to a Collada .dae so the downloadable file is a
+      // true 1:1 representation of the reconstructed render — not a primitive
+      // approximation.
+      let daeDataUrl: string | null = null;
+      try {
+        const { glbToDae } = await import("./glb-to-dae.server");
+        const dae = glbToDae(buf, { units: data.outputUnits ?? "meters" });
+        const daeB64 = btoa(unescape(encodeURIComponent(dae)));
+        daeDataUrl = `data:model/vnd.collada+xml;base64,${daeB64}`;
+      } catch (err) {
+        console.error("glb->dae conversion failed", err);
+      }
       return {
         ok: true as const,
         status: "succeeded",
         glbDataUrl: `data:model/gltf-binary;base64,${base64}`,
+        daeDataUrl,
       };
     } catch (err) {
       return { ok: false as const, error: err instanceof Error ? err.message : "Polling failed." };
