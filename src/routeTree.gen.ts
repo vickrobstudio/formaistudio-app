@@ -32,6 +32,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as R2dTo3dRouteImport } from './routes/2d-to-3d'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CheckoutReturnRouteImport } from './routes/checkout.return'
 import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
@@ -154,6 +155,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckoutReturnRoute = CheckoutReturnRouteImport.update({
+  id: '/checkout/return',
+  path: '/checkout/return',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPhotoChatRoute = ApiPhotoChatRouteImport.update({
   id: '/api/photo-chat',
   path: '/api/photo-chat',
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
+  '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
+  '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
 }
 export interface FileRoutesById {
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/_authenticated/wallet': typeof AuthenticatedWalletRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
+  '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
 }
 export interface FileRouteTypes {
@@ -317,6 +326,7 @@ export interface FileRouteTypes {
     | '/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
+    | '/checkout/return'
     | '/api/public/payments/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
     | '/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
+    | '/checkout/return'
     | '/api/public/payments/webhook'
   id:
     | '__root__'
@@ -380,6 +391,7 @@ export interface FileRouteTypes {
     | '/_authenticated/wallet'
     | '/api/generate-image'
     | '/api/photo-chat'
+    | '/checkout/return'
     | '/api/public/payments/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -409,6 +421,7 @@ export interface RootRouteChildren {
   ToolsRoute: typeof ToolsRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
+  CheckoutReturnRoute: typeof CheckoutReturnRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
 }
 
@@ -575,6 +588,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checkout/return': {
+      id: '/checkout/return'
+      path: '/checkout/return'
+      fullPath: '/checkout/return'
+      preLoaderRoute: typeof CheckoutReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/photo-chat': {
       id: '/api/photo-chat'
       path: '/api/photo-chat'
@@ -670,6 +690,7 @@ const rootRouteChildren: RootRouteChildren = {
   ToolsRoute: ToolsRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
+  CheckoutReturnRoute: CheckoutReturnRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
 }
 export const routeTree = rootRouteImport
