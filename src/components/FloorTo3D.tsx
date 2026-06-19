@@ -73,6 +73,7 @@ export function FloorTo3D() {
     setRenderUrl(null);
     setRenderFinal(false);
     setDae(null);
+    setGlb(null);
     setPlan(null);
     setSummary(null);
     const reader = new FileReader();
