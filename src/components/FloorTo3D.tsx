@@ -485,10 +485,15 @@ export function FloorTo3D() {
           </p>
         </div>}
         {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
-        {(dae || glb) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
+        {(dae || glb || obj || fbx) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · Collada .dae · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino` : glb ? "Reconstructed textured mesh · glTF binary .glb" : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · ${summary.outputUnits} · grouped by material`}</p>
-          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={download}><span>Download {dae ? ".dae" : ".glb"}</span><Download /></Button>
+          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <Button variant="default" className="h-11 w-full justify-between" disabled={!fbx} onClick={() => download("fbx")}><span>.fbx</span><Download /></Button>
+            <Button variant="default" className="h-11 w-full justify-between" disabled={!obj} onClick={() => download("obj")}><span>.obj</span><Download /></Button>
+            <Button variant="default" className="h-11 w-full justify-between" disabled={!dae} onClick={() => download("dae")}><span>.dae</span><Download /></Button>
+          </div>
+          <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">FBX · OBJ · DAE</p>
         </div>}
       </div>}
 
