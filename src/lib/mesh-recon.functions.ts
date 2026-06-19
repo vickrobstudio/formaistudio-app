@@ -142,6 +142,13 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       .object({
         predictionId: z.string().min(1).max(200),
         outputUnits: z.enum(["meters", "feet"]).default("meters").optional(),
+        targetBoundsMeters: z
+          .object({
+            width: z.number().positive().max(1000),
+            depth: z.number().positive().max(1000),
+            height: z.number().positive().max(1000),
+          })
+          .optional(),
       })
       .parse(input),
   )
@@ -175,7 +182,10 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       let daeDataUrl: string | null = null;
       try {
         const { glbToDae } = await import("./glb-to-dae.server");
-        const dae = glbToDae(buf, { units: data.outputUnits ?? "meters" });
+        const dae = glbToDae(buf, {
+          units: data.outputUnits ?? "meters",
+          targetBoundsMeters: data.targetBoundsMeters,
+        });
         const daeB64 = Buffer.from(dae, "utf8").toString("base64");
         daeDataUrl = `data:model/vnd.collada+xml;base64,${daeB64}`;
       } catch (err) {
