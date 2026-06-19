@@ -416,10 +416,10 @@ export function FloorTo3D() {
             <img src={renderUrl} alt="Approval rendering" className={`w-full object-cover transition-[filter] duration-500 ${renderFinal ? "blur-0" : "blur-2xl"}`} />
           </div>}
           {renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void approveAndBuild()}>
-            <span>Approve & build 3D model</span>
+            <span>{subject === "furniture" ? "Approve & reconstruct 3D mesh (.glb)" : "Approve & build 3D model"}</span>
             <Check />
           </Button>}
-          {renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
+          {subject !== "furniture" && renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
             <span>Reconstruct real 3D mesh from rendering (.glb)</span>
             <Sparkles />
           </Button>}
