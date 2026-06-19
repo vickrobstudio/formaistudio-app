@@ -776,30 +776,105 @@ function addCustomExtrusion(
   scale: number,
 ) {
   const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
-  const hz = part.height / 2;
-  const theta = (part.rotationDegZ * Math.PI) / 180;
+  const localOutline: [number, number][] = outline.map(([nx, ny]) => [nx * part.width, ny * part.depth]);
+  addFilletedExtrusion(
+    group,
+    localOutline,
+    part.cx, part.cy, part.cz,
+    part.height,
+    part.edgeRadius ?? 0,
+    part.rotationDegZ,
+    scale,
+  );
+}
+
+/**
+ * Inward polygon offset (miter join) for a CCW outline in part-local
+ * coordinates. Used to build a true bullnose / fillet on the top and bottom
+ * of any extruded shape so the .dae output matches softened edges that are
+ * visible in the reference rendering instead of producing sharp 90° edges.
+ */
+function offsetPolygonInward(outline: [number, number][], inset: number): [number, number][] {
+  const n = outline.length;
+  if (inset <= 0 || n < 3) return outline.map(([x, y]) => [x, y]);
+  return outline.map((p, i) => {
+    const prev = outline[(i - 1 + n) % n];
+    const next = outline[(i + 1) % n];
+    const e1x = p[0] - prev[0], e1y = p[1] - prev[1];
+    const e2x = next[0] - p[0], e2y = next[1] - p[1];
+    const l1 = Math.hypot(e1x, e1y) || 1;
+    const l2 = Math.hypot(e2x, e2y) || 1;
+    const n1x = -e1y / l1, n1y = e1x / l1;
+    const n2x = -e2y / l2, n2y = e2x / l2;
+    let bx = n1x + n2x, by = n1y + n2y;
+    const bl = Math.hypot(bx, by) || 1;
+    bx /= bl; by /= bl;
+    const cosHalf = Math.max(0.25, n1x * bx + n1y * by);
+    const m = inset / cosHalf;
+    return [p[0] + bx * m, p[1] + by * m];
+  });
+}
+
+/**
+ * Extrude a 2D outline along Z with optional top/bottom fillets so that
+ * rectangular tops, plinths, slab edges and custom silhouettes render the
+ * SAME softened edge profile that the user sees in the approved rendering.
+ */
+function addFilletedExtrusion(
+  group: Group,
+  outlineLocal: [number, number][],
+  cx: number, cy: number, cz: number,
+  height: number,
+  edgeRadius: number,
+  rotationDegZ: number,
+  scale: number,
+  rings = 5,
+) {
+  const n = outlineLocal.length;
+  if (n < 3) return;
+  const hz = height / 2;
+  const theta = (rotationDegZ * Math.PI) / 180;
   const cos = Math.cos(theta), sin = Math.sin(theta);
+  const r = Math.max(0, Math.min(edgeRadius, height / 2));
+
+  const ringDefs: Array<{ inset: number; z: number }> = [];
+  if (r > 0.0005) {
+    for (let i = 0; i <= rings; i++) {
+      const a = -Math.PI / 2 + (i / rings) * (Math.PI / 2);
+      ringDefs.push({ inset: r - r * Math.cos(a), z: -hz + (r + r * Math.sin(a)) });
+    }
+    ringDefs.push({ inset: 0, z: hz - r });
+    for (let i = 0; i <= rings; i++) {
+      const a = (i / rings) * (Math.PI / 2);
+      ringDefs.push({ inset: r - r * Math.cos(a), z: hz - r + r * Math.sin(a) });
+    }
+  } else {
+    ringDefs.push({ inset: 0, z: -hz });
+    ringDefs.push({ inset: 0, z: hz });
+  }
+
   const base = group.positions.length / 3;
-  for (let level = 0; level < 2; level++) {
-    const z = level === 0 ? -hz : hz;
-    for (const [nx, ny] of outline) {
-      const lx = nx * part.width;
-      const ly = ny * part.depth;
-      const wx = part.cx + lx * cos - ly * sin;
-      const wy = part.cy + lx * sin + ly * cos;
-      group.positions.push(wx * scale, wy * scale, (part.cz + z) * scale);
+  for (const ring of ringDefs) {
+    const ringOutline = ring.inset > 0 ? offsetPolygonInward(outlineLocal, ring.inset) : outlineLocal;
+    for (const [lx, ly] of ringOutline) {
+      const wx = cx + lx * cos - ly * sin;
+      const wy = cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (cz + ring.z) * scale);
     }
   }
-  const n = outline.length;
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-    const b0 = base + i, b1 = base + next;
-    const t0 = base + n + i, t1 = base + n + next;
-    group.indices.push(b0, b1, t1, b0, t1, t0);
+  for (let ri = 0; ri < ringDefs.length - 1; ri++) {
+    const r0 = base + ri * n;
+    const r1 = base + (ri + 1) * n;
+    for (let i = 0; i < n; i++) {
+      const nx = (i + 1) % n;
+      group.indices.push(r0 + i, r0 + nx, r1 + nx, r0 + i, r1 + nx, r1 + i);
+    }
   }
+  const first = base;
+  const last = base + (ringDefs.length - 1) * n;
   for (let i = 1; i < n - 1; i++) {
-    group.indices.push(base, base + i + 1, base + i);
-    group.indices.push(base + n, base + n + i, base + n + i + 1);
+    group.indices.push(first, first + i + 1, first + i);
+    group.indices.push(last, last + i, last + i + 1);
   }
 }
 
