@@ -30,7 +30,8 @@ workflows:
           bun install
       - name: Add iOS platform if missing
         script: |
-          if [ ! -d "ios" ]; then
+          if [ ! -f "ios/App/Podfile" ]; then
+            rm -rf ios
             bunx cap add ios
           fi
       - name: Sync Capacitor iOS
