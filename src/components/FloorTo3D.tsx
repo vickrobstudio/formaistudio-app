@@ -151,6 +151,14 @@ export function FloorTo3D() {
 
   async function approveAndBuild() {
     if (!renderUrl) return;
+    // For furniture, the only way to achieve 100% fidelity to the approved
+    // rendering is true image-to-3D mesh reconstruction (Trellis). Primitive
+    // extraction can never match an organic/curved silhouette exactly, so we
+    // route furniture straight to the mesh reconstructor.
+    if (subject === "furniture") {
+      await reconstructMesh();
+      return;
+    }
     // The approved rendering IS the source of geometry for the 3D model.
     // The 2D plan was only used to author the rendering.
     await buildModel(renderUrl, undefined, renderUrl);
@@ -159,6 +167,13 @@ export function FloorTo3D() {
   async function buildFromReferenceRendering() {
     const reference = referenceImages[0];
     if (!reference || !fileDataUrl) return;
+    if (subject === "furniture") {
+      setMasterPrompt("");
+      setRenderUrl(reference);
+      setRenderFinal(true);
+      await reconstructMesh();
+      return;
+    }
     // The reference rendering IS the geometry/material source for the live 3D
     // preview and .dae. The required 2D plan only unlocks this workflow.
     setMasterPrompt("");
