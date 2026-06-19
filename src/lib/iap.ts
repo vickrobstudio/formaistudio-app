@@ -1,0 +1,80 @@
+/**
+ * In-App Purchases via RevenueCat (iOS only).
+ *
+ * Apple requires that digital subscriptions sold inside an iOS app go through
+ * Apple's In-App Purchase system. Stripe checkout would get the app rejected.
+ * We use RevenueCat as the IAP wrapper because it handles receipt validation,
+ * renewals, refunds, and webhooks into our database for us.
+ *
+ * On web, IAP is unavailable — the pricing page falls back to Stripe.
+ */
+import { Capacitor } from "@capacitor/core";
+import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
+import { supabase } from "@/integrations/supabase/client";
+import type { PlanId } from "@/lib/plans";
+
+const IOS_API_KEY = import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | undefined;
+const BUNDLE_ID = "app.formaistudio.formai";
+
+let configured = false;
+
+export function isNativeIOS(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+}
+
+/** Map our internal plan IDs to Apple product IDs in App Store Connect. */
+export function applePid(planId: PlanId): string {
+  return `${BUNDLE_ID}.${planId}`;
+}
+
+export async function configureIAP(): Promise<void> {
+  if (configured || !isNativeIOS()) return;
+  if (!IOS_API_KEY) {
+    console.warn("[IAP] VITE_REVENUECAT_IOS_API_KEY not set — IAP disabled.");
+    return;
+  }
+  const { data: { user } } = await supabase.auth.getUser();
+  await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
+  await Purchases.configure({ apiKey: IOS_API_KEY, appUserID: user?.id ?? null });
+  configured = true;
+}
+
+export async function purchasePlan(planId: PlanId): Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }> {
+  if (!isNativeIOS()) return { ok: false, error: "In-app purchases are only available in the iOS app." };
+  try {
+    await configureIAP();
+    const offerings = await Purchases.getOfferings();
+    const all = offerings.all ?? {};
+    let pkg: any = null;
+    for (const offering of Object.values(all)) {
+      const found = (offering as any).availablePackages?.find(
+        (p: any) => p.product?.identifier === applePid(planId),
+      );
+      if (found) { pkg = found; break; }
+    }
+    if (!pkg) return { ok: false, error: `Product ${applePid(planId)} not found in RevenueCat offerings.` };
+    await Purchases.purchasePackage({ aPackage: pkg });
+    return { ok: true };
+  } catch (e: any) {
+    if (e?.userCancelled) return { ok: false, error: "Purchase cancelled.", cancelled: true };
+    return { ok: false, error: e?.message ?? "Purchase failed." };
+  }
+}
+
+export async function restorePurchases(): Promise<{ ok: boolean; error?: string }> {
+  if (!isNativeIOS()) return { ok: false, error: "Only available in the iOS app." };
+  try {
+    await configureIAP();
+    await Purchases.restorePurchases();
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Restore failed." };
+  }
+}
+
+/** Link the RevenueCat user to the Supabase user after sign-in. */
+export async function identifyIAPUser(userId: string): Promise<void> {
+  if (!isNativeIOS() || !IOS_API_KEY) return;
+  await configureIAP();
+  try { await Purchases.logIn({ appUserID: userId }); } catch (e) { console.warn("[IAP] logIn failed", e); }
+}
