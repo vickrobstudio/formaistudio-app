@@ -404,6 +404,16 @@ export function FloorTo3D() {
             <Button type="button" size="sm" variant={outputUnits === "meters" ? "default" : "ghost"} onClick={() => setOutputUnits("meters")}>Meters</Button>
           </div>
         </div>
+        <div className="mt-6 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Model detail</p>
+            <p className="mt-2 text-xs text-muted-foreground">High poly = fine geometric detail. Low poly = lighter mesh, fast loading, game-engine ready.</p>
+          </div>
+          <div className="flex rounded-xl border border-foreground p-1">
+            <Button type="button" size="sm" variant={quality === "low" ? "default" : "ghost"} onClick={() => setQuality("low")}>Low poly</Button>
+            <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High poly</Button>
+          </div>
+        </div>
         {subject === "building" && <>
           <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em]">Ceiling height</p>
           {planUnits === "meters"
