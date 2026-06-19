@@ -367,6 +367,12 @@ REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials
 - Do NOT output a simplified blocky stand-in. Round, oval, ring, tapered, scalloped, arched, wavy or asymmetric features MUST use the closest matching primitive (cylinder / ellipse_cylinder / tapered_cylinder / torus / rounded_box / custom_extrusion) — never substitute a box.
 - Do not output annotations, labels, dimension marks, cameras, lights, background scenery, shadows or image-plane billboards.
 
+EDGE PROFILES — MANDATORY 1:1 WITH THE RENDERING:
+- Inspect the edges of EVERY part in the reference rendering. If an edge looks rounded, softened, bullnosed, eased, chamfered, pillowed or radiused (even slightly), you MUST set "edgeRadius" on that part to the visible radius in meters (sampled from the rendering, e.g. 0.003 m for a hairline eased edge, 0.008 m for a typical softened edge, 0.012–0.02 m for a clear bullnose, half the part's thickness for a FULL bullnose).
+- For rectangular parts with rounded corners in PLAN (e.g. a soft-cornered tabletop, cushion, plinth) use "rounded_box" and set BOTH the corner radius (via the plan view) AND "edgeRadius" for the top/bottom horizontal edge fillet. The .dae export turns "edgeRadius" into a real fillet on the top and bottom of the extrusion, so omitting it produces a wrong sharp-edged piece.
+- For "custom_extrusion" silhouettes, "edgeRadius" produces the same top/bottom fillet — set it whenever the rendering shows a non-sharp top/bottom edge.
+- Default to a small "edgeRadius" of 0.002–0.005 m on any furniture surface that is clearly not knife-sharp in the rendering. Only set 0 / omit it when the edge is unambiguously a hard 90° corner.
+
 Return JSON ONLY in this exact shape:
 {
   "kind": "furniture",
