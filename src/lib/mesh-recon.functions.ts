@@ -166,7 +166,7 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         return { ok: false as const, error: typeof json.error === "string" ? json.error : `Reconstruction ${status}.` };
       }
       if (status !== "succeeded") {
-        return { ok: true as const, status, glbDataUrl: null, daeDataUrl: null };
+        return { ok: true as const, status, glbDataUrl: null, daeDataUrl: null, objDataUrl: null, fbxDataUrl: null };
       }
       const glbUrl = pickGlbUrl(json.output);
       if (!glbUrl) return { ok: false as const, error: "Reconstruction finished but no .glb file was produced." };
