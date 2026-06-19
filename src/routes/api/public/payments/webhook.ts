@@ -2,8 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { type StripeEnv, verifyWebhook } from "@/lib/stripe.server";
-
-const PRO_CREDIT_REFILL = 2000;
+import { creditsForPlan } from "@/lib/plans";
 
 let _supabase: ReturnType<typeof createClient<Database>> | null = null;
 function getSupabase() {
@@ -27,11 +26,19 @@ function extractFields(subscription: any) {
   return { priceId, productId, periodStart, periodEnd };
 }
 
-async function topUpCredits(userId: string) {
+async function topUpCredits(userId: string, amount: number) {
+  if (amount <= 0) return;
   const supabase = getSupabase();
+  // Read current balance and top up additively so per-tool subs stack.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("starter_credits")
+    .eq("id", userId)
+    .maybeSingle();
+  const current = (profile?.starter_credits as number | undefined) ?? 0;
   await supabase
     .from("profiles")
-    .update({ starter_credits: PRO_CREDIT_REFILL, updated_at: new Date().toISOString() })
+    .update({ starter_credits: Math.max(current, amount), updated_at: new Date().toISOString() })
     .eq("id", userId);
 }
 
@@ -60,7 +67,7 @@ async function handleSubscriptionCreated(subscription: any, env: StripeEnv) {
   );
 
   if (subscription.status === "active" || subscription.status === "trialing") {
-    await topUpCredits(userId);
+    await topUpCredits(userId, creditsForPlan(priceId));
   }
 }
 
@@ -91,17 +98,16 @@ async function handleSubscriptionDeleted(subscription: any, env: StripeEnv) {
 }
 
 async function handleInvoicePaid(invoice: any, env: StripeEnv) {
-  // Refill credits on subscription renewals (invoice.paid fires on each cycle).
   const subscriptionId = invoice.subscription;
   if (!subscriptionId) return;
   const supabase = getSupabase();
   const { data: row } = await supabase
     .from("subscriptions")
-    .select("user_id")
+    .select("user_id, price_id")
     .eq("stripe_subscription_id", subscriptionId as string)
     .eq("environment", env)
     .maybeSingle();
-  if (row?.user_id) await topUpCredits(row.user_id as string);
+  if (row?.user_id) await topUpCredits(row.user_id as string, creditsForPlan(row.price_id as string));
 }
 
 async function handleWebhook(req: Request, env: StripeEnv) {
