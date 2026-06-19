@@ -14,7 +14,7 @@ const GATEWAY = "https://connector-gateway.lovable.dev/replicate/v1";
 
 function authHeaders() {
   const lov = process.env.LOVABLE_API_KEY;
-  const rep = process.env.LOVABLE_CONNECTOR_REPLICATE_API_KEY;
+  const rep = process.env.REPLICATE_API_KEY ?? process.env.LOVABLE_CONNECTOR_REPLICATE_API_KEY;
   if (!lov || !rep) throw new Error("Replicate connector is not linked to this project.");
   return {
     Authorization: `Bearer ${lov}`,
