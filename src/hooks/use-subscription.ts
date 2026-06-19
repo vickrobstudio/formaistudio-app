@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getStripeEnvironment } from "@/lib/stripe";
+import { toolUnlockedBy } from "@/lib/plans";
 
 export interface SubscriptionState {
   loading: boolean;
@@ -9,6 +10,8 @@ export interface SubscriptionState {
   plan: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  activePlans: Set<string>;
+  hasTool: (toolPath: string) => boolean;
 }
 
 function computeActive(row: { status: string; current_period_end: string | null }) {
@@ -22,14 +25,8 @@ function computeActive(row: { status: string; current_period_end: string | null 
 }
 
 export function useSubscription() {
-  const [state, setState] = useState<SubscriptionState>({
-    loading: true,
-    isActive: false,
-    status: null,
-    plan: null,
-    currentPeriodEnd: null,
-    cancelAtPeriodEnd: false,
-  });
+  const [rows, setRows] = useState<Array<{ status: string; price_id: string; current_period_end: string | null; cancel_at_period_end: boolean | null }>>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,27 +40,15 @@ export function useSubscription() {
         .select("status, price_id, current_period_end, cancel_at_period_end")
         .eq("user_id", userId)
         .eq("environment", env)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("created_at", { ascending: false });
       if (cancelled) return;
-      if (!data) {
-        setState({ loading: false, isActive: false, status: null, plan: null, currentPeriodEnd: null, cancelAtPeriodEnd: false });
-        return;
-      }
-      setState({
-        loading: false,
-        isActive: computeActive(data),
-        status: data.status,
-        plan: data.price_id,
-        currentPeriodEnd: data.current_period_end,
-        cancelAtPeriodEnd: !!data.cancel_at_period_end,
-      });
+      setRows(data ?? []);
+      setLoading(false);
     }
 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setState((s) => ({ ...s, loading: false })); return; }
+      if (!user) { setLoading(false); return; }
       await refetch(user.id);
 
       const channel = supabase
@@ -77,5 +62,24 @@ export function useSubscription() {
     return () => { cancelled = true; };
   }, []);
 
-  return state;
+  return useMemo<SubscriptionState>(() => {
+    const activePlans = new Set<string>();
+    let primary: typeof rows[number] | null = null;
+    for (const r of rows) {
+      if (computeActive(r)) {
+        activePlans.add(r.price_id);
+        if (!primary) primary = r;
+      }
+    }
+    return {
+      loading,
+      isActive: activePlans.size > 0,
+      status: primary?.status ?? null,
+      plan: primary?.price_id ?? null,
+      currentPeriodEnd: primary?.current_period_end ?? null,
+      cancelAtPeriodEnd: !!primary?.cancel_at_period_end,
+      activePlans,
+      hasTool: (toolPath: string) => toolUnlockedBy(activePlans, toolPath),
+    };
+  }, [rows, loading]);
 }
