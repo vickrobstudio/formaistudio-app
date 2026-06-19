@@ -1324,8 +1324,17 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       : planResult.data;
     const dae = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
+    // Reuse the same triangle data to emit OBJ and ASCII FBX so users can
+    // download whichever format their CAD tool prefers.
+    const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
+    const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
+    const groups = parseDaeToTriangles(dae);
+    const { obj } = trianglesToObj(groups);
+    const fbx = trianglesToFbxAscii(groups);
+    const objDataUrl = toDataUrl(obj, "model/obj");
+    const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
     const elementCount = plan.kind === "building"
       ? plan.walls.length + plan.columns.length + plan.stairs.length + plan.fixtures.length
       : plan.parts.length;
-    return { ok: true, daeDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan };
+    return { ok: true, daeDataUrl, objDataUrl, fbxDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan };
   });
