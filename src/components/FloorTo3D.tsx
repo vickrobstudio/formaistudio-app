@@ -69,7 +69,8 @@ export function FloorTo3D() {
     if (busy !== "model") { setModelProgress(0); return; }
     setModelProgress(2);
     const started = Date.now();
-    const target = glb ? 240_000 : 45_000; // mesh recon is slower
+    // Furniture uses a higher-fidelity (slower) model; mesh recon is slowest.
+    const target = glb ? 240_000 : subject === "furniture" ? 90_000 : 45_000;
     const interval = setInterval(() => {
       const elapsed = Date.now() - started;
       // Asymptotic ease toward 95%
@@ -77,7 +78,7 @@ export function FloorTo3D() {
       setModelProgress(pct);
     }, 250);
     return () => clearInterval(interval);
-  }, [busy, glb]);
+  }, [busy, glb, subject]);
 
   useEffect(() => {
     if ((dae || glb) && stage === "ready") setModelProgress(100);
@@ -426,11 +427,17 @@ export function FloorTo3D() {
             />
           </div>
           <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            {modelProgress < 25 ? "Analyzing drawing"
-              : modelProgress < 55 ? "Extracting walls, openings & elements"
-              : modelProgress < 80 ? "Triangulating geometry"
-              : modelProgress < 100 ? "Assembling .dae"
-              : "Complete"}
+            {subject === "furniture"
+              ? (modelProgress < 25 ? "Analyzing drawing & references"
+                : modelProgress < 55 ? "Extracting parts, materials & proportions"
+                : modelProgress < 80 ? "Matching silhouette to approved rendering"
+                : modelProgress < 100 ? "Assembling .dae"
+                : "Complete")
+              : (modelProgress < 25 ? "Analyzing drawing"
+                : modelProgress < 55 ? "Extracting walls, openings & elements"
+                : modelProgress < 80 ? "Triangulating geometry"
+                : modelProgress < 100 ? "Assembling .dae"
+                : "Complete")}
           </p>
         </div>}
         {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}

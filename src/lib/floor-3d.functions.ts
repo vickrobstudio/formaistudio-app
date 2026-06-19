@@ -1282,7 +1282,11 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        // Furniture pieces need maximum shape fidelity to match the approved
+        // rendering, so we spend the extra latency on gemini-2.5-pro. Building
+        // plans are denser and would time out on pro, so they stay on the fast
+        // multimodal model.
+        model: data.subject === "furniture" ? "google/gemini-2.5-pro" : "google/gemini-3-flash-preview",
         messages: [{ role: "user", content: userContent }],
         response_format: { type: "json_object" },
       }),
