@@ -266,9 +266,7 @@ export function FloorTo3D() {
           r.readAsDataURL(blob);
         });
       }
-      const started = await startRecon({ data: { imageDataUrl } });
-      // quality is read here so reconstructions honour the toggle
-      void quality;
+      const started = await startRecon({ data: { imageDataUrl, quality } });
       if (!started.ok) { setError(started.error); setStage("rendered"); return; }
       setReconStatus("Reconstructing textured mesh — this takes 1–5 minutes…");
       const predictionId = started.predictionId;
