@@ -489,13 +489,14 @@ export function FloorTo3D() {
         {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
         {(dae || glb || obj || fbx) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <Button variant="default" className="h-11 w-full justify-between" disabled={!fbx} onClick={() => download("fbx")}><span>.fbx</span><Download /></Button>
-            <Button variant="default" className="h-11 w-full justify-between" disabled={!obj} onClick={() => download("obj")}><span>.obj</span><Download /></Button>
-            <Button variant="default" className="h-11 w-full justify-between" disabled={!dae} onClick={() => download("dae")}><span>.dae</span><Download /></Button>
+          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
+          <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
+          <div className="mt-2 flex rounded-xl border border-foreground p-1">
+            <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" disabled={!obj} onClick={() => setDownloadFormat("obj")}>.obj</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae} onClick={() => setDownloadFormat("dae")}>.dae</Button>
           </div>
-          <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">FBX · OBJ · DAE</p>
+          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>
         </div>}
       </div>}
 
