@@ -151,6 +151,14 @@ export function FloorTo3D() {
 
   async function approveAndBuild() {
     if (!renderUrl) return;
+    // For furniture, the only way to achieve 100% fidelity to the approved
+    // rendering is true image-to-3D mesh reconstruction (Trellis). Primitive
+    // extraction can never match an organic/curved silhouette exactly, so we
+    // route furniture straight to the mesh reconstructor.
+    if (subject === "furniture") {
+      await reconstructMesh();
+      return;
+    }
     // The approved rendering IS the source of geometry for the 3D model.
     // The 2D plan was only used to author the rendering.
     await buildModel(renderUrl, undefined, renderUrl);
@@ -159,6 +167,13 @@ export function FloorTo3D() {
   async function buildFromReferenceRendering() {
     const reference = referenceImages[0];
     if (!reference || !fileDataUrl) return;
+    if (subject === "furniture") {
+      setMasterPrompt("");
+      setRenderUrl(reference);
+      setRenderFinal(true);
+      await reconstructMesh(reference);
+      return;
+    }
     // The reference rendering IS the geometry/material source for the live 3D
     // preview and .dae. The required 2D plan only unlocks this workflow.
     setMasterPrompt("");
@@ -216,8 +231,9 @@ export function FloorTo3D() {
     anchor.remove();
   }
 
-  async function reconstructMesh() {
-    if (!renderUrl) return;
+  async function reconstructMesh(urlOverride?: string) {
+    const source = urlOverride ?? renderUrl;
+    if (!source) return;
     setBusy("model"); setError(""); setDae(null); setGlb(null); setStage("modeling");
     setReconStatus("Uploading rendering to mesh reconstructor…");
     if (!(await consume())) {
@@ -227,7 +243,7 @@ export function FloorTo3D() {
     }
     try {
       // Render data URLs may be remote URLs from the streaming image; fetch to data URL first.
-      let imageDataUrl = renderUrl;
+      let imageDataUrl = source;
       if (!imageDataUrl.startsWith("data:")) {
         const res = await fetch(imageDataUrl);
         const blob = await res.blob();
@@ -400,10 +416,10 @@ export function FloorTo3D() {
             <img src={renderUrl} alt="Approval rendering" className={`w-full object-cover transition-[filter] duration-500 ${renderFinal ? "blur-0" : "blur-2xl"}`} />
           </div>}
           {renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="default" className="mt-3 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void approveAndBuild()}>
-            <span>Approve & build 3D model</span>
+            <span>{subject === "furniture" ? "Approve & reconstruct 3D mesh (.glb)" : "Approve & build 3D model"}</span>
             <Check />
           </Button>}
-          {renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
+          {subject !== "furniture" && renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
             <span>Reconstruct real 3D mesh from rendering (.glb)</span>
             <Sparkles />
           </Button>}
