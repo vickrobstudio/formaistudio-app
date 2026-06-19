@@ -24,6 +24,7 @@ import { Route as CreateRouteImport } from './routes/create'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
+import { Route as AiRenderingRouteImport } from './routes/ai-rendering'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as R2dTo3dRouteImport } from './routes/2d-to-3d'
@@ -111,6 +112,11 @@ const AiToVideoRoute = AiToVideoRouteImport.update({
   path: '/ai-to-video',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiRenderingRoute = AiRenderingRouteImport.update({
+  id: '/ai-rendering',
+  path: '/ai-rendering',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiEditsRoute = AiEditsRouteImport.update({
   id: '/ai-edits',
   path: '/ai-edits',
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
@@ -198,6 +205,7 @@ export interface FileRoutesByTo {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
@@ -227,6 +235,7 @@ export interface FileRoutesById {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
     | '/contact'
@@ -283,6 +293,7 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
     | '/contact'
@@ -311,6 +322,7 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
     | '/contact'
@@ -340,6 +352,7 @@ export interface RootRouteChildren {
   R2dTo3dRoute: typeof R2dTo3dRoute
   AboutRoute: typeof AboutRoute
   AiEditsRoute: typeof AiEditsRoute
+  AiRenderingRoute: typeof AiRenderingRoute
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
   ContactRoute: typeof ContactRoute
@@ -466,6 +479,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiToVideoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai-rendering': {
+      id: '/ai-rendering'
+      path: '/ai-rendering'
+      fullPath: '/ai-rendering'
+      preLoaderRoute: typeof AiRenderingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai-edits': {
       id: '/ai-edits'
       path: '/ai-edits'
@@ -569,6 +589,7 @@ const rootRouteChildren: RootRouteChildren = {
   R2dTo3dRoute: R2dTo3dRoute,
   AboutRoute: AboutRoute,
   AiEditsRoute: AiEditsRoute,
+  AiRenderingRoute: AiRenderingRoute,
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
   ContactRoute: ContactRoute,
