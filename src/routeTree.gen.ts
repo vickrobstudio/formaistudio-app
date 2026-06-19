@@ -17,12 +17,15 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
+import { Route as FloorPlanTo3dRouteImport } from './routes/floor-plan-to-3d'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
+import { Route as AiRenderingRouteImport } from './routes/ai-rendering'
+import { Route as AiInteriorRenderingRouteImport } from './routes/ai-interior-rendering'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as R2dTo3dRouteImport } from './routes/2d-to-3d'
@@ -75,6 +78,11 @@ const ModelToAiRoute = ModelToAiRouteImport.update({
   path: '/model-to-ai',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FloorPlanTo3dRoute = FloorPlanTo3dRouteImport.update({
+  id: '/floor-plan-to-3d',
+  path: '/floor-plan-to-3d',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FeedRoute = FeedRouteImport.update({
   id: '/feed',
   path: '/feed',
@@ -103,6 +111,16 @@ const AuthRoute = AuthRouteImport.update({
 const AiToVideoRoute = AiToVideoRouteImport.update({
   id: '/ai-to-video',
   path: '/ai-to-video',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiRenderingRoute = AiRenderingRouteImport.update({
+  id: '/ai-rendering',
+  path: '/ai-rendering',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiInteriorRenderingRoute = AiInteriorRenderingRouteImport.update({
+  id: '/ai-interior-rendering',
+  path: '/ai-interior-rendering',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AiEditsRoute = AiEditsRouteImport.update({
@@ -165,12 +183,15 @@ export interface FileRoutesByFullPath {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-interior-rendering': typeof AiInteriorRenderingRoute
+  '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
+  '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -191,12 +212,15 @@ export interface FileRoutesByTo {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-interior-rendering': typeof AiInteriorRenderingRoute
+  '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
+  '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -219,12 +243,15 @@ export interface FileRoutesById {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-interior-rendering': typeof AiInteriorRenderingRoute
+  '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
+  '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -247,12 +274,15 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-interior-rendering'
+    | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
     | '/contact'
     | '/create'
     | '/dashboard'
     | '/feed'
+    | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -273,12 +303,15 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-interior-rendering'
+    | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
     | '/contact'
     | '/create'
     | '/dashboard'
     | '/feed'
+    | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -300,12 +333,15 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-interior-rendering'
+    | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
     | '/contact'
     | '/create'
     | '/dashboard'
     | '/feed'
+    | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -328,12 +364,15 @@ export interface RootRouteChildren {
   R2dTo3dRoute: typeof R2dTo3dRoute
   AboutRoute: typeof AboutRoute
   AiEditsRoute: typeof AiEditsRoute
+  AiInteriorRenderingRoute: typeof AiInteriorRenderingRoute
+  AiRenderingRoute: typeof AiRenderingRoute
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
   ContactRoute: typeof ContactRoute
   CreateRoute: typeof CreateRoute
   DashboardRoute: typeof DashboardRoute
   FeedRoute: typeof FeedRoute
+  FloorPlanTo3dRoute: typeof FloorPlanTo3dRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -404,6 +443,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ModelToAiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/floor-plan-to-3d': {
+      id: '/floor-plan-to-3d'
+      path: '/floor-plan-to-3d'
+      fullPath: '/floor-plan-to-3d'
+      preLoaderRoute: typeof FloorPlanTo3dRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/feed': {
       id: '/feed'
       path: '/feed'
@@ -444,6 +490,20 @@ declare module '@tanstack/react-router' {
       path: '/ai-to-video'
       fullPath: '/ai-to-video'
       preLoaderRoute: typeof AiToVideoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-rendering': {
+      id: '/ai-rendering'
+      path: '/ai-rendering'
+      fullPath: '/ai-rendering'
+      preLoaderRoute: typeof AiRenderingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-interior-rendering': {
+      id: '/ai-interior-rendering'
+      path: '/ai-interior-rendering'
+      fullPath: '/ai-interior-rendering'
+      preLoaderRoute: typeof AiInteriorRenderingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ai-edits': {
@@ -549,12 +609,15 @@ const rootRouteChildren: RootRouteChildren = {
   R2dTo3dRoute: R2dTo3dRoute,
   AboutRoute: AboutRoute,
   AiEditsRoute: AiEditsRoute,
+  AiInteriorRenderingRoute: AiInteriorRenderingRoute,
+  AiRenderingRoute: AiRenderingRoute,
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
   ContactRoute: ContactRoute,
   CreateRoute: CreateRoute,
   DashboardRoute: DashboardRoute,
   FeedRoute: FeedRoute,
+  FloorPlanTo3dRoute: FloorPlanTo3dRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
   PrivacyRoute: PrivacyRoute,
