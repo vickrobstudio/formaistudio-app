@@ -157,7 +157,7 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       try {
         const { glbToDae } = await import("./glb-to-dae.server");
         const dae = glbToDae(buf, { units: data.outputUnits ?? "meters" });
-        const daeB64 = btoa(unescape(encodeURIComponent(dae)));
+        const daeB64 = Buffer.from(dae, "utf8").toString("base64");
         daeDataUrl = `data:model/vnd.collada+xml;base64,${daeB64}`;
       } catch (err) {
         console.error("glb->dae conversion failed", err);
