@@ -159,7 +159,7 @@ type BuildingPlan = z.infer<typeof BuildingPlanSchema>;
 type FurniturePlan = z.infer<typeof FurniturePlanSchema>;
 
 type GenerateFloor3DResult =
-  | { ok: true; daeDataUrl: string; elementCount: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet"; plan: BuildingPlan | FurniturePlan }
+  | { ok: true; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string; elementCount: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet"; plan: BuildingPlan | FurniturePlan }
   | { ok: false; error: string };
 
 const PRINTED_UNITS_NOTE: Record<z.infer<typeof PlanUnits>, string> = {
