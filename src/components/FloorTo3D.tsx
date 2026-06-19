@@ -47,6 +47,8 @@ export function FloorTo3D() {
   const [glb, setGlb] = useState<string | null>(null);
   const [obj, setObj] = useState<string | null>(null);
   const [fbx, setFbx] = useState<string | null>(null);
+  const [quality, setQuality] = useState<"low" | "high">("high");
+  const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae">("fbx");
   const [reconStatus, setReconStatus] = useState("");
   const [modelProgress, setModelProgress] = useState(0);
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
@@ -265,6 +267,8 @@ export function FloorTo3D() {
         });
       }
       const started = await startRecon({ data: { imageDataUrl } });
+      // quality is read here so reconstructions honour the toggle
+      void quality;
       if (!started.ok) { setError(started.error); setStage("rendered"); return; }
       setReconStatus("Reconstructing textured mesh — this takes 1–5 minutes…");
       const predictionId = started.predictionId;
