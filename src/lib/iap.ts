@@ -9,7 +9,6 @@
  * On web, IAP is unavailable — the pricing page falls back to Stripe.
  */
 import { Capacitor } from "@capacitor/core";
-import { Purchases, LOG_LEVEL } from "@revenuecat/purchases-capacitor";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlanId } from "@/lib/plans";
 
@@ -17,9 +16,16 @@ const IOS_API_KEY = import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | unde
 const BUNDLE_ID = "app.formaistudio.formai";
 
 let configured = false;
+let revenueCatModule: Promise<any> | null = null;
 
 export function isNativeIOS(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+}
+
+async function loadRevenueCat() {
+  if (!isNativeIOS()) return null;
+  revenueCatModule ??= import("@revenuecat/purchases-capacitor");
+  return revenueCatModule;
 }
 
 /** Map our internal plan IDs to Apple product IDs in App Store Connect. */
@@ -33,6 +39,9 @@ export async function configureIAP(): Promise<void> {
     console.warn("[IAP] VITE_REVENUECAT_IOS_API_KEY not set — IAP disabled.");
     return;
   }
+  const revenueCat = await loadRevenueCat();
+  if (!revenueCat) return;
+  const { Purchases, LOG_LEVEL } = revenueCat;
   const { data: { user } } = await supabase.auth.getUser();
   await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
   await Purchases.configure({ apiKey: IOS_API_KEY, appUserID: user?.id ?? null });
@@ -43,6 +52,9 @@ export async function purchasePlan(planId: PlanId): Promise<{ ok: true } | { ok:
   if (!isNativeIOS()) return { ok: false, error: "In-app purchases are only available in the iOS app." };
   try {
     await configureIAP();
+    const revenueCat = await loadRevenueCat();
+    if (!revenueCat) return { ok: false, error: "In-app purchases are only available in the iOS app." };
+    const { Purchases } = revenueCat;
     const offerings = await Purchases.getOfferings();
     const all = offerings.all ?? {};
     let pkg: any = null;
@@ -65,6 +77,9 @@ export async function restorePurchases(): Promise<{ ok: boolean; error?: string 
   if (!isNativeIOS()) return { ok: false, error: "Only available in the iOS app." };
   try {
     await configureIAP();
+    const revenueCat = await loadRevenueCat();
+    if (!revenueCat) return { ok: false, error: "Only available in the iOS app." };
+    const { Purchases } = revenueCat;
     await Purchases.restorePurchases();
     return { ok: true };
   } catch (e: any) {
@@ -76,5 +91,8 @@ export async function restorePurchases(): Promise<{ ok: boolean; error?: string 
 export async function identifyIAPUser(userId: string): Promise<void> {
   if (!isNativeIOS() || !IOS_API_KEY) return;
   await configureIAP();
+  const revenueCat = await loadRevenueCat();
+  if (!revenueCat) return;
+  const { Purchases } = revenueCat;
   try { await Purchases.logIn({ appUserID: userId }); } catch (e) { console.warn("[IAP] logIn failed", e); }
 }
