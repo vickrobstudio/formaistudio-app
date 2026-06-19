@@ -47,6 +47,8 @@ export function FloorTo3D() {
   const [glb, setGlb] = useState<string | null>(null);
   const [obj, setObj] = useState<string | null>(null);
   const [fbx, setFbx] = useState<string | null>(null);
+  const [quality, setQuality] = useState<"low" | "high">("high");
+  const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae">("fbx");
   const [reconStatus, setReconStatus] = useState("");
   const [modelProgress, setModelProgress] = useState(0);
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
@@ -264,7 +266,7 @@ export function FloorTo3D() {
           r.readAsDataURL(blob);
         });
       }
-      const started = await startRecon({ data: { imageDataUrl } });
+      const started = await startRecon({ data: { imageDataUrl, quality } });
       if (!started.ok) { setError(started.error); setStage("rendered"); return; }
       setReconStatus("Reconstructing textured mesh — this takes 1–5 minutes…");
       const predictionId = started.predictionId;
@@ -402,6 +404,16 @@ export function FloorTo3D() {
             <Button type="button" size="sm" variant={outputUnits === "meters" ? "default" : "ghost"} onClick={() => setOutputUnits("meters")}>Meters</Button>
           </div>
         </div>
+        <div className="mt-6 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Model detail</p>
+            <p className="mt-2 text-xs text-muted-foreground">High poly = fine geometric detail. Low poly = lighter mesh, fast loading, game-engine ready.</p>
+          </div>
+          <div className="flex rounded-xl border border-foreground p-1">
+            <Button type="button" size="sm" variant={quality === "low" ? "default" : "ghost"} onClick={() => setQuality("low")}>Low poly</Button>
+            <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High poly</Button>
+          </div>
+        </div>
         {subject === "building" && <>
           <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em]">Ceiling height</p>
           {planUnits === "meters"
@@ -487,13 +499,14 @@ export function FloorTo3D() {
         {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
         {(dae || glb || obj || fbx) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <Button variant="default" className="h-11 w-full justify-between" disabled={!fbx} onClick={() => download("fbx")}><span>.fbx</span><Download /></Button>
-            <Button variant="default" className="h-11 w-full justify-between" disabled={!obj} onClick={() => download("obj")}><span>.obj</span><Download /></Button>
-            <Button variant="default" className="h-11 w-full justify-between" disabled={!dae} onClick={() => download("dae")}><span>.dae</span><Download /></Button>
+          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
+          <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
+          <div className="mt-2 flex rounded-xl border border-foreground p-1">
+            <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" disabled={!obj} onClick={() => setDownloadFormat("obj")}>.obj</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae} onClick={() => setDownloadFormat("dae")}>.dae</Button>
           </div>
-          <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">FBX · OBJ · DAE</p>
+          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>
         </div>}
       </div>}
 
