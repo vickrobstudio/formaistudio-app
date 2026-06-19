@@ -14,6 +14,9 @@ workflows:
       node: 20.11.0
       xcode: latest
       cocoapods: default
+    cache:
+      cache_paths:
+        - $CM_CACHE_DIR/codemagic-signing
     triggering:
       events:
         - push
@@ -45,12 +48,15 @@ workflows:
           keychain initialize
       - name: Fetch signing files
         script: |
-          CERTIFICATE_KEY_PATH="$CM_BUILD_DIR/codemagic_private_key"
+          CERTIFICATE_KEY_DIR="${CM_CACHE_DIR:-$HOME/.codemagic-cache}/codemagic-signing"
+          CERTIFICATE_KEY_PATH="$CERTIFICATE_KEY_DIR/codemagic_private_key"
+          mkdir -p "$CERTIFICATE_KEY_DIR"
           if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
             printf "%s\n" "$CERTIFICATE_PRIVATE_KEY" > "$CERTIFICATE_KEY_PATH"
-          else
+          elif [ ! -f "$CERTIFICATE_KEY_PATH" ]; then
             ssh-keygen -t rsa -b 2048 -m PEM -f "$CERTIFICATE_KEY_PATH" -q -N ""
           fi
+          chmod 600 "$CERTIFICATE_KEY_PATH"
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --certificate-key "@file:$CERTIFICATE_KEY_PATH" \
