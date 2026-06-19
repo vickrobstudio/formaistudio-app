@@ -166,7 +166,7 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         return { ok: false as const, error: typeof json.error === "string" ? json.error : `Reconstruction ${status}.` };
       }
       if (status !== "succeeded") {
-        return { ok: true as const, status, glbDataUrl: null, daeDataUrl: null };
+        return { ok: true as const, status, glbDataUrl: null, daeDataUrl: null, objDataUrl: null, fbxDataUrl: null };
       }
       const glbUrl = pickGlbUrl(json.output);
       if (!glbUrl) return { ok: false as const, error: "Reconstruction finished but no .glb file was produced." };
@@ -180,6 +180,8 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       // true 1:1 representation of the reconstructed render — not a primitive
       // approximation.
       let daeDataUrl: string | null = null;
+      let objDataUrl: string | null = null;
+      let fbxDataUrl: string | null = null;
       try {
         const { glbToDae } = await import("./glb-to-dae.server");
         const dae = glbToDae(buf, {
@@ -188,6 +190,12 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         });
         const daeB64 = Buffer.from(dae, "utf8").toString("base64");
         daeDataUrl = `data:model/vnd.collada+xml;base64,${daeB64}`;
+        const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
+        const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
+        const groups = parseDaeToTriangles(dae);
+        const { obj } = trianglesToObj(groups);
+        objDataUrl = toDataUrl(obj, "model/obj");
+        fbxDataUrl = toDataUrl(trianglesToFbxAscii(groups), "application/octet-stream");
       } catch (err) {
         console.error("glb->dae conversion failed", err);
       }
@@ -196,6 +204,8 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         status: "succeeded",
         glbDataUrl: `data:model/gltf-binary;base64,${base64}`,
         daeDataUrl,
+        objDataUrl,
+        fbxDataUrl,
       };
     } catch (err) {
       return { ok: false as const, error: err instanceof Error ? err.message : "Polling failed." };

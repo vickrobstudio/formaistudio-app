@@ -45,6 +45,8 @@ export function FloorTo3D() {
   const [renderFinal, setRenderFinal] = useState(false);
   const [dae, setDae] = useState<string | null>(null);
   const [glb, setGlb] = useState<string | null>(null);
+  const [obj, setObj] = useState<string | null>(null);
+  const [fbx, setFbx] = useState<string | null>(null);
   const [reconStatus, setReconStatus] = useState("");
   const [modelProgress, setModelProgress] = useState(0);
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
@@ -97,6 +99,8 @@ export function FloorTo3D() {
     setRenderFinal(false);
     setDae(null);
     setGlb(null);
+    setObj(null);
+    setFbx(null);
     setPlan(null);
     setSummary(null);
     const reader = new FileReader();
@@ -114,6 +118,8 @@ export function FloorTo3D() {
     setRenderFinal(false);
     setDae(null);
     setGlb(null);
+    setObj(null);
+    setFbx(null);
     setReconStatus("");
     setPlan(null);
     setSummary(null);
@@ -212,6 +218,8 @@ export function FloorTo3D() {
       });
       if (!result.ok) { setError(result.error); return; }
       setDae(result.daeDataUrl);
+      setObj(result.objDataUrl);
+      setFbx(result.fbxDataUrl);
       setSummary({ count: result.elementCount, subject: result.subject, outputUnits: result.outputUnits });
       if (result.plan.kind === "furniture") setPlan(result.plan as FurniturePlan);
       setStage("ready");
@@ -220,15 +228,14 @@ export function FloorTo3D() {
     } finally { setBusy(""); }
   }
 
-  function download() {
-    if (!glb && !dae) return;
+  function download(format: "dae" | "obj" | "fbx" | "glb") {
+    const map: Record<typeof format, string | null> = { dae, obj, fbx, glb };
+    const href = map[format];
+    if (!href) return;
     const baseName = (fileName.replace(/\.[^.]+$/, "") || (subject === "furniture" ? "furniture" : "floorplan"));
     const anchor = document.createElement("a");
-    // Prefer .dae when we have one — including the mesh-reconstructed .dae
-    // converted from the Trellis GLB — so the downloaded file is the true 1:1
-    // mesh of the approved rendering in the requested CAD format.
-    if (dae) { anchor.href = dae; anchor.download = `${baseName}.dae`; }
-    else { anchor.href = glb!; anchor.download = `${baseName}.glb`; }
+    anchor.href = href;
+    anchor.download = `${baseName}.${format}`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -237,7 +244,7 @@ export function FloorTo3D() {
   async function reconstructMesh(urlOverride?: string) {
     const source = urlOverride ?? renderUrl;
     if (!source) return;
-    setBusy("model"); setError(""); setDae(null); setGlb(null); setStage("modeling");
+    setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setStage("modeling");
     setReconStatus("Uploading rendering to mesh reconstructor…");
     if (!(await consume())) {
       setBusy(""); setStage("rendered");
@@ -291,6 +298,8 @@ export function FloorTo3D() {
         if (polled.glbDataUrl) {
           setGlb(polled.glbDataUrl);
           if (polled.daeDataUrl) setDae(polled.daeDataUrl);
+          if (polled.objDataUrl) setObj(polled.objDataUrl);
+          if (polled.fbxDataUrl) setFbx(polled.fbxDataUrl);
           setSummary({ count: 1, subject, outputUnits });
           setStage("ready");
           setReconStatus("");
@@ -476,10 +485,15 @@ export function FloorTo3D() {
           </p>
         </div>}
         {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
-        {(dae || glb) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
+        {(dae || glb || obj || fbx) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · Collada .dae · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino` : glb ? "Reconstructed textured mesh · glTF binary .glb" : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · ${summary.outputUnits} · grouped by material`}</p>
-          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={download}><span>Download {dae ? ".dae" : ".glb"}</span><Download /></Button>
+          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <Button variant="default" className="h-11 w-full justify-between" disabled={!fbx} onClick={() => download("fbx")}><span>.fbx</span><Download /></Button>
+            <Button variant="default" className="h-11 w-full justify-between" disabled={!obj} onClick={() => download("obj")}><span>.obj</span><Download /></Button>
+            <Button variant="default" className="h-11 w-full justify-between" disabled={!dae} onClick={() => download("dae")}><span>.dae</span><Download /></Button>
+          </div>
+          <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">FBX · OBJ · DAE</p>
         </div>}
       </div>}
 
