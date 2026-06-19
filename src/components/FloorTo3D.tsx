@@ -10,6 +10,7 @@ import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformat
 import { useCredits } from "@/hooks/use-credits";
 import { generateFloor3D } from "@/lib/floor-3d.functions";
 import { buildMasterPrompt } from "@/lib/floor-3d-prompt.functions";
+import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
@@ -43,12 +44,16 @@ export function FloorTo3D() {
   const [renderUrl, setRenderUrl] = useState<string | null>(null);
   const [renderFinal, setRenderFinal] = useState(false);
   const [dae, setDae] = useState<string | null>(null);
+  const [glb, setGlb] = useState<string | null>(null);
+  const [reconStatus, setReconStatus] = useState("");
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
   const [summary, setSummary] = useState<{ count: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet" } | null>(null);
   const { credits, signedIn, vip, consume } = useCredits();
   const navigate = useNavigate();
   const generate = useServerFn(generateFloor3D);
   const writePrompt = useServerFn(buildMasterPrompt);
+  const startRecon = useServerFn(startMeshReconstruction);
+  const pollRecon = useServerFn(pollMeshReconstruction);
 
   useEffect(() => {
     if ((stage === "modeling" || stage === "ready") && previewRef.current) {
@@ -68,6 +73,7 @@ export function FloorTo3D() {
     setRenderUrl(null);
     setRenderFinal(false);
     setDae(null);
+    setGlb(null);
     setPlan(null);
     setSummary(null);
     const reader = new FileReader();
@@ -84,6 +90,8 @@ export function FloorTo3D() {
     setRenderUrl(null);
     setRenderFinal(false);
     setDae(null);
+    setGlb(null);
+    setReconStatus("");
     setPlan(null);
     setSummary(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -175,14 +183,68 @@ export function FloorTo3D() {
   }
 
   function download() {
-    if (!dae) return;
+    if (!glb && !dae) return;
     const baseName = (fileName.replace(/\.[^.]+$/, "") || (subject === "furniture" ? "furniture" : "floorplan"));
     const anchor = document.createElement("a");
-    anchor.href = dae;
-    anchor.download = `${baseName}.dae`;
+    if (glb) { anchor.href = glb; anchor.download = `${baseName}.glb`; }
+    else { anchor.href = dae!; anchor.download = `${baseName}.dae`; }
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
+  }
+
+  async function reconstructMesh() {
+    if (!renderUrl) return;
+    setBusy("model"); setError(""); setDae(null); setGlb(null); setStage("modeling");
+    setReconStatus("Uploading rendering to mesh reconstructor…");
+    if (!(await consume())) {
+      setBusy(""); setStage("rendered");
+      if (!signedIn) { void navigate({ to: "/auth" }); return; }
+      setError("You have no credits left. Open your Wallet to continue."); return;
+    }
+    try {
+      // Render data URLs may be remote URLs from the streaming image; fetch to data URL first.
+      let imageDataUrl = renderUrl;
+      if (!imageDataUrl.startsWith("data:")) {
+        const res = await fetch(imageDataUrl);
+        const blob = await res.blob();
+        imageDataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
+          r.onerror = () => reject(new Error("Could not read rendering."));
+          r.readAsDataURL(blob);
+        });
+      }
+      const started = await startRecon({ data: { imageDataUrl } });
+      if (!started.ok) { setError(started.error); setStage("rendered"); return; }
+      setReconStatus("Reconstructing textured mesh — this takes 1–5 minutes…");
+      const predictionId = started.predictionId;
+      const deadline = Date.now() + 10 * 60 * 1000;
+      // Poll loop
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (Date.now() > deadline) { setError("Reconstruction timed out after 10 minutes."); setStage("rendered"); return; }
+        await new Promise((r) => setTimeout(r, 6000));
+        const polled = await pollRecon({ data: { predictionId } });
+        if (!polled.ok) { setError(polled.error); setStage("rendered"); return; }
+        if (polled.status && polled.status !== "succeeded") {
+          setReconStatus(`Reconstructing textured mesh — status: ${polled.status}…`);
+          continue;
+        }
+        if (polled.glbDataUrl) {
+          setGlb(polled.glbDataUrl);
+          setSummary({ count: 1, subject, outputUnits });
+          setStage("ready");
+          setReconStatus("");
+          return;
+        }
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Mesh reconstruction failed.");
+      setStage("rendered");
+    } finally {
+      setBusy("");
+    }
   }
 
   const stepHeading = (n: number, label: string, active: boolean, done: boolean) =>
@@ -190,7 +252,7 @@ export function FloorTo3D() {
       <span className={`flex size-5 items-center justify-center rounded-full border ${done ? "border-foreground bg-foreground text-background" : active ? "border-foreground" : "border-border"}`}>{done ? <Check className="size-3" /> : n}</span>
       {label}
     </div>;
-  const showLivePreview = stage === "modeling" || stage === "ready" || Boolean(dae);
+  const showLivePreview = stage === "modeling" || stage === "ready" || Boolean(dae) || Boolean(glb);
 
   return <main className="min-h-screen bg-background"><FormaHeader /><div className="px-5 pt-7"><BackLink /></div>
     <PageIntro eyebrow="2D to 3D" title="2D plan to 3D model" description="Upload a fully dimensioned floor plan or furniture drawing. AI reads every printed dimension and exports an editable Collada .dae model in the units you choose.">
@@ -318,6 +380,10 @@ export function FloorTo3D() {
             <span>Approve & build 3D model</span>
             <Check />
           </Button>}
+          {renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
+            <span>Reconstruct real 3D mesh from rendering (.glb)</span>
+            <Sparkles />
+          </Button>}
         </>}
       </>}
 
@@ -325,13 +391,13 @@ export function FloorTo3D() {
       {showLivePreview && <div ref={previewRef}>
         <div className="mt-8">{stepHeading(4, "Live 3D preview", stage === "modeling" || stage === "ready", Boolean(dae))}</div>
         {busy === "model" && <div className="mt-3 flex h-56 items-center justify-center rounded-2xl border border-border text-xs text-muted-foreground">
-          <LoaderCircle className="mr-2 animate-spin" /> Reconstructing geometry…
+          <LoaderCircle className="mr-2 animate-spin" /> {reconStatus || "Reconstructing geometry…"}
         </div>}
-        {dae && <div className="mt-3"><Furniture3DPreview key={dae} plan={plan ?? undefined} daeDataUrl={dae} /></div>}
-        {dae && summary && <div className="mt-4 rounded-2xl border border-border p-4">
+        {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
+        {(dae || glb) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{summary.count} {summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · {summary.outputUnits} · grouped by material</p>
-          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={download}><span>Download .dae</span><Download /></Button>
+          <p className="mt-2 text-xs text-muted-foreground">{glb ? "Reconstructed textured mesh · glTF binary .glb · opens in Blender, SketchUp (via importer), Rhino, Three.js" : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · ${summary.outputUnits} · grouped by material`}</p>
+          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={download}><span>Download {glb ? ".glb" : ".dae"}</span><Download /></Button>
         </div>}
       </div>}
 

@@ -3,6 +3,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Rotate3D, Loader2 } from "lucide-react";
 import {
   MATERIAL_PALETTE,
@@ -24,6 +25,15 @@ function readDaeText(daeDataUrl: string) {
   const binary = atob(payload);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return Promise.resolve(new TextDecoder("utf-8").decode(bytes));
+}
+
+function readBinary(dataUrl: string): Promise<ArrayBuffer> {
+  if (!dataUrl.startsWith("data:")) return fetch(dataUrl).then((r) => r.arrayBuffer());
+  const comma = dataUrl.indexOf(",");
+  const binary = atob(dataUrl.slice(comma + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return Promise.resolve(bytes.buffer);
 }
 
 function PreviewCamera({ maxDim, height }: { maxDim: number; height: number }) {
@@ -52,6 +62,7 @@ function useDaeScene(daeDataUrl: string) {
       try {
         setScene(null);
         setError("");
+        if (!daeDataUrl) return;
         const text = await readDaeText(daeDataUrl);
         if (cancelled) return;
         const collada = loader.parse(text, "");
@@ -99,8 +110,50 @@ function useDaeScene(daeDataUrl: string) {
   return { scene, error };
 }
 
-export function Furniture3DPreview({ plan, daeDataUrl }: { plan?: FurniturePlan; daeDataUrl: string }) {
-  const { scene, error } = useDaeScene(daeDataUrl);
+function useGlbScene(glbDataUrl: string) {
+  const [scene, setScene] = useState<THREE.Group | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    const loader = new GLTFLoader();
+    const run = async () => {
+      try {
+        setScene(null);
+        setError("");
+        if (!glbDataUrl) return;
+        const buf = await readBinary(glbDataUrl);
+        if (cancelled) return;
+        loader.parse(buf, "", (gltf) => {
+          if (cancelled) return;
+          const root = gltf.scene as THREE.Group;
+          let meshCount = 0;
+          root.traverse((obj) => {
+            const mesh = obj as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            meshCount += 1;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+          });
+          if (meshCount === 0) { setError("The reconstructed mesh was empty."); return; }
+          setScene(root);
+        }, (err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : "The .glb mesh could not be loaded.");
+        });
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "The .glb mesh could not be loaded.");
+      }
+    };
+    void run();
+    return () => { cancelled = true; };
+  }, [glbDataUrl]);
+  return { scene, error };
+}
+
+export function Furniture3DPreview({ plan, daeDataUrl, glbDataUrl }: { plan?: FurniturePlan; daeDataUrl?: string; glbDataUrl?: string }) {
+  const dae = useDaeScene(glbDataUrl ? "" : (daeDataUrl ?? ""));
+  const glb = useGlbScene(glbDataUrl ?? "");
+  const scene = glbDataUrl ? glb.scene : dae.scene;
+  const error = glbDataUrl ? glb.error : dae.error;
 
   // Centre the loaded scene on the ground plane (Y up after our rotation) and
   // derive bounds straight from the geometry so the preview works for any .dae
