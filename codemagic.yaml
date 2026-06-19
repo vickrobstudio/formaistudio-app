@@ -30,12 +30,18 @@ workflows:
           bun install
       - name: Add iOS platform if missing
         script: |
-          if [ ! -d "ios" ]; then
-            bunx cap add ios
+          set -e
+          if [ ! -f "ios/App/Podfile" ]; then
+            rm -rf ios
+            mkdir -p dist
+            npx --yes cap add ios
           fi
+          ls -la ios/App
       - name: Sync Capacitor iOS
         script: |
-          bunx cap sync ios
+          set -e
+          mkdir -p dist
+          npx --yes cap sync ios
       - name: Install CocoaPods dependencies
         script: |
           cd ios/App && pod install
