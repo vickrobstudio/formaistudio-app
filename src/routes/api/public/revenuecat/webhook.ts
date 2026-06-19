@@ -49,7 +49,7 @@ async function handle(event: RCEvent) {
         is_active: isActiveEvent,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,entitlement_id" },
+      { onConflict: "user_id,entitlement_id,product_id" },
     );
   }
 }
