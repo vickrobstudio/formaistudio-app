@@ -114,7 +114,20 @@ function xmlEscape(s: string): string {
   return s.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c]!));
 }
 
-export function glbToDae(glbBytes: Uint8Array, options: { units?: "meters" | "feet" } = {}): string {
+export function glbToDae(
+  glbBytes: Uint8Array,
+  options: {
+    units?: "meters" | "feet";
+    /**
+     * Target real-world bounding box in METERS, taken from the 2D plan.
+     * Trellis returns a normalised mesh (~unit cube). When supplied, the
+     * mesh is non-uniformly scaled so its bounding box matches the plan
+     * width/depth/height exactly — i.e. the downloadable .dae has the
+     * dimensions the user typed into the plan.
+     */
+    targetBoundsMeters?: { width: number; depth: number; height: number };
+  } = {},
+): string {
   const { json, bin } = parseGlb(glbBytes);
   const meshes = (json.meshes as Array<{ primitives: Array<{ attributes: Record<string, number>; indices?: number; material?: number; mode?: number }>; name?: string }>) ?? [];
   if (!meshes.length) throw new Error("GLB contains no meshes.");
@@ -169,6 +182,36 @@ export function glbToDae(glbBytes: Uint8Array, options: { units?: "meters" | "fe
   const unit = options.units === "feet" ? 0.3048 : 1;
   const unitName = options.units === "feet" ? "foot" : "meter";
 
+  // Compute the mesh bounding box across all primitives so we can scale to
+  // the plan's real-world dimensions. Trellis uses Y-up, so we map
+  //   plan.width  -> mesh X
+  //   plan.height -> mesh Y
+  //   plan.depth  -> mesh Z
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (const tri of tris) {
+    for (let i = 0; i < tri.positions.length; i += 3) {
+      const x = tri.positions[i];
+      const y = tri.positions[i + 1];
+      const z = tri.positions[i + 2];
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
+  }
+  const meshW = Math.max(maxX - minX, 1e-6);
+  const meshH = Math.max(maxY - minY, 1e-6);
+  const meshD = Math.max(maxZ - minZ, 1e-6);
+  const cx = (minX + maxX) / 2;
+  const cz = (minZ + maxZ) / 2;
+
+  // Per-axis scale in METERS so the mesh bbox exactly matches the plan
+  // bounds. Falls back to 1 (no rescale) when no target is supplied.
+  const tb = options.targetBoundsMeters;
+  const sxM = tb && tb.width  > 0 ? tb.width  / meshW : 1;
+  const syM = tb && tb.height > 0 ? tb.height / meshH : 1;
+  const szM = tb && tb.depth  > 0 ? tb.depth  / meshD : 1;
+
   // Build geometries
   const geometryXml: string[] = [];
   const materialXml: string[] = [];
@@ -195,7 +238,19 @@ export function glbToDae(glbBytes: Uint8Array, options: { units?: "meters" | "fe
     materialXml.push(`<material id="${matId}" name="${xmlEscape(tri.name)}"><instance_effect url="#${fxId}-effect"/></material>`);
 
     const posCount = tri.positions.length / 3;
-    const posFloats = Array.from(tri.positions, (v) => fmt(v * unit)).join(" ");
+    // Re-centre on X/Z, drop to Y=0, then scale to plan dimensions in
+    // metres, then convert to the chosen output unit (1 for metres,
+    // 1/0.3048 for feet — `unit` is metres-per-output-unit, so divide).
+    const posArr = new Array<string>(tri.positions.length);
+    for (let i = 0; i < tri.positions.length; i += 3) {
+      const xMeters = (tri.positions[i]     - cx)   * sxM;
+      const yMeters = (tri.positions[i + 1] - minY) * syM;
+      const zMeters = (tri.positions[i + 2] - cz)   * szM;
+      posArr[i]     = fmt(xMeters / unit);
+      posArr[i + 1] = fmt(yMeters / unit);
+      posArr[i + 2] = fmt(zMeters / unit);
+    }
+    const posFloats = posArr.join(" ");
     const posSource = `<source id="${geomId}-pos"><float_array id="${geomId}-pos-array" count="${tri.positions.length}">${posFloats}</float_array><technique_common><accessor source="#${geomId}-pos-array" count="${posCount}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>`;
 
     let normSource = "";
