@@ -1282,7 +1282,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "google/gemini-3-flash-preview",
         messages: [{ role: "user", content: userContent }],
         response_format: { type: "json_object" },
       }),
