@@ -74,62 +74,36 @@ function PricingPage() {
           </div>
         ) : (
           <>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {PLANS.map((plan) => {
                 const isPro = plan.id === "pro_monthly";
                 const owned = sub.activePlans.has(plan.id);
                 return (
-                  <div
+                  <button
                     key={plan.id}
-                    className={`flex flex-col rounded-2xl border bg-card p-6 shadow-sm ${isPro ? "ring-2 ring-black" : ""}`}
+                    type="button"
+                    onClick={() => void handleSubscribe(plan.id)}
+                    disabled={iapBusy === plan.id || owned}
+                    className={`group relative flex aspect-square flex-col justify-between rounded-2xl border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-90 ${isPro ? "ring-2 ring-black" : ""}`}
                   >
-                    {isPro && (
-                      <span className="mb-3 inline-block w-fit rounded-full bg-black px-3 py-1 text-xs font-medium text-white">
-                        Best value
-                      </span>
-                    )}
-                    <h2 className="text-xl font-semibold">{plan.name}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">{plan.blurb}</p>
-                    <div className="mt-5 flex items-baseline gap-1">
-                      <span className="text-3xl font-semibold">${plan.priceUsd}</span>
-                      <span className="text-sm text-muted-foreground">/month</span>
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">{plan.credits.toLocaleString()} credits / month</div>
-
-                    <div className="mt-6 flex-1" />
-
-                    {owned ? (
-                      <div className="rounded-xl bg-muted px-3 py-2 text-center text-xs">
-                        Subscribed{sub.cancelAtPeriodEnd && sub.plan === plan.id ? " (ends at period end)" : ""}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => void handleSubscribe(plan.id)}
-                        disabled={iapBusy === plan.id}
-                        className={`w-full rounded-full px-5 py-3 text-sm font-medium transition ${
-                          isPro ? "bg-black text-white hover:bg-black/85" : "border border-black/15 hover:bg-muted"
-                        } disabled:opacity-50`}
-                      >
-                        {iapBusy === plan.id ? "Opening Apple…" : `Subscribe — $${plan.priceUsd}/mo`}
-                      </button>
-                    )}
-                  </div>
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-semibold leading-tight">{plan.name}</span>
+                      {isPro && <span className="rounded-full bg-black px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">Best</span>}
+                    </span>
+                    <span className="block">
+                      <span className="block text-2xl font-semibold leading-none">${plan.priceUsd}<span className="text-xs font-normal text-muted-foreground">/mo</span></span>
+                      <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : "Subscribe"}</span>
+                    </span>
+                  </button>
                 );
               })}
-
-              <div className="flex flex-col rounded-2xl border border-dashed bg-muted/30 p-6">
-                <h2 className="text-xl font-semibold">Photo to AI</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Free forever. Convert photos into AI-styled images.</p>
-                <div className="mt-5 text-3xl font-semibold">Free</div>
-                <div className="mt-1 text-xs text-muted-foreground">No subscription needed</div>
-                <div className="mt-6 flex-1" />
-                <Link
-                  to="/photo-to-ai"
-                  className="w-full rounded-full border border-black/15 px-5 py-3 text-center text-sm font-medium hover:bg-background"
-                >
-                  Open Photo to AI
-                </Link>
-              </div>
+              <Link to="/photo-to-ai" className="flex aspect-square flex-col justify-between rounded-2xl border border-dashed bg-muted/30 p-4 transition-colors hover:bg-accent">
+                <span className="text-sm font-semibold leading-tight">Photo to AI</span>
+                <span className="block">
+                  <span className="block text-2xl font-semibold leading-none">Free</span>
+                  <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Open</span>
+                </span>
+              </Link>
             </div>
 
             {onIOS && (
