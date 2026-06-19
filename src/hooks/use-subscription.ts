@@ -26,6 +26,7 @@ function computeActive(row: { status: string; current_period_end: string | null 
 
 export function useSubscription() {
   const [rows, setRows] = useState<Array<{ status: string; price_id: string; current_period_end: string | null; cancel_at_period_end: boolean | null }>>([]);
+  const [iapRows, setIapRows] = useState<Array<{ entitlement_id: string; expires_at: string | null; is_active: boolean }>>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,15 +35,22 @@ export function useSubscription() {
     try { env = getStripeEnvironment(); } catch { env = null; }
 
     async function refetch(userId: string) {
-      if (!env) return;
-      const { data } = await supabase
-        .from("subscriptions")
-        .select("status, price_id, current_period_end, cancel_at_period_end")
-        .eq("user_id", userId)
-        .eq("environment", env)
-        .order("created_at", { ascending: false });
+      const subsPromise = env
+        ? supabase
+            .from("subscriptions")
+            .select("status, price_id, current_period_end, cancel_at_period_end")
+            .eq("user_id", userId)
+            .eq("environment", env)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as any[] });
+      const iapPromise = supabase
+        .from("iap_entitlements")
+        .select("entitlement_id, expires_at, is_active")
+        .eq("user_id", userId);
+      const [subs, iap] = await Promise.all([subsPromise, iapPromise]);
       if (cancelled) return;
-      setRows(data ?? []);
+      setRows((subs as any).data ?? []);
+      setIapRows(((iap as any).data ?? []) as any);
       setLoading(false);
     }
 
@@ -71,6 +79,11 @@ export function useSubscription() {
         if (!primary) primary = r;
       }
     }
+    const now = Date.now();
+    for (const e of iapRows) {
+      const exp = e.expires_at ? new Date(e.expires_at).getTime() : null;
+      if (e.is_active && (exp === null || exp > now)) activePlans.add(e.entitlement_id);
+    }
     return {
       loading,
       isActive: activePlans.size > 0,
@@ -81,5 +94,5 @@ export function useSubscription() {
       activePlans,
       hasTool: (toolPath: string) => toolUnlockedBy(activePlans, toolPath),
     };
-  }, [rows, loading]);
+  }, [rows, iapRows, loading]);
 }
