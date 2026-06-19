@@ -1197,10 +1197,21 @@ export const generateFloor3D = createServerFn({ method: "POST" })
         userContent.push({ type: "image_url", image_url: { url } });
       }
     }
+    // The master prompt drove the approved rendering — feed it back in so the
+    // geometry model uses the SAME shape, size and detail language when
+    // reconstructing the .dae. This applies in BOTH normal mode (drawing +
+    // approved render) and referenceOnly mode (render-only build) so the 3D
+    // output mirrors the rendering 1:1.
+    if (data.masterPrompt && data.masterPrompt.trim()) {
+      userContent.push({
+        type: "text",
+        text: `MASTER PROMPT — this is the EXACT prompt that produced the approved rendering above. Treat it as BINDING for the 3D reconstruction: every dimension, proportion, part, material, finish, edge profile and UPPER-CASE feature it mentions MUST be reproduced in the geometry. Do not simplify, omit or restyle anything described here.\n"""\n${data.masterPrompt}\n"""`,
+      });
+    }
     if (!data.referenceOnly && data.subject === "furniture" && data.approvedRenderUrl) {
       userContent.push({
         type: "text",
-        text: `APPROVED RENDERING follows — this is the final approved look of the piece. The 3D geometry MUST match this silhouette and grouping 1:1. Do not separate visually-continuous shapes into multiple parts and do not invent a different shape.${data.masterPrompt ? `\n\nMaster prompt used to create this rendering:\n"""\n${data.masterPrompt}\n"""` : ""}`,
+        text: `APPROVED RENDERING follows — this is the final approved look of the piece. The 3D geometry MUST match this silhouette and grouping 1:1. Do not separate visually-continuous shapes into multiple parts and do not invent a different shape.`,
       });
       userContent.push({ type: "image_url", image_url: { url: data.approvedRenderUrl } });
     }
