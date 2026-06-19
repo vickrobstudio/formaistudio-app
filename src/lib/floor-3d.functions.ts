@@ -730,6 +730,7 @@ function addRoundedBox(
   scale: number,
   cornerRadius: number,
   cornerSegments = 8,
+  edgeRadius = 0,
 ) {
   const r = Math.max(0, Math.min(cornerRadius, width / 2, depth / 2));
   if (r <= 0.0005) {
@@ -751,8 +752,6 @@ function addRoundedBox(
     return;
   }
   const hx = width / 2, hy = depth / 2, hz = height / 2;
-  const theta = (rotationDegZ * Math.PI) / 180;
-  const cos = Math.cos(theta), sin = Math.sin(theta);
   // Build a stadium-style outline (rectangle with rounded corners) and extrude.
   const outline: [number, number][] = [];
   const corners: Array<{ cx: number; cy: number; start: number }> = [
@@ -767,27 +766,8 @@ function addRoundedBox(
       outline.push([c.cx + Math.cos(a) * r, c.cy + Math.sin(a) * r]);
     }
   }
-  const base = group.positions.length / 3;
-  for (let level = 0; level < 2; level++) {
-    const z = level === 0 ? -hz : hz;
-    for (const [lx, ly] of outline) {
-      const wx = cx + lx * cos - ly * sin;
-      const wy = cy + lx * sin + ly * cos;
-      group.positions.push(wx * scale, wy * scale, (cz + z) * scale);
-    }
-  }
-  const n = outline.length;
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-    const b0 = base + i, b1 = base + next;
-    const t0 = base + n + i, t1 = base + n + next;
-    group.indices.push(b0, b1, t1, b0, t1, t0);
-  }
-  // Fan caps from first vertex.
-  for (let i = 1; i < n - 1; i++) {
-    group.indices.push(base, base + i + 1, base + i);          // bottom (face down)
-    group.indices.push(base + n, base + n + i, base + n + i + 1); // top (face up)
-  }
+  addFilletedExtrusion(group, outline, cx, cy, cz, height, edgeRadius, rotationDegZ, scale);
+  void hx; void hy; void hz;
 }
 
 function addCustomExtrusion(
