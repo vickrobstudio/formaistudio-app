@@ -5,6 +5,7 @@ import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
 import { useSubscription } from "@/hooks/use-subscription";
 import { PLANS, type PlanId } from "@/lib/plans";
+import { isNativeIOS, purchasePlan, restorePurchases } from "@/lib/iap";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -24,6 +25,9 @@ function PricingPage() {
   const sub = useSubscription();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<PlanId | null>(null);
+  const [iapBusy, setIapBusy] = useState<PlanId | null>(null);
+  const [iapMsg, setIapMsg] = useState<string | null>(null);
+  const onIOS = isNativeIOS();
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
@@ -33,9 +37,17 @@ function PricingPage() {
     ? `${window.location.origin}/checkout/return?session_id={CHECKOUT_SESSION_ID}`
     : "";
 
-  const handleSubscribe = (planId: PlanId) => {
+  const handleSubscribe = async (planId: PlanId) => {
     if (signedIn === false) {
       void navigate({ to: "/auth", search: { redirect: "/pricing" } as any });
+      return;
+    }
+    if (onIOS) {
+      setIapBusy(planId);
+      setIapMsg(null);
+      const res = await purchasePlan(planId);
+      setIapBusy(null);
+      if (!res.ok && !("cancelled" in res && res.cancelled)) setIapMsg(res.error);
       return;
     }
     setSelected(planId);
@@ -89,12 +101,13 @@ function PricingPage() {
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleSubscribe(plan.id)}
+                        onClick={() => void handleSubscribe(plan.id)}
+                        disabled={iapBusy === plan.id}
                         className={`w-full rounded-full px-5 py-3 text-sm font-medium transition ${
                           isPro ? "bg-black text-white hover:bg-black/85" : "border border-black/15 hover:bg-muted"
-                        }`}
+                        } disabled:opacity-50`}
                       >
-                        Subscribe — ${plan.priceUsd}/mo
+                        {iapBusy === plan.id ? "Opening Apple…" : `Subscribe — $${plan.priceUsd}/mo`}
                       </button>
                     )}
                   </div>
@@ -115,6 +128,18 @@ function PricingPage() {
                 </Link>
               </div>
             </div>
+
+            {onIOS && (
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => void restorePurchases()}
+                  className="text-xs text-muted-foreground underline"
+                >
+                  Restore purchases
+                </button>
+                {iapMsg && <p className="mt-2 text-xs text-red-600">{iapMsg}</p>}
+              </div>
+            )}
 
             <p className="mt-10 text-center text-xs text-muted-foreground">
               Cancel anytime. Access continues until the end of your billing period.
