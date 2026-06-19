@@ -74,7 +74,7 @@ function PricingPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mx-auto grid max-w-4xl grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {PLANS.map((plan) => {
                 const isPro = plan.id === "pro_monthly";
                 const owned = sub.activePlans.has(plan.id);
@@ -84,24 +84,24 @@ function PricingPage() {
                     type="button"
                     onClick={() => void handleSubscribe(plan.id)}
                     disabled={iapBusy === plan.id || owned}
-                    className={`group relative flex aspect-square flex-col justify-between rounded-2xl border bg-card p-4 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-90 ${isPro ? "ring-2 ring-black" : ""}`}
+                    className={`group relative flex aspect-square flex-col justify-between rounded-3xl border bg-card p-7 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-90 ${isPro ? "ring-2 ring-black" : ""}`}
                   >
                     <span className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-semibold leading-tight">{plan.name}</span>
-                      {isPro && <span className="rounded-full bg-black px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">Best</span>}
+                      <span className="text-lg font-semibold leading-tight">{plan.name}</span>
+                      {isPro && <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Best</span>}
                     </span>
                     <span className="block">
-                      <span className="block text-2xl font-semibold leading-none">${plan.priceUsd}<span className="text-xs font-normal text-muted-foreground">/mo</span></span>
-                      <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : "Subscribe"}</span>
+                      <span className="block text-5xl font-semibold leading-none">${plan.priceUsd}<span className="text-base font-normal text-muted-foreground">/mo</span></span>
+                      <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : "Subscribe"}</span>
                     </span>
                   </button>
                 );
               })}
-              <Link to="/photo-to-ai" className="flex aspect-square flex-col justify-between rounded-2xl border border-dashed bg-muted/30 p-4 transition-colors hover:bg-accent">
-                <span className="text-sm font-semibold leading-tight">Photo to AI</span>
+              <Link to="/photo-to-ai" className="flex aspect-square flex-col justify-between rounded-3xl border border-dashed bg-muted/30 p-7 transition-colors hover:bg-accent">
+                <span className="text-lg font-semibold leading-tight">Photo to AI</span>
                 <span className="block">
-                  <span className="block text-2xl font-semibold leading-none">Free</span>
-                  <span className="mt-1 block text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Open</span>
+                  <span className="block text-5xl font-semibold leading-none">Free</span>
+                  <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Open</span>
                 </span>
               </Link>
             </div>
