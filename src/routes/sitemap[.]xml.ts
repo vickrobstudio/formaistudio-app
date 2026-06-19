@@ -3,7 +3,7 @@ import type {} from "@tanstack/react-start";
 
 const BASE_URL = "https://formaistudio.app";
 
-const entries = ["/", "/about", "/ai-edits", "/ai-to-video", "/auth", "/contact", "/create", "/feed", "/model-to-ai", "/photo-to-ai", "/privacy", "/studio", "/terms", "/tools"];
+const entries = ["/", "/2d-to-3d", "/about", "/ai-edits", "/ai-to-video", "/auth", "/contact", "/create", "/feed", "/model-to-ai", "/photo-to-ai", "/privacy", "/studio", "/terms", "/tools"];
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
