@@ -45,8 +45,15 @@ workflows:
           keychain initialize
       - name: Fetch signing files
         script: |
+          CERTIFICATE_KEY_PATH="$CM_BUILD_DIR/codemagic_private_key"
+          if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+            printf "%s\n" "$CERTIFICATE_PRIVATE_KEY" > "$CERTIFICATE_KEY_PATH"
+          else
+            ssh-keygen -t rsa -b 2048 -m PEM -f "$CERTIFICATE_KEY_PATH" -q -N ""
+          fi
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key "@file:$CERTIFICATE_KEY_PATH" \
             --create \
             --delete-stale-profiles
       - name: Add certificates to keychain
