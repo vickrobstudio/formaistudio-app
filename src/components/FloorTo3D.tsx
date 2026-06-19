@@ -264,7 +264,7 @@ export function FloorTo3D() {
       while (true) {
         if (Date.now() > deadline) { setError("Reconstruction timed out after 10 minutes."); setStage("rendered"); return; }
         await new Promise((r) => setTimeout(r, 6000));
-        const polled = await pollRecon({ data: { predictionId } });
+        const polled = await pollRecon({ data: { predictionId, outputUnits } });
         if (!polled.ok) { setError(polled.error); setStage("rendered"); return; }
         if (polled.status && polled.status !== "succeeded") {
           setReconStatus(`Reconstructing textured mesh — status: ${polled.status}…`);
@@ -272,6 +272,7 @@ export function FloorTo3D() {
         }
         if (polled.glbDataUrl) {
           setGlb(polled.glbDataUrl);
+          if (polled.daeDataUrl) setDae(polled.daeDataUrl);
           setSummary({ count: 1, subject, outputUnits });
           setStage("ready");
           setReconStatus("");
