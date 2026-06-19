@@ -945,6 +945,12 @@ function buildGroups(
     slab.addBox(0, 0, -0.05, plan.bounds.width, plan.bounds.length, 0);
     groups.push(slab.group);
 
+    // Ceiling slab — full footprint, sitting on top of the default wall
+    // height. Becomes its own selectable layer ("Ceiling") on .dae import.
+    const ceiling = makeGroupBuilder("group_ceiling", "Ceiling", scale, "plaster_white");
+    ceiling.addBox(0, 0, wallHeightMeters, plan.bounds.width, plan.bounds.length, wallHeightMeters + 0.08);
+    groups.push(ceiling.group);
+
     // Group by (category, material) so each visually distinct material region
     // in the rendering becomes its own selectable .dae layer.
     const bucketFor = (
@@ -975,6 +981,62 @@ function buildGroups(
       addWallWithOpenings(b.addCorners, wall, wallHeightMeters);
     }
     for (const b of wallBuckets.values()) groups.push(b.group);
+
+    // Doors and windows — every wall opening becomes a real 3D element so
+    // the .dae shows actual door leaves and glass panes inside the holes
+    // the wall geometry cut out (instead of empty rectangles).
+    const doorBucket = makeGroupBuilder("group_doors", "Doors", scale, "wood_oak");
+    const windowGlass = makeGroupBuilder("group_window_glass", "Windows - Glass", scale, "glass_clear");
+    const windowFrame = makeGroupBuilder("group_window_frames", "Windows - Frames", scale, "metal_aluminum_brushed");
+    for (const wall of plan.walls) {
+      const dx = wall.x2 - wall.x1;
+      const dy = wall.y2 - wall.y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 0.05) continue;
+      const ux = dx / len, uy = dy / len;
+      const top = wall.height ?? wallHeightMeters;
+      const angleDeg = (Math.atan2(uy, ux) * 180) / Math.PI;
+      for (const op of wall.openings) {
+        const start = Math.max(0, Math.min(len, op.position));
+        const end = Math.max(0, Math.min(len, op.position + op.width));
+        const wOp = end - start;
+        if (wOp < 0.05) continue;
+        const sill = Math.max(0, Math.min(top, op.sillHeight));
+        const head = Math.max(sill + 0.05, Math.min(top, op.headHeight));
+        const hOp = head - sill;
+        const midAlong = (start + end) / 2;
+        const cx = wall.x1 + ux * midAlong;
+        const cy = wall.y1 + uy * midAlong;
+        if (op.kind === "door") {
+          // Door leaf: 4 cm thick panel filling the opening, sitting inside the wall.
+          const thickness = Math.min(0.04, wall.thickness * 0.4);
+          addRotatedBox(doorBucket.addCorners, cx, cy, sill + hOp / 2, wOp - 0.02, thickness, hOp - 0.02, angleDeg);
+        } else {
+          // Window: thin glass pane centered in wall, with a slim frame around it.
+          const glassThickness = Math.min(0.02, wall.thickness * 0.25);
+          const frameDepth = Math.min(0.05, wall.thickness * 0.5);
+          const frameWidth = 0.05;
+          // Glass pane (inset by frame width on all sides)
+          const gW = Math.max(0.05, wOp - 2 * frameWidth);
+          const gH = Math.max(0.05, hOp - 2 * frameWidth);
+          addRotatedBox(windowGlass.addCorners, cx, cy, sill + hOp / 2, gW, glassThickness, gH, angleDeg);
+          // Frame: 4 thin bars (top, bottom, left, right) — drawn as boxes in wall plane
+          // Bottom rail
+          addRotatedBox(windowFrame.addCorners, cx, cy, sill + frameWidth / 2, wOp, frameDepth, frameWidth, angleDeg);
+          // Top rail
+          addRotatedBox(windowFrame.addCorners, cx, cy, head - frameWidth / 2, wOp, frameDepth, frameWidth, angleDeg);
+          // Side stiles — offset along the wall direction
+          const stileOffset = (wOp - frameWidth) / 2;
+          const lx = cx - ux * stileOffset, ly = cy - uy * stileOffset;
+          const rx = cx + ux * stileOffset, ry = cy + uy * stileOffset;
+          addRotatedBox(windowFrame.addCorners, lx, ly, sill + hOp / 2, frameWidth, frameDepth, hOp, angleDeg);
+          addRotatedBox(windowFrame.addCorners, rx, ry, sill + hOp / 2, frameWidth, frameDepth, hOp, angleDeg);
+        }
+      }
+    }
+    if (doorBucket.group.positions.length) groups.push(doorBucket.group);
+    if (windowGlass.group.positions.length) groups.push(windowGlass.group);
+    if (windowFrame.group.positions.length) groups.push(windowFrame.group);
 
     if (plan.columns.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
