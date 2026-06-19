@@ -17,6 +17,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
+import { Route as FloorPlanTo3dRouteImport } from './routes/floor-plan-to-3d'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CreateRouteImport } from './routes/create'
@@ -73,6 +74,11 @@ const PhotoToAiRoute = PhotoToAiRouteImport.update({
 const ModelToAiRoute = ModelToAiRouteImport.update({
   id: '/model-to-ai',
   path: '/model-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FloorPlanTo3dRoute = FloorPlanTo3dRouteImport.update({
+  id: '/floor-plan-to-3d',
+  path: '/floor-plan-to-3d',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedRoute = FeedRouteImport.update({
@@ -171,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
+  '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -197,6 +204,7 @@ export interface FileRoutesByTo {
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
+  '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -225,6 +233,7 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
+  '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/privacy': typeof PrivacyRoute
@@ -253,6 +262,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/dashboard'
     | '/feed'
+    | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -279,6 +289,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/dashboard'
     | '/feed'
+    | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -306,6 +317,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/dashboard'
     | '/feed'
+    | '/floor-plan-to-3d'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/privacy'
@@ -334,6 +346,7 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   DashboardRoute: typeof DashboardRoute
   FeedRoute: typeof FeedRoute
+  FloorPlanTo3dRoute: typeof FloorPlanTo3dRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -402,6 +415,13 @@ declare module '@tanstack/react-router' {
       path: '/model-to-ai'
       fullPath: '/model-to-ai'
       preLoaderRoute: typeof ModelToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/floor-plan-to-3d': {
+      id: '/floor-plan-to-3d'
+      path: '/floor-plan-to-3d'
+      fullPath: '/floor-plan-to-3d'
+      preLoaderRoute: typeof FloorPlanTo3dRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feed': {
@@ -555,6 +575,7 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   DashboardRoute: DashboardRoute,
   FeedRoute: FeedRoute,
+  FloorPlanTo3dRoute: FloorPlanTo3dRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
   PrivacyRoute: PrivacyRoute,
