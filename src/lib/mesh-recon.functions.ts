@@ -89,7 +89,20 @@ export const startMeshReconstruction = createServerFn({ method: "POST" })
         }),
       });
       if (!res.ok) {
-        return { ok: false as const, error: `Replicate rejected the request (${res.status}): ${await res.text()}` };
+        const body = await res.text();
+        if (res.status === 402) {
+          return {
+            ok: false as const,
+            error: "Your Replicate account is out of credit. Add credit at replicate.com/account/billing, wait ~2 minutes, then retry.",
+          };
+        }
+        if (res.status === 401 || res.status === 403) {
+          return {
+            ok: false as const,
+            error: "Replicate rejected the API key. Re-link the Replicate connector and try again.",
+          };
+        }
+        return { ok: false as const, error: `Replicate rejected the request (${res.status}): ${body.slice(0, 200)}` };
       }
       const json = (await res.json()) as { id?: string };
       if (!json.id) return { ok: false as const, error: "Replicate did not return a prediction id." };
