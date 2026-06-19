@@ -267,7 +267,22 @@ export function FloorTo3D() {
       while (true) {
         if (Date.now() > deadline) { setError("Reconstruction timed out after 10 minutes."); setStage("rendered"); return; }
         await new Promise((r) => setTimeout(r, 6000));
-        const polled = await pollRecon({ data: { predictionId, outputUnits } });
+        const polled = await pollRecon({
+          data: {
+            predictionId,
+            outputUnits,
+            // Pass the real-world bounds parsed from the 2D plan so the
+            // downloaded .dae has the exact width/depth/height the user
+            // typed in — not Trellis's normalised unit-cube output.
+            targetBoundsMeters: plan?.bounds
+              ? {
+                  width: plan.bounds.width,
+                  depth: plan.bounds.depth,
+                  height: plan.bounds.height,
+                }
+              : undefined,
+          },
+        });
         if (!polled.ok) { setError(polled.error); setStage("rendered"); return; }
         if (polled.status && polled.status !== "succeeded") {
           setReconStatus(`Reconstructing textured mesh — status: ${polled.status}…`);
