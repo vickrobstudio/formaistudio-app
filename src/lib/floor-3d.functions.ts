@@ -367,6 +367,12 @@ REFERENCE RENDERING IS THE 100% FIDELITY SOURCE OF TRUTH — geometry, materials
 - Do NOT output a simplified blocky stand-in. Round, oval, ring, tapered, scalloped, arched, wavy or asymmetric features MUST use the closest matching primitive (cylinder / ellipse_cylinder / tapered_cylinder / torus / rounded_box / custom_extrusion) — never substitute a box.
 - Do not output annotations, labels, dimension marks, cameras, lights, background scenery, shadows or image-plane billboards.
 
+EDGE PROFILES — MANDATORY 1:1 WITH THE RENDERING:
+- Inspect the edges of EVERY part in the reference rendering. If an edge looks rounded, softened, bullnosed, eased, chamfered, pillowed or radiused (even slightly), you MUST set "edgeRadius" on that part to the visible radius in meters (sampled from the rendering, e.g. 0.003 m for a hairline eased edge, 0.008 m for a typical softened edge, 0.012–0.02 m for a clear bullnose, half the part's thickness for a FULL bullnose).
+- For rectangular parts with rounded corners in PLAN (e.g. a soft-cornered tabletop, cushion, plinth) use "rounded_box" and set BOTH the corner radius (via the plan view) AND "edgeRadius" for the top/bottom horizontal edge fillet. The .dae export turns "edgeRadius" into a real fillet on the top and bottom of the extrusion, so omitting it produces a wrong sharp-edged piece.
+- For "custom_extrusion" silhouettes, "edgeRadius" produces the same top/bottom fillet — set it whenever the rendering shows a non-sharp top/bottom edge.
+- Default to a small "edgeRadius" of 0.002–0.005 m on any furniture surface that is clearly not knife-sharp in the rendering. Only set 0 / omit it when the edge is unambiguously a hard 90° corner.
+
 Return JSON ONLY in this exact shape:
 {
   "kind": "furniture",
@@ -730,6 +736,7 @@ function addRoundedBox(
   scale: number,
   cornerRadius: number,
   cornerSegments = 8,
+  edgeRadius = 0,
 ) {
   const r = Math.max(0, Math.min(cornerRadius, width / 2, depth / 2));
   if (r <= 0.0005) {
@@ -751,8 +758,6 @@ function addRoundedBox(
     return;
   }
   const hx = width / 2, hy = depth / 2, hz = height / 2;
-  const theta = (rotationDegZ * Math.PI) / 180;
-  const cos = Math.cos(theta), sin = Math.sin(theta);
   // Build a stadium-style outline (rectangle with rounded corners) and extrude.
   const outline: [number, number][] = [];
   const corners: Array<{ cx: number; cy: number; start: number }> = [
@@ -767,27 +772,8 @@ function addRoundedBox(
       outline.push([c.cx + Math.cos(a) * r, c.cy + Math.sin(a) * r]);
     }
   }
-  const base = group.positions.length / 3;
-  for (let level = 0; level < 2; level++) {
-    const z = level === 0 ? -hz : hz;
-    for (const [lx, ly] of outline) {
-      const wx = cx + lx * cos - ly * sin;
-      const wy = cy + lx * sin + ly * cos;
-      group.positions.push(wx * scale, wy * scale, (cz + z) * scale);
-    }
-  }
-  const n = outline.length;
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-    const b0 = base + i, b1 = base + next;
-    const t0 = base + n + i, t1 = base + n + next;
-    group.indices.push(b0, b1, t1, b0, t1, t0);
-  }
-  // Fan caps from first vertex.
-  for (let i = 1; i < n - 1; i++) {
-    group.indices.push(base, base + i + 1, base + i);          // bottom (face down)
-    group.indices.push(base + n, base + n + i, base + n + i + 1); // top (face up)
-  }
+  addFilletedExtrusion(group, outline, cx, cy, cz, height, edgeRadius, rotationDegZ, scale);
+  void hx; void hy; void hz;
 }
 
 function addCustomExtrusion(
@@ -796,30 +782,105 @@ function addCustomExtrusion(
   scale: number,
 ) {
   const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
-  const hz = part.height / 2;
-  const theta = (part.rotationDegZ * Math.PI) / 180;
+  const localOutline: [number, number][] = outline.map(([nx, ny]) => [nx * part.width, ny * part.depth]);
+  addFilletedExtrusion(
+    group,
+    localOutline,
+    part.cx, part.cy, part.cz,
+    part.height,
+    part.edgeRadius ?? 0,
+    part.rotationDegZ,
+    scale,
+  );
+}
+
+/**
+ * Inward polygon offset (miter join) for a CCW outline in part-local
+ * coordinates. Used to build a true bullnose / fillet on the top and bottom
+ * of any extruded shape so the .dae output matches softened edges that are
+ * visible in the reference rendering instead of producing sharp 90° edges.
+ */
+function offsetPolygonInward(outline: [number, number][], inset: number): [number, number][] {
+  const n = outline.length;
+  if (inset <= 0 || n < 3) return outline.map(([x, y]) => [x, y]);
+  return outline.map((p, i) => {
+    const prev = outline[(i - 1 + n) % n];
+    const next = outline[(i + 1) % n];
+    const e1x = p[0] - prev[0], e1y = p[1] - prev[1];
+    const e2x = next[0] - p[0], e2y = next[1] - p[1];
+    const l1 = Math.hypot(e1x, e1y) || 1;
+    const l2 = Math.hypot(e2x, e2y) || 1;
+    const n1x = -e1y / l1, n1y = e1x / l1;
+    const n2x = -e2y / l2, n2y = e2x / l2;
+    let bx = n1x + n2x, by = n1y + n2y;
+    const bl = Math.hypot(bx, by) || 1;
+    bx /= bl; by /= bl;
+    const cosHalf = Math.max(0.25, n1x * bx + n1y * by);
+    const m = inset / cosHalf;
+    return [p[0] + bx * m, p[1] + by * m];
+  });
+}
+
+/**
+ * Extrude a 2D outline along Z with optional top/bottom fillets so that
+ * rectangular tops, plinths, slab edges and custom silhouettes render the
+ * SAME softened edge profile that the user sees in the approved rendering.
+ */
+function addFilletedExtrusion(
+  group: Group,
+  outlineLocal: [number, number][],
+  cx: number, cy: number, cz: number,
+  height: number,
+  edgeRadius: number,
+  rotationDegZ: number,
+  scale: number,
+  rings = 5,
+) {
+  const n = outlineLocal.length;
+  if (n < 3) return;
+  const hz = height / 2;
+  const theta = (rotationDegZ * Math.PI) / 180;
   const cos = Math.cos(theta), sin = Math.sin(theta);
+  const r = Math.max(0, Math.min(edgeRadius, height / 2));
+
+  const ringDefs: Array<{ inset: number; z: number }> = [];
+  if (r > 0.0005) {
+    for (let i = 0; i <= rings; i++) {
+      const a = -Math.PI / 2 + (i / rings) * (Math.PI / 2);
+      ringDefs.push({ inset: r - r * Math.cos(a), z: -hz + (r + r * Math.sin(a)) });
+    }
+    ringDefs.push({ inset: 0, z: hz - r });
+    for (let i = 0; i <= rings; i++) {
+      const a = (i / rings) * (Math.PI / 2);
+      ringDefs.push({ inset: r - r * Math.cos(a), z: hz - r + r * Math.sin(a) });
+    }
+  } else {
+    ringDefs.push({ inset: 0, z: -hz });
+    ringDefs.push({ inset: 0, z: hz });
+  }
+
   const base = group.positions.length / 3;
-  for (let level = 0; level < 2; level++) {
-    const z = level === 0 ? -hz : hz;
-    for (const [nx, ny] of outline) {
-      const lx = nx * part.width;
-      const ly = ny * part.depth;
-      const wx = part.cx + lx * cos - ly * sin;
-      const wy = part.cy + lx * sin + ly * cos;
-      group.positions.push(wx * scale, wy * scale, (part.cz + z) * scale);
+  for (const ring of ringDefs) {
+    const ringOutline = ring.inset > 0 ? offsetPolygonInward(outlineLocal, ring.inset) : outlineLocal;
+    for (const [lx, ly] of ringOutline) {
+      const wx = cx + lx * cos - ly * sin;
+      const wy = cy + lx * sin + ly * cos;
+      group.positions.push(wx * scale, wy * scale, (cz + ring.z) * scale);
     }
   }
-  const n = outline.length;
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-    const b0 = base + i, b1 = base + next;
-    const t0 = base + n + i, t1 = base + n + next;
-    group.indices.push(b0, b1, t1, b0, t1, t0);
+  for (let ri = 0; ri < ringDefs.length - 1; ri++) {
+    const r0 = base + ri * n;
+    const r1 = base + (ri + 1) * n;
+    for (let i = 0; i < n; i++) {
+      const nx = (i + 1) % n;
+      group.indices.push(r0 + i, r0 + nx, r1 + nx, r0 + i, r1 + nx, r1 + i);
+    }
   }
+  const first = base;
+  const last = base + (ringDefs.length - 1) * n;
   for (let i = 1; i < n - 1; i++) {
-    group.indices.push(base, base + i + 1, base + i);
-    group.indices.push(base + n, base + n + i, base + n + i + 1);
+    group.indices.push(first, first + i + 1, first + i);
+    group.indices.push(last, last + i, last + i + 1);
   }
 }
 
@@ -986,11 +1047,30 @@ function buildGroups(
         const tube = part.tubeDiameter ?? Math.min(part.height, 0.015);
         addTorus(g.group, part.cx, part.cy, part.cz, dx, dy, tube, part.rotationDegZ, scale, 64, 16);
       } else if (part.shape === "rounded_box") {
-        addRoundedBox(g.group, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ, scale, edge || 0.01);
+        addRoundedBox(
+          g.group,
+          part.cx, part.cy, part.cz,
+          part.width, part.depth, part.height,
+          part.rotationDegZ, scale,
+          edge || 0.01,
+          8,
+          edge || Math.min(0.01, part.height / 2),
+        );
       } else if (part.shape === "custom_extrusion") {
         addCustomExtrusion(g.group, part, scale);
       } else {
-        addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
+        // Sharp box. If the AI tagged a non-zero edgeRadius (e.g. softened
+        // tabletop edge visible in the rendering), promote it to a filleted
+        // extrusion so the .dae has the same rounded edge profile.
+        if (edge > 0.0005) {
+          const hx = part.width / 2, hy = part.depth / 2;
+          const rect: [number, number][] = [
+            [-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy],
+          ];
+          addFilletedExtrusion(g.group, rect, part.cx, part.cy, part.cz, part.height, edge, part.rotationDegZ, scale);
+        } else {
+          addRotatedBox(g.addCorners, part.cx, part.cy, part.cz, part.width, part.depth, part.height, part.rotationDegZ);
+        }
       }
     });
     for (const bucket of byMaterial.values()) groups.push(bucket.group);
