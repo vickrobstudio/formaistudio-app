@@ -49,6 +49,10 @@ async function uploadImageToReplicate(imageDataUrl: string): Promise<string> {
   return url;
 }
 
+// Community Trellis model — must be invoked via /v1/predictions with version
+// hash. Update if firtoz publishes a new version.
+const TRELLIS_VERSION = "e8f6c45206993f297372f5436b90350817bd9b4a0d52d2a76df50c1c8afa2b3c";
+
 export const startMeshReconstruction = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
     z
@@ -63,15 +67,17 @@ export const startMeshReconstruction = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const imageUrl = await uploadImageToReplicate(data.imageDataUrl);
-      const res = await fetch(`${GATEWAY}/models/firtoz/trellis/predictions`, {
+      const res = await fetch(`${GATEWAY}/predictions`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
+          version: TRELLIS_VERSION,
           input: {
             images: [imageUrl],
             texture_size: 1024,
             mesh_simplify: 0.95,
             generate_color: true,
+            generate_model: true,
             generate_normal: true,
             randomize_seed: true,
             save_gaussian_ply: false,
