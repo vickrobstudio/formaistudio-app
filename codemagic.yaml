@@ -47,8 +47,15 @@ workflows:
           cd ios/App && pod install
       - name: Set build number
         script: |
+          set -e
           cd ios/App
-          agvtool new-version -all $(($(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID") + 1))
+          LATEST=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
+          if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then
+            LATEST=0
+          fi
+          NEXT=$((LATEST + 1))
+          echo "Setting build number to $NEXT"
+          agvtool new-version -all "$NEXT"
       - name: Initialize keychain
         script: |
           keychain initialize
