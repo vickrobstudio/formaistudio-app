@@ -25,6 +25,7 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AiToVideoRouteImport } from './routes/ai-to-video'
 import { Route as AiRenderingRouteImport } from './routes/ai-rendering'
+import { Route as AiInteriorRenderingRouteImport } from './routes/ai-interior-rendering'
 import { Route as AiEditsRouteImport } from './routes/ai-edits'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as R2dTo3dRouteImport } from './routes/2d-to-3d'
@@ -117,6 +118,11 @@ const AiRenderingRoute = AiRenderingRouteImport.update({
   path: '/ai-rendering',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiInteriorRenderingRoute = AiInteriorRenderingRouteImport.update({
+  id: '/ai-interior-rendering',
+  path: '/ai-interior-rendering',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiEditsRoute = AiEditsRouteImport.update({
   id: '/ai-edits',
   path: '/ai-edits',
@@ -177,6 +183,7 @@ export interface FileRoutesByFullPath {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-interior-rendering': typeof AiInteriorRenderingRoute
   '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
@@ -205,6 +212,7 @@ export interface FileRoutesByTo {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-interior-rendering': typeof AiInteriorRenderingRoute
   '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
@@ -235,6 +243,7 @@ export interface FileRoutesById {
   '/2d-to-3d': typeof R2dTo3dRoute
   '/about': typeof AboutRoute
   '/ai-edits': typeof AiEditsRoute
+  '/ai-interior-rendering': typeof AiInteriorRenderingRoute
   '/ai-rendering': typeof AiRenderingRoute
   '/ai-to-video': typeof AiToVideoRoute
   '/auth': typeof AuthRoute
@@ -265,6 +274,7 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-interior-rendering'
     | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-interior-rendering'
     | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
@@ -322,6 +333,7 @@ export interface FileRouteTypes {
     | '/2d-to-3d'
     | '/about'
     | '/ai-edits'
+    | '/ai-interior-rendering'
     | '/ai-rendering'
     | '/ai-to-video'
     | '/auth'
@@ -352,6 +364,7 @@ export interface RootRouteChildren {
   R2dTo3dRoute: typeof R2dTo3dRoute
   AboutRoute: typeof AboutRoute
   AiEditsRoute: typeof AiEditsRoute
+  AiInteriorRenderingRoute: typeof AiInteriorRenderingRoute
   AiRenderingRoute: typeof AiRenderingRoute
   AiToVideoRoute: typeof AiToVideoRoute
   AuthRoute: typeof AuthRoute
@@ -486,6 +499,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiRenderingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai-interior-rendering': {
+      id: '/ai-interior-rendering'
+      path: '/ai-interior-rendering'
+      fullPath: '/ai-interior-rendering'
+      preLoaderRoute: typeof AiInteriorRenderingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai-edits': {
       id: '/ai-edits'
       path: '/ai-edits'
@@ -589,6 +609,7 @@ const rootRouteChildren: RootRouteChildren = {
   R2dTo3dRoute: R2dTo3dRoute,
   AboutRoute: AboutRoute,
   AiEditsRoute: AiEditsRoute,
+  AiInteriorRenderingRoute: AiInteriorRenderingRoute,
   AiRenderingRoute: AiRenderingRoute,
   AiToVideoRoute: AiToVideoRoute,
   AuthRoute: AuthRoute,
