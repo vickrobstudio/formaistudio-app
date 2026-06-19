@@ -171,7 +171,7 @@ export function FloorTo3D() {
       setMasterPrompt("");
       setRenderUrl(reference);
       setRenderFinal(true);
-      await reconstructMesh();
+      await reconstructMesh(reference);
       return;
     }
     // The reference rendering IS the geometry/material source for the live 3D
@@ -231,8 +231,9 @@ export function FloorTo3D() {
     anchor.remove();
   }
 
-  async function reconstructMesh() {
-    if (!renderUrl) return;
+  async function reconstructMesh(urlOverride?: string) {
+    const source = urlOverride ?? renderUrl;
+    if (!source) return;
     setBusy("model"); setError(""); setDae(null); setGlb(null); setStage("modeling");
     setReconStatus("Uploading rendering to mesh reconstructor…");
     if (!(await consume())) {
@@ -242,7 +243,7 @@ export function FloorTo3D() {
     }
     try {
       // Render data URLs may be remote URLs from the streaming image; fetch to data URL first.
-      let imageDataUrl = renderUrl;
+      let imageDataUrl = source;
       if (!imageDataUrl.startsWith("data:")) {
         const res = await fetch(imageDataUrl);
         const blob = await res.blob();
