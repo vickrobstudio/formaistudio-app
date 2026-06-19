@@ -46,6 +46,7 @@ export function FloorTo3D() {
   const [dae, setDae] = useState<string | null>(null);
   const [glb, setGlb] = useState<string | null>(null);
   const [reconStatus, setReconStatus] = useState("");
+  const [modelProgress, setModelProgress] = useState(0);
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
   const [summary, setSummary] = useState<{ count: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet" } | null>(null);
   const { credits, signedIn, vip, consume } = useCredits();
@@ -60,6 +61,27 @@ export function FloorTo3D() {
       previewRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [stage, dae]);
+
+  // Time-based progress bar for 3D model creation. The server fn is a single
+  // blocking call, so we ease toward 95% over ~45s while busy="model" and
+  // snap to 100% the moment a .dae or .glb is ready.
+  useEffect(() => {
+    if (busy !== "model") { setModelProgress(0); return; }
+    setModelProgress(2);
+    const started = Date.now();
+    const target = glb ? 240_000 : 45_000; // mesh recon is slower
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - started;
+      // Asymptotic ease toward 95%
+      const pct = Math.min(95, 100 * (1 - Math.exp(-elapsed / (target * 0.4))));
+      setModelProgress(pct);
+    }, 250);
+    return () => clearInterval(interval);
+  }, [busy, glb]);
+
+  useEffect(() => {
+    if ((dae || glb) && stage === "ready") setModelProgress(100);
+  }, [dae, glb, stage]);
 
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -390,8 +412,26 @@ export function FloorTo3D() {
       {/* Step 4 — Live 3D + download */}
       {showLivePreview && <div ref={previewRef}>
         <div className="mt-8">{stepHeading(4, "Live 3D preview", stage === "modeling" || stage === "ready", Boolean(dae))}</div>
-        {busy === "model" && <div className="mt-3 flex h-56 items-center justify-center rounded-2xl border border-border text-xs text-muted-foreground">
-          <LoaderCircle className="mr-2 animate-spin" /> {reconStatus || "Reconstructing geometry…"}
+        {busy === "model" && <div className="mt-3 rounded-2xl border border-border p-6">
+          <div className="flex items-center justify-between text-xs">
+            <span className="inline-flex items-center gap-2 font-bold uppercase tracking-[0.14em]">
+              <LoaderCircle className="size-4 animate-spin" /> {reconStatus || (glb !== null ? "Reconstructing textured mesh…" : "Building 3D model…")}
+            </span>
+            <span className="tabular-nums text-muted-foreground">{Math.round(modelProgress)}%</span>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full bg-foreground transition-[width] duration-300 ease-out"
+              style={{ width: `${modelProgress}%` }}
+            />
+          </div>
+          <p className="mt-3 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            {modelProgress < 25 ? "Analyzing drawing"
+              : modelProgress < 55 ? "Extracting walls, openings & elements"
+              : modelProgress < 80 ? "Triangulating geometry"
+              : modelProgress < 100 ? "Assembling .dae"
+              : "Complete"}
+          </p>
         </div>}
         {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
         {(dae || glb) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
