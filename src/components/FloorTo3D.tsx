@@ -224,8 +224,11 @@ export function FloorTo3D() {
     if (!glb && !dae) return;
     const baseName = (fileName.replace(/\.[^.]+$/, "") || (subject === "furniture" ? "furniture" : "floorplan"));
     const anchor = document.createElement("a");
-    if (glb) { anchor.href = glb; anchor.download = `${baseName}.glb`; }
-    else { anchor.href = dae!; anchor.download = `${baseName}.dae`; }
+    // Prefer .dae when we have one — including the mesh-reconstructed .dae
+    // converted from the Trellis GLB — so the downloaded file is the true 1:1
+    // mesh of the approved rendering in the requested CAD format.
+    if (dae) { anchor.href = dae; anchor.download = `${baseName}.dae`; }
+    else { anchor.href = glb!; anchor.download = `${baseName}.glb`; }
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -264,7 +267,7 @@ export function FloorTo3D() {
       while (true) {
         if (Date.now() > deadline) { setError("Reconstruction timed out after 10 minutes."); setStage("rendered"); return; }
         await new Promise((r) => setTimeout(r, 6000));
-        const polled = await pollRecon({ data: { predictionId } });
+        const polled = await pollRecon({ data: { predictionId, outputUnits } });
         if (!polled.ok) { setError(polled.error); setStage("rendered"); return; }
         if (polled.status && polled.status !== "succeeded") {
           setReconStatus(`Reconstructing textured mesh — status: ${polled.status}…`);
@@ -272,6 +275,7 @@ export function FloorTo3D() {
         }
         if (polled.glbDataUrl) {
           setGlb(polled.glbDataUrl);
+          if (polled.daeDataUrl) setDae(polled.daeDataUrl);
           setSummary({ count: 1, subject, outputUnits });
           setStage("ready");
           setReconStatus("");
@@ -459,8 +463,8 @@ export function FloorTo3D() {
         {(dae || glb) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
         {(dae || glb) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{glb ? "Reconstructed textured mesh · glTF binary .glb · opens in Blender, SketchUp (via importer), Rhino, Three.js" : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · ${summary.outputUnits} · grouped by material`}</p>
-          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={download}><span>Download {glb ? ".glb" : ".dae"}</span><Download /></Button>
+          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · Collada .dae · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino` : glb ? "Reconstructed textured mesh · glTF binary .glb" : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · Collada .dae · Z-up · ${summary.outputUnits} · grouped by material`}</p>
+          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={download}><span>Download {dae ? ".dae" : ".glb"}</span><Download /></Button>
         </div>}
       </div>}
 
