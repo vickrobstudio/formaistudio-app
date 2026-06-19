@@ -44,7 +44,17 @@ workflows:
           npx --yes cap sync ios
       - name: Install CocoaPods dependencies
         script: |
-          cd ios/App && pod install
+          set -e
+          if [ ! -f "ios/App/Podfile" ]; then
+            echo "Podfile missing — re-scaffolding iOS platform"
+            rm -rf ios
+            mkdir -p dist
+            npx --yes cap add ios
+            npx --yes cap sync ios
+          fi
+          ls -la ios/App
+          cd ios/App
+          pod install --repo-update
       - name: Set build number
         script: |
           set -e
