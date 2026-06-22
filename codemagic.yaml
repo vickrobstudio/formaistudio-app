@@ -79,9 +79,10 @@ workflows:
           set -euo pipefail
           # Codemagic auto-generates a distribution certificate and provisioning
           # profile via the App Store Connect API integration. No Mac required.
-          # A private key is needed to pair with the certificate; we generate
-          # one on the build machine and cache it so future builds reuse the
-          # same certificate (cache path: $HOME/.codemagic-signing).
+          # A private key is needed to pair with the certificate. If Apple
+          # already has the maximum number of Distribution certificates, revoke
+          # one old/unused Distribution certificate in Apple Developer first,
+          # then rerun this build so Codemagic can create a new matching pair.
           export SIGNING_DIR="$HOME/.codemagic-signing"
           export CERT_KEY_PATH="$SIGNING_DIR/distribution_private_key.pem"
           mkdir -p "$SIGNING_DIR"
@@ -93,10 +94,23 @@ workflows:
           fi
           chmod 600 "$CERT_KEY_PATH"
 
+          set +e
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --certificate-key "@file:$CERT_KEY_PATH" \
-            --create
+            --create \
+            --delete-stale-profiles 2>&1 | tee "$SIGNING_DIR/fetch-signing-files.log"
+          FETCH_EXIT=${PIPESTATUS[0]}
+          set -e
+          if [ "$FETCH_EXIT" -ne 0 ]; then
+            if grep -q "You already have a current Distribution certificate or a pending certificate request" "$SIGNING_DIR/fetch-signing-files.log"; then
+              echo ""
+              echo "Apple already has the maximum number of active Distribution certificates for this developer account."
+              echo "Open Apple Developer > Certificates, Identifiers & Profiles > Certificates, revoke one old/unused Distribution certificate, then rerun this Codemagic build."
+              echo "No Mac or PEM export is needed after revoking one old certificate; this build will create a new matching certificate/private-key pair."
+            fi
+            exit "$FETCH_EXIT"
+          fi
       - name: Set up code signing
         script: |
           keychain initialize
