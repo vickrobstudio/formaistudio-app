@@ -12,6 +12,9 @@ workflows:
         XCODE_SCHEME: "App"
         BUNDLE_ID: "app.formaistudio.formai"
         APP_STORE_APPLE_ID: 6782088017 # replace with your numeric App Store Connect app id
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.formaistudio.formai
       node: 22.11.0
       xcode: latest
       cocoapods: default
@@ -74,29 +77,6 @@ workflows:
             /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEXT" App/Info.plist || \
               /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEXT" App/Info.plist
           fi
-      - name: Initialize keychain
-        script: |
-          keychain initialize
-      - name: Fetch signing files
-        script: |
-          set -euo pipefail
-          CERTIFICATE_KEY_DIR="${CM_CACHE_DIR:-$HOME/.codemagic-cache}/codemagic-signing"
-          CERTIFICATE_KEY_PATH="$CERTIFICATE_KEY_DIR/codemagic_private_key"
-          mkdir -p "$CERTIFICATE_KEY_DIR"
-          if [ -n "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
-            printf "%s\n" "$CERTIFICATE_PRIVATE_KEY" > "$CERTIFICATE_KEY_PATH"
-          elif [ ! -f "$CERTIFICATE_KEY_PATH" ]; then
-            ssh-keygen -t rsa -b 2048 -m PEM -f "$CERTIFICATE_KEY_PATH" -q -N ""
-          fi
-          chmod 600 "$CERTIFICATE_KEY_PATH"
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --certificate-key "@file:$CERTIFICATE_KEY_PATH" \
-            --create \
-            --delete-stale-profiles
-      - name: Add certificates to keychain
-        script: |
-          keychain add-certificates
       - name: Set up code signing
         script: |
           xcode-project use-profiles
