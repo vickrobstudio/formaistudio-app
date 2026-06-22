@@ -77,21 +77,8 @@ workflows:
       - name: Fetch signing files
         script: |
           set -e
-          # Codemagic needs a private key to save any new Distribution certificate.
-          # Persist one in the cache so the same key is reused across builds.
-          SIGNING_DIR="$HOME/.codemagic-signing"
-          CERT_KEY_PATH="$SIGNING_DIR/distribution_private_key.pem"
-          mkdir -p "$(dirname "$CERT_KEY_PATH")"
-          if [ ! -f "$CERT_KEY_PATH" ]; then
-            ssh-keygen -t rsa -b 2048 -m PEM -f "$CERT_KEY_PATH" -q -N ""
-            # ssh-keygen writes the private key without .pem extension handling; ensure PEM format
-            openssl rsa -in "$CERT_KEY_PATH" -out "$CERT_KEY_PATH.tmp" >/dev/null 2>&1 && mv "$CERT_KEY_PATH.tmp" "$CERT_KEY_PATH"
-            rm -f "$CERT_KEY_PATH.pub"
-          fi
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --certificate-key "@file:$CERT_KEY_PATH" \
-            --create
+            --type IOS_APP_STORE
       - name: Set up code signing
         script: |
           keychain initialize
