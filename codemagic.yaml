@@ -77,8 +77,16 @@ workflows:
             /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEXT" App/Info.plist || \
               /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEXT" App/Info.plist
           fi
+      - name: Fetch signing files
+        script: |
+          set -e
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
       - name: Set up code signing
         script: |
+          keychain initialize
+          keychain add-certificates
           xcode-project use-profiles
       - name: Build .ipa
         script: |
