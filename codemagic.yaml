@@ -72,7 +72,8 @@ workflows:
           set_str NSPhotoLibraryUsageDescription "FormAI accesses your photo library so you can pick interior photos to redesign."
           set_str NSPhotoLibraryAddUsageDescription "FormAI saves generated renderings and videos to your photo library."
           set_str NSMicrophoneUsageDescription "FormAI uses the microphone when you record audio notes for a design."
-          set_str NSUserTrackingUsageDescription "FormAI does not track you across other apps."
+          # No NSUserTrackingUsageDescription — FormAI does not track users across apps or websites.
+          $PB -c "Delete :NSUserTrackingUsageDescription" "$PLIST" 2>/dev/null || true
           # Skips the App Store Connect export-compliance question on every upload.
           set_bool ITSAppUsesNonExemptEncryption false
           # Display name shown under the icon on the home screen.
