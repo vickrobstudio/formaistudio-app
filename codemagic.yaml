@@ -6,8 +6,6 @@ workflows:
     integrations:
       app_store_connect: codemagic_api_key
     environment:
-      groups:
-        - PRIVATE
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_PROJECT: "ios/App/App.xcodeproj"
@@ -79,63 +77,11 @@ workflows:
       - name: Fetch signing files
         script: |
           set -euo pipefail
-          export SIGNING_DIR="$HOME/.codemagic-signing"
-          export CERT_KEY_PATH="$SIGNING_DIR/distribution_private_key.pem"
-          mkdir -p "$SIGNING_DIR"
-
-          python3 - <<'PY'
-          import base64
-          import os
-          import re
-          from pathlib import Path
-
-          key = os.environ.get("APP_STORE_CERTIFICATE_PRIVATE_KEY") or os.environ.get("CERTIFICATE_PRIVATE_KEY") or ""
-          path = Path(os.environ["CERT_KEY_PATH"])
-          if key:
-              normalized = key.replace("\\n", "\n").strip()
-              if not normalized or set(normalized) == {"*"}:
-                  raise SystemExit(
-                      "APP_STORE_CERTIFICATE_PRIVATE_KEY appears to contain only Codemagic's masked placeholder. "
-                      "Edit the PRIVATE environment group and paste the real private key value, not the hidden ******** value shown in the UI."
-                  )
-              if "PRIVATE KEY-----" in normalized:
-                  path.write_text(normalized + "\n")
-              else:
-                  # Treat as base64: strip whitespace and pad to multiple of 4
-                  compact = re.sub(r"\s+", "", normalized)
-                  compact += "=" * (-len(compact) % 4)
-                  try:
-                      decoded = base64.b64decode(compact, validate=True)
-                  except Exception as e:
-                      raise SystemExit(
-                          "APP_STORE_CERTIFICATE_PRIVATE_KEY is neither a PEM "
-                          "(missing '-----BEGIN/END PRIVATE KEY-----' markers) "
-                          "nor valid base64. Re-export the key with: "
-                          "`openssl pkcs12 -in cert.p12 -nocerts -nodes -out key.pem` "
-                          "and paste the FULL file contents (including BEGIN/END lines) "
-                          f"into the Codemagic secret. Decode error: {e}"
-                      )
-                  path.write_bytes(decoded)
-
-          if path.exists():
-              contents = path.read_bytes()
-              if b"PRIVATE KEY-----" not in contents:
-                  raise SystemExit(
-                      "APP_STORE_CERTIFICATE_PRIVATE_KEY decoded successfully, but it is not a PEM private key. "
-                      "It must be the private key that matches the Apple Distribution certificate, including "
-                      "-----BEGIN PRIVATE KEY----- / -----END PRIVATE KEY----- lines, not a .p12 file, .cer file, or App Store Connect .p8 key."
-                  )
-          PY
-
-          if [ ! -s "$CERT_KEY_PATH" ]; then
-            echo "Missing APP_STORE_CERTIFICATE_PRIVATE_KEY. Add the private key that matches an existing Apple Distribution certificate, then rerun the build."
-            exit 1
-          fi
-          chmod 600 "$CERT_KEY_PATH"
-
+          # Codemagic auto-generates a distribution certificate and provisioning
+          # profile via the App Store Connect API integration. No Mac required.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key "@file:$CERT_KEY_PATH"
+            --create
       - name: Set up code signing
         script: |
           keychain initialize
