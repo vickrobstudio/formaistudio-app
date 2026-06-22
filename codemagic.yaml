@@ -12,9 +12,6 @@ workflows:
         XCODE_SCHEME: "App"
         BUNDLE_ID: "app.formaistudio.formai"
         APP_STORE_APPLE_ID: 6782088017 # replace with your numeric App Store Connect app id
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.formaistudio.formai
       node: 22.11.0
       xcode: latest
       cocoapods: default
