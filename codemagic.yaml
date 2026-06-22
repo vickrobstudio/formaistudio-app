@@ -93,6 +93,11 @@ workflows:
           path = Path(os.environ["CERT_KEY_PATH"])
           if key:
               normalized = key.replace("\\n", "\n").strip()
+              if not normalized or set(normalized) == {"*"}:
+                  raise SystemExit(
+                      "APP_STORE_CERTIFICATE_PRIVATE_KEY appears to contain only Codemagic's masked placeholder. "
+                      "Edit the PRIVATE environment group and paste the real private key value, not the hidden ******** value shown in the UI."
+                  )
               if "PRIVATE KEY-----" in normalized:
                   path.write_text(normalized + "\n")
               else:
@@ -111,6 +116,15 @@ workflows:
                           f"into the Codemagic secret. Decode error: {e}"
                       )
                   path.write_bytes(decoded)
+
+          if path.exists():
+              contents = path.read_bytes()
+              if b"PRIVATE KEY-----" not in contents:
+                  raise SystemExit(
+                      "APP_STORE_CERTIFICATE_PRIVATE_KEY decoded successfully, but it is not a PEM private key. "
+                      "It must be the private key that matches the Apple Distribution certificate, including "
+                      "-----BEGIN PRIVATE KEY----- / -----END PRIVATE KEY----- lines, not a .p12 file, .cer file, or App Store Connect .p8 key."
+                  )
           PY
 
           if [ ! -s "$CERT_KEY_PATH" ]; then
