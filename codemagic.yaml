@@ -76,9 +76,35 @@ workflows:
           fi
       - name: Fetch signing files
         script: |
-          set -e
+          set -euo pipefail
+          export SIGNING_DIR="$HOME/.codemagic-signing"
+          export CERT_KEY_PATH="$SIGNING_DIR/distribution_private_key.pem"
+          mkdir -p "$SIGNING_DIR"
+
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          key = os.environ.get("APP_STORE_CERTIFICATE_PRIVATE_KEY") or os.environ.get("CERTIFICATE_PRIVATE_KEY") or ""
+          path = Path(os.environ["CERT_KEY_PATH"])
+          if key:
+              normalized = key.replace("\\n", "\n").strip()
+              if "PRIVATE KEY-----" in normalized:
+                  path.write_text(normalized + "\n")
+              else:
+                  path.write_bytes(base64.b64decode(normalized))
+          PY
+
+          if [ ! -s "$CERT_KEY_PATH" ]; then
+            echo "Missing APP_STORE_CERTIFICATE_PRIVATE_KEY. Add the private key that matches an existing Apple Distribution certificate, then rerun the build."
+            exit 1
+          fi
+          chmod 600 "$CERT_KEY_PATH"
+
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE
+            --type IOS_APP_STORE \
+            --certificate-key "@file:$CERT_KEY_PATH"
       - name: Set up code signing
         script: |
           keychain initialize
