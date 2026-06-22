@@ -86,6 +86,7 @@ workflows:
           python3 - <<'PY'
           import base64
           import os
+          import re
           from pathlib import Path
 
           key = os.environ.get("APP_STORE_CERTIFICATE_PRIVATE_KEY") or os.environ.get("CERTIFICATE_PRIVATE_KEY") or ""
@@ -95,7 +96,21 @@ workflows:
               if "PRIVATE KEY-----" in normalized:
                   path.write_text(normalized + "\n")
               else:
-                  path.write_bytes(base64.b64decode(normalized))
+                  # Treat as base64: strip whitespace and pad to multiple of 4
+                  compact = re.sub(r"\s+", "", normalized)
+                  compact += "=" * (-len(compact) % 4)
+                  try:
+                      decoded = base64.b64decode(compact, validate=True)
+                  except Exception as e:
+                      raise SystemExit(
+                          "APP_STORE_CERTIFICATE_PRIVATE_KEY is neither a PEM "
+                          "(missing '-----BEGIN/END PRIVATE KEY-----' markers) "
+                          "nor valid base64. Re-export the key with: "
+                          "`openssl pkcs12 -in cert.p12 -nocerts -nodes -out key.pem` "
+                          "and paste the FULL file contents (including BEGIN/END lines) "
+                          f"into the Codemagic secret. Decode error: {e}"
+                      )
+                  path.write_bytes(decoded)
           PY
 
           if [ ! -s "$CERT_KEY_PATH" ]; then
