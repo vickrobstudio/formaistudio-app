@@ -79,8 +79,23 @@ workflows:
           set -euo pipefail
           # Codemagic auto-generates a distribution certificate and provisioning
           # profile via the App Store Connect API integration. No Mac required.
+          # A private key is needed to pair with the certificate; we generate
+          # one on the build machine and cache it so future builds reuse the
+          # same certificate (cache path: $HOME/.codemagic-signing).
+          export SIGNING_DIR="$HOME/.codemagic-signing"
+          export CERT_KEY_PATH="$SIGNING_DIR/distribution_private_key.pem"
+          mkdir -p "$SIGNING_DIR"
+          if [ ! -s "$CERT_KEY_PATH" ]; then
+            echo "Generating new RSA private key for distribution certificate..."
+            ssh-keygen -t rsa -b 2048 -m PEM -f "$CERT_KEY_PATH" -q -N ""
+            # ssh-keygen creates a .pub sibling we don't need
+            rm -f "${CERT_KEY_PATH}.pub"
+          fi
+          chmod 600 "$CERT_KEY_PATH"
+
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key "@file:$CERT_KEY_PATH" \
             --create
       - name: Set up code signing
         script: |
