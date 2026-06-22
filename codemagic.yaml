@@ -55,15 +55,25 @@ workflows:
           fi
       - name: Set build number
         script: |
-          set -e
+          set -euo pipefail
           cd ios/App
           LATEST=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
           if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then
             LATEST=0
           fi
           NEXT=$((LATEST + 1))
+          if [[ "${CM_BUILD_NUMBER:-0}" =~ ^[0-9]+$ ]] && [ "${CM_BUILD_NUMBER:-0}" -gt "$NEXT" ]; then
+            NEXT="$CM_BUILD_NUMBER"
+          fi
           echo "Setting build number to $NEXT"
-          agvtool new-version -all "$NEXT"
+          agvtool new-version -all "$NEXT" || true
+          if [ -f "App.xcodeproj/project.pbxproj" ]; then
+            perl -0pi -e "s/CURRENT_PROJECT_VERSION = [^;]+;/CURRENT_PROJECT_VERSION = $NEXT;/g" App.xcodeproj/project.pbxproj
+          fi
+          if [ -f "App/Info.plist" ]; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEXT" App/Info.plist || \
+              /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEXT" App/Info.plist
+          fi
       - name: Initialize keychain
         script: |
           keychain initialize
