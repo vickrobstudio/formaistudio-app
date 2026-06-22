@@ -17,7 +17,7 @@ workflows:
       cocoapods: default
     cache:
       cache_paths:
-        - $CM_CACHE_DIR/codemagic-signing
+        - $HOME/.codemagic-signing
     triggering:
       events:
         - push
@@ -79,7 +79,8 @@ workflows:
           set -e
           # Codemagic needs a private key to save any new Distribution certificate.
           # Persist one in the cache so the same key is reused across builds.
-          CERT_KEY_PATH="$CM_CACHE_DIR/codemagic-signing/distribution_private_key.pem"
+          SIGNING_DIR="$HOME/.codemagic-signing"
+          CERT_KEY_PATH="$SIGNING_DIR/distribution_private_key.pem"
           mkdir -p "$(dirname "$CERT_KEY_PATH")"
           if [ ! -f "$CERT_KEY_PATH" ]; then
             ssh-keygen -t rsa -b 2048 -m PEM -f "$CERT_KEY_PATH" -q -N ""
@@ -94,7 +95,7 @@ workflows:
       - name: Set up code signing
         script: |
           keychain initialize
-          keychain add-certificates --certificate-key-path "$CM_CACHE_DIR/codemagic-signing/distribution_private_key.pem"
+          keychain add-certificates --certificate-key-path "$HOME/.codemagic-signing/distribution_private_key.pem"
           xcode-project use-profiles
       - name: Build .ipa
         script: |
