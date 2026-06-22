@@ -43,6 +43,11 @@ workflows:
           set -e
           mkdir -p dist
           npx --yes cap sync ios
+      - name: Generate iOS app icon
+        script: |
+          set -e
+          # Generates AppIcon.appiconset from resources/icon.png (1024x1024, no alpha)
+          npx --yes @capacitor/assets generate --ios --iconBackgroundColor '#FBF5E7' --iconBackgroundColorDark '#FBF5E7'
       - name: Install CocoaPods dependencies
         script: |
           set -e
