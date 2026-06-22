@@ -90,12 +90,12 @@ workflows:
           fi
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key-path "$CERT_KEY_PATH" \
+            --certificate-key "@file:$CERT_KEY_PATH" \
             --create
       - name: Set up code signing
         script: |
           keychain initialize
-          keychain add-certificates --certificate-key-path "$HOME/.codemagic-signing/distribution_private_key.pem"
+          keychain add-certificates
           xcode-project use-profiles
       - name: Build .ipa
         script: |
