@@ -3,6 +3,7 @@
  * browser. Safe to import from client components.
  */
 import { Capacitor } from "@capacitor/core";
+import { installIosServerFnBridge } from "./ios-server-fn-bridge";
 
 let initialised = false;
 
@@ -12,6 +13,10 @@ export async function initNativeIOS() {
   if (!Capacitor.isNativePlatform()) return;
   if (Capacitor.getPlatform() !== "ios") return;
   initialised = true;
+
+  // Forward server-fn / api calls to the live SSR host. Must run before
+  // any route loader fires its first fetch.
+  installIosServerFnBridge();
 
   try {
     const [{ StatusBar, Style }, { SplashScreen }, { App }, { Haptics, ImpactStyle }, { Keyboard }] = await Promise.all([

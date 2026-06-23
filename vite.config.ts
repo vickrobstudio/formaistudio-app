@@ -6,6 +6,11 @@
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
+// BUILD_TARGET=ios switches the build into a static SPA bundle that ships
+// inside the iOS .ipa (loaded by Capacitor's WKWebView, no website fetch on
+// launch). The default (unset) keeps the SSR build used for the web app.
+const isIosBuild = process.env.BUILD_TARGET === "ios";
+
 export default defineConfig({
   vite: {
     optimizeDeps: {
@@ -14,7 +19,26 @@ export default defineConfig({
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
+    // nitro/vite builds from this. The iOS SPA build prerenders a static
+    // shell instead of running real SSR, so it uses the default entry.
+    ...(isIosBuild ? {} : { server: { entry: "server" } }),
+    // For the iOS shell, prerender a static SPA shell so the .ipa boots
+    // without needing any server. Server functions still run on
+    // formaistudio.app; the bundled app fetches them cross-origin.
+    ...(isIosBuild
+      ? {
+          spa: {
+            enabled: true,
+            // Emit the SPA shell as dist/client/index.html so Capacitor's
+            // WKWebView finds it as the default document.
+            prerender: { outputPath: "/index.html" },
+          },
+        }
+      : {}),
   },
+  // The iOS build prerenders a SPA shell. Prerendering boots a plain Vite
+  // SSR preview server (which expects `dist/server/server.js`), so we
+  // disable Nitro for this build — Nitro would rewrite the server output
+  // into a worker bundle the preview server can't load.
+  ...(isIosBuild ? { nitro: false } : {}),
 });

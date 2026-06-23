@@ -12,6 +12,12 @@ import { Button } from "@/components/ui/button";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { installIosServerFnBridge } from "../lib/ios-server-fn-bridge";
+
+// Install the iOS server-fn fetch bridge as a side effect at module load —
+// route loaders fire before useEffect, so we cannot wait for RootComponent
+// to mount before patching window.fetch. No-op in the browser / on the web.
+installIosServerFnBridge();
 
 function NotFoundComponent() {
   return (
