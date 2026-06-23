@@ -25,7 +25,16 @@ export default defineConfig({
     // For the iOS shell, prerender a static SPA shell so the .ipa boots
     // without needing any server. Server functions still run on
     // formaistudio.app; the bundled app fetches them cross-origin.
-    ...(isIosBuild ? { spa: { enabled: true } } : {}),
+    ...(isIosBuild
+      ? {
+          spa: {
+            enabled: true,
+            // Emit the SPA shell as dist/client/index.html so Capacitor's
+            // WKWebView finds it as the default document.
+            prerender: { outputPath: "/index.html" },
+          },
+        }
+      : {}),
   },
   // The iOS build prerenders a SPA shell. Prerendering boots a plain Vite
   // SSR preview server (which expects `dist/server/server.js`), so we
