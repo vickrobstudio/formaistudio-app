@@ -10,12 +10,38 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 // inside the iOS .ipa (loaded by Capacitor's WKWebView, no website fetch on
 // launch). The default (unset) keeps the SSR build used for the web app.
 const isIosBuild = process.env.BUILD_TARGET === "ios";
+const IOS_ASSET_ORIGIN =
+  process.env.VITE_API_ORIGIN ?? "https://formaistudio.app";
+
+// When bundling for the iOS WKWebView, .asset.json pointers carry
+// root-relative CDN paths like "/__l5e/assets-v1/...". Those resolve to
+// `capacitor://localhost/__l5e/...` inside the app and 404. Rewrite the
+// `url` field at build time to an absolute https URL on the live host so
+// images, fonts, and wallpapers load from the CDN.
+const iosAssetUrlRewriter = {
+  name: "lovable-ios-asset-url-rewriter",
+  enforce: "pre" as const,
+  transform(code: string, id: string) {
+    if (!id.endsWith(".asset.json")) return null;
+    try {
+      const json = JSON.parse(code);
+      if (typeof json.url === "string" && json.url.startsWith("/")) {
+        json.url = IOS_ASSET_ORIGIN.replace(/\/$/, "") + json.url;
+        return { code: JSON.stringify(json), map: null };
+      }
+    } catch {
+      // leave untouched on parse failure
+    }
+    return null;
+  },
+};
 
 export default defineConfig({
   vite: {
     optimizeDeps: {
       exclude: ["three/examples/jsm/loaders/ColladaLoader.js"],
     },
+    plugins: isIosBuild ? [iosAssetUrlRewriter] : [],
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
