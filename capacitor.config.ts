@@ -13,7 +13,11 @@ const config: CapacitorConfig = {
   appName: "FormAI",
   webDir: "dist",
   server: {
-    url: "https://www.formaistudio.app",
+    // Use the canonical domain directly. The www host redirects to this root
+    // host, and iOS can treat that first-hop redirect as external navigation.
+    url: "https://formaistudio.app",
+    // Keep the production hosts inside WKWebView instead of opening Safari.
+    allowNavigation: ["formaistudio.app", "www.formaistudio.app", "formaistudio-app.lovable.app"],
     cleartext: false,
     androidScheme: "https",
   },
