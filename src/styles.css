@@ -2,6 +2,48 @@
 @source "../src";
 @import "tw-animate-css";
 
+/* ===== Native iOS feel =====
+ * Kill browser-isms inside the Capacitor WebView so the app feels native:
+ * no rubber-band bounce, no grey tap highlight, no long-press callout,
+ * no accidental text selection on chrome. Inputs and prose still behave
+ * normally.
+ */
+html,
+body {
+  /* Prevent rubber-band scroll on the document; pages scroll inside <main>. */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"],
+.allow-select,
+.allow-select * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* Hide scrollbars inside the native shell — iOS apps don't show them. */
+::-webkit-scrollbar {
+  display: none;
+}
+/* When the keyboard is open, the inset-bottom safe area is meaningless. */
+html.keyboard-open {
+  --kb-safe: 0px;
+}
+
 @font-face {
   font-family: "SF Pro";
   src: url("/__l5e/assets-v1/8c6f0082-510b-423e-98b2-4a6600695ea4/SF-Pro.ttf") format("truetype");
