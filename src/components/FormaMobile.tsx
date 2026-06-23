@@ -2,6 +2,7 @@ import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Grid2X2, House, Settings, Sparkles, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import formaiLogo from "@/assets/formai-logo-mark.png.asset.json";
+import formaiLogoWhite from "@/assets/formai-logo-white.png.asset.json";
 
 const tools = [
   { to: "/feed", label: "Home", icon: House },
@@ -14,9 +15,9 @@ const tools = [
 export function FormAILogo({ inverse = false, className = "w-16" }: { inverse?: boolean; className?: string }) {
   return (
     <img
-      src={formaiLogo.url}
+      src={inverse ? formaiLogoWhite.url : formaiLogo.url}
       alt="FormAI logo"
-      className={`${className} h-auto object-contain ${inverse ? "brightness-0 invert" : ""}`}
+      className={`${className} h-auto object-contain`}
     />
   );
 }
