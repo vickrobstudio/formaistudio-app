@@ -1,7 +1,7 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Grid2X2, House, Settings, Sparkles, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
-import formaiLogo from "@/assets/formai-logo-complete.png.asset.json";
+import formaiLogo from "@/assets/formai-logo-mark.png.asset.json";
 
 const tools = [
   { to: "/feed", label: "Home", icon: House },
