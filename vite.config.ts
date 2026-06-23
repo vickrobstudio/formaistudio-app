@@ -19,8 +19,9 @@ export default defineConfig({
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
+    // nitro/vite builds from this. The iOS SPA build prerenders a static
+    // shell instead of running real SSR, so it uses the default entry.
+    ...(isIosBuild ? {} : { server: { entry: "server" } }),
     // For the iOS shell, prerender a static SPA shell so the .ipa boots
     // without needing any server. Server functions still run on
     // formaistudio.app; the bundled app fetches them cross-origin.
