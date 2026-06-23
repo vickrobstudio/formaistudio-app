@@ -78,12 +78,13 @@ workflows:
           set_bool ITSAppUsesNonExemptEncryption false
           # Display name shown under the icon on the home screen.
           set_str CFBundleDisplayName "FormAI"
-          # Mark our web origin as app-bound so WKWebView keeps navigation
-          # inside the app instead of bouncing the user out to Safari.
+          # Mark every production web origin as app-bound so WKWebView keeps
+          # launch and redirects inside the app instead of bouncing to Safari.
           $PB -c "Delete :WKAppBoundDomains" "$PLIST" 2>/dev/null || true
           $PB -c "Add :WKAppBoundDomains array" "$PLIST"
-          $PB -c "Add :WKAppBoundDomains:0 string www.formaistudio.app" "$PLIST"
-          $PB -c "Add :WKAppBoundDomains:1 string formaistudio.app" "$PLIST"
+          $PB -c "Add :WKAppBoundDomains:0 string formaistudio.app" "$PLIST"
+          $PB -c "Add :WKAppBoundDomains:1 string www.formaistudio.app" "$PLIST"
+          $PB -c "Add :WKAppBoundDomains:2 string formaistudio-app.lovable.app" "$PLIST"
           echo "--- Final Info.plist ---"
           $PB -c "Print" "$PLIST" | head -80
       - name: Install CocoaPods dependencies
