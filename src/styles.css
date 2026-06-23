@@ -18,6 +18,22 @@ body {
   touch-action: manipulation;
   background-color: #000;
 }
+
+/* Lock the document so fixed headers/footers truly stay pinned in iOS
+ * WKWebView. Pages scroll inside <main>, which is a scroll container but
+ * NOT a containing block for position:fixed (no transform/filter), so
+ * FormaHeader and ToolTabBar remain glued to the viewport edges. */
+html:not(:has(.landing-screen)),
+body:not(:has(.landing-screen)) {
+  height: 100%;
+  overflow: hidden;
+}
+main {
+  height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
 body {
   -webkit-user-select: none;
   user-select: none;
