@@ -27,8 +27,9 @@ export default defineConfig({
     // formaistudio.app; the bundled app fetches them cross-origin.
     ...(isIosBuild ? { spa: { enabled: true } } : {}),
   },
-  // The iOS build prerenders a SPA shell. Prerendering boots a Node
-  // preview server from the SSR output, which requires a Node-compatible
-  // nitro preset rather than the default cloudflare-module worker bundle.
-  ...(isIosBuild ? { nitro: { preset: "node-server" } } : {}),
+  // The iOS build prerenders a SPA shell. Prerendering boots a plain Vite
+  // SSR preview server (which expects `dist/server/server.js`), so we
+  // disable Nitro for this build — Nitro would rewrite the server output
+  // into a worker bundle the preview server can't load.
+  ...(isIosBuild ? { nitro: false } : {}),
 });
