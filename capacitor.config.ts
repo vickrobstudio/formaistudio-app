@@ -19,7 +19,9 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: "always",
-    limitsNavigationsToAppBoundDomains: false,
+    // Keeps all navigation inside WKWebView instead of handing the URL off
+    // to Safari. Requires WKAppBoundDomains in Info.plist (set in codemagic.yaml).
+    limitsNavigationsToAppBoundDomains: true,
   },
 };
 
