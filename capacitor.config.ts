@@ -3,23 +3,22 @@ import type { CapacitorConfig } from "@capacitor/cli";
 /**
  * Capacitor config for the FormAI iOS shell.
  *
- * TanStack Start is server-rendered, so there is no static `dist/` to ship
- * inside the .ipa. Instead, the native shell loads the live published web app
- * over HTTPS. `webDir` is still required by the Capacitor CLI — we point it at
- * the Vite client build output so `cap sync` is happy.
+ * The `.ipa` now ships a pre-built SPA bundle (produced by `bun run build:ios`
+ * into `dist-ios/client`). The shell loads its own UI from disk — no
+ * Safari hand-off, works offline for navigation. Server functions still live
+ * on https://formaistudio.app; the bundled app fetches them cross-origin via
+ * the bridge in `src/lib/ios-server-fn-bridge.ts`.
  */
 const config: CapacitorConfig = {
   appId: "app.formaistudio.formai",
   appName: "FormAI",
-  webDir: "dist",
+  webDir: "dist/client",
+  // Production hosts the SPA bundle reaches cross-origin for server fns/api.
   server: {
-    // Use the canonical domain directly. The www host redirects to this root
-    // host, and iOS can treat that first-hop redirect as external navigation.
-    url: "https://formaistudio.app",
-    // Keep the production hosts inside WKWebView instead of opening Safari.
-    allowNavigation: ["formaistudio.app", "www.formaistudio.app", "formaistudio-app.lovable.app"],
     cleartext: false,
     androidScheme: "https",
+    iosScheme: "capacitor",
+    allowNavigation: ["formaistudio.app", "www.formaistudio.app"],
   },
   ios: {
     contentInset: "always",
