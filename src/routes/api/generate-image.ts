@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 const RenderInput = z.object({
-  prompt: z.string().trim().min(10).max(20000),
+  prompt: z.string().trim().min(10),
   sourceImage: z.string().startsWith("data:image/").max(8_000_000).nullable().optional(),
   sourceImages: z.array(z.string().startsWith("data:image/").max(8_000_000)).max(5).optional(),
 });
