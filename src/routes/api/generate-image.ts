@@ -3,11 +3,11 @@ import { z } from "zod";
 
 const RenderInput = z.object({
   prompt: z.string().trim().min(10),
-  sourceImage: z.string().startsWith("data:image/").max(50_000_000).nullable().optional(),
-  sourceImages: z.array(z.string().startsWith("data:image/").max(50_000_000)).max(5).optional(),
+  sourceImage: z.string().startsWith("data:image/").max(1_500_000_000).nullable().optional(),
+  sourceImages: z.array(z.string().startsWith("data:image/").max(1_500_000_000)).max(5).optional(),
 });
 
-const MAX_TOTAL_IMAGE_INPUT = 4_500_000;
+const MAX_TOTAL_IMAGE_INPUT = 6_000_000_000;
 
 export const Route = createFileRoute("/api/generate-image")({
   server: {
