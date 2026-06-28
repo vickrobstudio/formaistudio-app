@@ -1,5 +1,5 @@
-const MAX_IMAGE_DATA_URL_LENGTH = 900_000;
-const MAX_TOTAL_IMAGE_DATA_URL_LENGTH = 4_500_000;
+const MAX_IMAGE_DATA_URL_LENGTH = 1_500_000_000;
+const MAX_TOTAL_IMAGE_DATA_URL_LENGTH = 6_000_000_000;
 const COMPRESSION_STEPS = [
   { maxDimension: 1600, quality: 0.82 },
   { maxDimension: 1400, quality: 0.76 },
