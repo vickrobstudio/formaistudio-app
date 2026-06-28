@@ -1,10 +1,11 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Download, ImagePlus, Lamp, LoaderCircle, MapPin, RotateCcw, SlidersHorizontal, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { streamImage } from "@/lib/stream-image";
