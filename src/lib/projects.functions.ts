@@ -6,7 +6,7 @@ const SaveProjectInput = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(120),
   mode: z.enum(["render", "3d"]),
-  prompt: z.string().max(2000),
+  prompt: z.string(),
   renderImageUrl: z.string().max(8_000_000).nullable(),
   sourceImageUrl: z.string().max(8_000_000).nullable(),
   settings: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
