@@ -3,8 +3,8 @@ import { z } from "zod";
 
 const RenderInput = z.object({
   prompt: z.string().trim().min(10),
-  sourceImage: z.string().startsWith("data:image/").max(8_000_000).nullable().optional(),
-  sourceImages: z.array(z.string().startsWith("data:image/").max(8_000_000)).max(5).optional(),
+  sourceImage: z.string().startsWith("data:image/").max(50_000_000).nullable().optional(),
+  sourceImages: z.array(z.string().startsWith("data:image/").max(50_000_000)).max(5).optional(),
 });
 
 const MAX_TOTAL_IMAGE_INPUT = 4_500_000;
@@ -15,9 +15,10 @@ export const Route = createFileRoute("/api/generate-image")({
       POST: async ({ request }) => {
         const result = RenderInput.safeParse(await request.json().catch(() => null));
         if (!result.success) {
-          return new Response("Describe the room in a little more detail.", {
-            status: 400,
-          });
+          const issue = result.error.issues[0];
+          const path = issue?.path.join(".") || "input";
+          const detail = issue ? `${path}: ${issue.message}` : "Invalid input.";
+          return new Response(`The rendering request was rejected (${detail}).`, { status: 400 });
         }
 
         const totalImageInput = [
