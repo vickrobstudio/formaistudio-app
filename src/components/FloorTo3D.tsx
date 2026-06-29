@@ -269,16 +269,8 @@ export function FloorTo3D() {
     if ((dae || glb) && stage === "ready") setModelProgress(100);
   }, [dae, glb, stage]);
 
-  // Buildings skip the live 3D viewer and go straight to a .dae download.
-  const buildingAutoDownloaded = useRef(false);
-  useEffect(() => {
-    if (subject !== "building") { buildingAutoDownloaded.current = false; return; }
-    if (stage === "ready" && dae && !buildingAutoDownloaded.current) {
-      buildingAutoDownloaded.current = true;
-      setDownloadFormat("dae");
-      download("dae");
-    }
-  }, [stage, dae, subject]);
+  // Buildings skip the live 3D viewer — the user picks which floor(s) to
+  // download from the per-floor list below.
 
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
