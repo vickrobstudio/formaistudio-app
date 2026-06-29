@@ -1485,38 +1485,40 @@ function buildMultiFloorBuildingDae(
   let zOffset = 0;
   for (let i = 0; i < sortedFloors.length; i++) {
     const floor = sortedFloors[i];
-    const subPlan: BuildingPlan = {
-      kind: "building",
-      units: "meters",
-      bounds: multi.bounds,
-      walls: floor.walls,
-      columns: floor.columns,
-      stairs: floor.stairs,
-      fixtures: floor.fixtures,
-    };
-    const floorGroups = buildGroups(subPlan, floor.heightMeters, outputUnits)
-      // strip the per-floor slab and ceiling — multi-floor adds them explicitly
-      .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
-    const dzScaled = zOffset * scale;
     const floorNum = String(floor.index + 1).padStart(2, "0");
     const floorTitle = floor.label?.trim()
       ? `Floor ${floorNum} — ${floor.label.trim()}`
       : `Floor ${floorNum}`;
-    for (const g of floorGroups) {
-      for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
-      const category = categoryFor(g.id);
-      g.id = `f${floor.index}_${g.id}`;
-      g.parentPath = [floorTitle, category];
-      allGroups.push(g);
+    if (includeFloors) {
+      const subPlan: BuildingPlan = {
+        kind: "building",
+        units: "meters",
+        bounds: multi.bounds,
+        walls: floor.walls,
+        columns: floor.columns,
+        stairs: floor.stairs,
+        fixtures: floor.fixtures,
+      };
+      const floorGroups = buildGroups(subPlan, floor.heightMeters, outputUnits)
+        // strip the per-floor slab and ceiling — multi-floor adds them explicitly
+        .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
+      const dzScaled = zOffset * scale;
+      for (const g of floorGroups) {
+        for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
+        const category = categoryFor(g.id);
+        g.id = `f${floor.index}_${g.id}`;
+        g.parentPath = [floorTitle, category];
+        allGroups.push(g);
+      }
+      elementCount += floor.walls.length + floor.columns.length + floor.stairs.length + floor.fixtures.length;
     }
-    elementCount += floor.walls.length + floor.columns.length + floor.stairs.length + floor.fixtures.length;
 
     zOffset += floor.heightMeters;
 
     // Inter-floor slab (acts as ceiling of below + floor of above).
     // The roof above replaces the slab on top.
     const isTop = i === sortedFloors.length - 1;
-    if (!isTop && includeInterFloorSlab) {
+    if (includeFloors && !isTop && includeInterFloorSlab) {
       const slab = makeGroupBuilder(
         `group_slab_between_${floor.index}_${floor.index + 1}`,
         `Slab above ${floorTitle}`,
