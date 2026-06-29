@@ -262,9 +262,9 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 125_000;
 const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 110_000;
 const BUILDING_ANALYSIS_MODELS = [
-  "openai/gpt-5.4-pro",
   "google/gemini-3.1-pro-preview",
   "google/gemini-2.5-pro",
+  "google/gemini-3-flash-preview",
 ] as const;
 
 type GenerateFloor3DResult =
@@ -304,7 +304,7 @@ const ACCURACY_RULES = `ACCURACY IS CRITICAL:
 - Preserve every angle, alignment, parallel and perpendicular relationship.
 - Round to no more than 3 decimal meters; do not round entire dimensions to whole numbers.
 - Use a scale bar, grid or known reference if explicit dimensions are missing.
-- Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
+- Output compact/minified JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse. Do not pretty-print or add comments.`;
 
 function buildingInstruction(planUnits: z.infer<typeof PlanUnits>) {
   return `You are an architectural CAD vectorizer. Inspect the uploaded floor plan of a building (residential, office, retail, hospitality, industrial, etc.) and return STRICT JSON describing every wall.
