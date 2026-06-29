@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Check, Download, ImagePlus, LoaderCircle, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Check, Download, ImagePlus, LoaderCircle, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +59,114 @@ export function FloorTo3D() {
   const writePrompt = useServerFn(buildMasterPrompt);
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
+
+  // Multi-image building flow — one image per floor, optional roof plan,
+  // multiple elevations. When the user uses this flow we skip the master
+  // prompt + approval render and build the 3D model straight from drawings.
+  type FloorEntry = { imageDataUrl: string; label: string; heightMeters: number; fileName: string };
+  type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
+  const [floors, setFloors] = useState<FloorEntry[]>([]);
+  const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
+  const [elevations, setElevations] = useState<ElevationEntry[]>([]);
+  const floorInputRef = useRef<HTMLInputElement>(null);
+  const floorInputIndex = useRef<number>(-1);
+  const roofInputRef = useRef<HTMLInputElement>(null);
+  const elevationInputRef = useRef<HTMLInputElement>(null);
+
+  function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
+      r.onerror = () => reject(new Error("Could not read file."));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function addFloor() {
+    floorInputIndex.current = -1;
+    floorInputRef.current?.click();
+  }
+  async function replaceFloor(index: number) {
+    floorInputIndex.current = index;
+    floorInputRef.current?.click();
+  }
+  async function onFloorPicked(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
+    const url = await readFileAsDataUrl(file);
+    const idx = floorInputIndex.current;
+    if (idx >= 0) {
+      setFloors((prev) => prev.map((f, i) => i === idx ? { ...f, imageDataUrl: url, fileName: file.name } : f));
+    } else {
+      setFloors((prev) => [...prev, {
+        imageDataUrl: url,
+        label: prev.length === 0 ? "Ground floor" : `Floor ${prev.length}`,
+        heightMeters: 2.7,
+        fileName: file.name,
+      }]);
+    }
+    setError("");
+  }
+  async function onRoofPicked(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
+    const url = await readFileAsDataUrl(file);
+    setRoofPlan({ imageDataUrl: url, fileName: file.name });
+    setError("");
+  }
+  async function onElevationsPicked(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
+    const cycle: ElevationEntry["facing"][] = ["N", "E", "S", "W", "other"];
+    const added: ElevationEntry[] = [];
+    for (const file of files) {
+      const url = await readFileAsDataUrl(file);
+      const facing = cycle[(elevations.length + added.length) % cycle.length];
+      added.push({ imageDataUrl: url, facing, label: "", fileName: file.name });
+    }
+    setElevations((prev) => [...prev, ...added].slice(0, 8));
+    setError("");
+  }
+
+  async function buildFromDrawings() {
+    if (floors.length === 0) { setError("Add at least one floor plan."); return; }
+    setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setStage("modeling");
+    if (!(await consume())) {
+      setBusy(""); setStage("upload");
+      if (!signedIn) { void navigate({ to: "/auth" }); return; }
+      setError("You have no credits left. Open your Wallet to continue."); return;
+    }
+    try {
+      const result = await generate({
+        data: {
+          wallHeightMeters: floors[0]?.heightMeters || 2.7,
+          planUnits,
+          outputUnits,
+          subject: "building",
+          building: {
+            floors: floors.map((f) => ({ imageDataUrl: f.imageDataUrl, label: f.label, heightMeters: f.heightMeters })),
+            roof: roofPlan ? { imageDataUrl: roofPlan.imageDataUrl } : undefined,
+            elevations: elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })),
+          },
+        },
+      });
+      if (!result.ok) { setError(result.error); setStage("upload"); return; }
+      setDae(result.daeDataUrl);
+      setObj(result.objDataUrl);
+      setFbx(result.fbxDataUrl);
+      setSummary({ count: result.elementCount, subject: result.subject, outputUnits: result.outputUnits });
+      setStage("ready");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The 3D model could not be generated.");
+      setStage("upload");
+    } finally { setBusy(""); }
+  }
 
   useEffect(() => {
     if ((stage === "modeling" || stage === "ready") && previewRef.current) {
@@ -337,6 +445,67 @@ export function FloorTo3D() {
           <Button type="button" variant={subject === "furniture" ? "default" : "outline"} onClick={() => setSubject("furniture")}>Furniture piece</Button>
         </div>
       </div>
+      {subject === "building" && <>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Floors — one image per floor, bottom → top</p>
+        <p className="mt-2 text-xs text-muted-foreground">Upload each floor plan separately so the 3D model stacks them in real-world order. Set the floor-to-floor height for each level.</p>
+        <input ref={floorInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onFloorPicked} />
+        <input ref={roofInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onRoofPicked} />
+        <input ref={elevationInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onElevationsPicked} />
+        <div className="mt-3 space-y-3">
+          {floors.map((floor, index) => <div key={index} className="rounded-2xl border border-border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Floor {index}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
+            </div>
+            <button type="button" onClick={() => void replaceFloor(index)} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+              {floor.imageDataUrl.startsWith("data:image/") ? <img src={floor.imageDataUrl} alt={floor.label} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{floor.fileName}</span>}
+            </button>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="text-[10px] uppercase tracking-[0.18em]">Label
+                <Input value={floor.label} onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, label: event.target.value } : f))} className="mt-1 h-10" />
+              </label>
+              <label className="text-[10px] uppercase tracking-[0.18em]">Height (m)
+                <Input type="number" min="1" max="10" step="0.1" inputMode="decimal" value={floor.heightMeters} onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: Number(event.target.value) || 0 } : f))} className="mt-1 h-10" />
+              </label>
+            </div>
+          </div>)}
+          <Button type="button" variant="outline" className="h-12 w-full justify-between" onClick={() => void addFloor()} disabled={floors.length >= 10}>
+            <span>{floors.length === 0 ? "Add ground floor plan" : `Add floor ${floors.length}`}</span><Plus />
+          </Button>
+        </div>
+
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Roof plan (optional)</p>
+        <p className="mt-2 text-xs text-muted-foreground">A top-down view of the roof. Used together with the elevations to set the roof outline.</p>
+        {roofPlan ? <div className="mt-3 rounded-2xl border border-border p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Roof</span>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setRoofPlan(null)}><X className="size-3" />Remove</Button>
+          </div>
+          <button type="button" onClick={() => roofInputRef.current?.click()} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+            {roofPlan.imageDataUrl.startsWith("data:image/") ? <img src={roofPlan.imageDataUrl} alt="Roof plan" className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{roofPlan.fileName}</span>}
+          </button>
+        </div> : <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()}><span>Add roof plan</span><Plus /></Button>}
+
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Elevations</p>
+        <p className="mt-2 text-xs text-muted-foreground">Add one image per facade (North, South, East, West). Used to lock heights, window positions and roof shape.</p>
+        {elevations.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {elevations.map((elev, index) => <div key={index} className="rounded-2xl border border-border p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Elevation</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setElevations((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
+            </div>
+            {elev.imageDataUrl.startsWith("data:image/") ? <img src={elev.imageDataUrl} alt={`Elevation ${elev.facing}`} className="mt-2 aspect-[4/3] w-full rounded-xl border border-border bg-secondary object-contain" /> : <div className="mt-2 grid aspect-[4/3] w-full place-items-center rounded-xl border border-border bg-secondary text-xs text-muted-foreground">{elev.fileName}</div>}
+            <div className="mt-2 flex gap-1">
+              {(["N", "E", "S", "W", "other"] as const).map((dir) => <Button key={dir} type="button" size="sm" variant={elev.facing === dir ? "default" : "outline"} className="flex-1" onClick={() => setElevations((prev) => prev.map((e, i) => i === index ? { ...e, facing: dir } : e))}>{dir}</Button>)}
+            </div>
+          </div>)}
+        </div>}
+        <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => elevationInputRef.current?.click()} disabled={elevations.length >= 8}>
+          <span>{elevations.length === 0 ? "Add elevations" : `Add more elevations (${elevations.length}/8)`}</span><Plus />
+        </Button>
+      </>}
+
+      {subject === "furniture" && <>
       <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg" className="sr-only" onChange={upload} />
       <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
         {fileDataUrl && !isPdf
@@ -382,6 +551,7 @@ export function FloorTo3D() {
           </Button>
         </div>}
       </div>
+      </>}
 
       <div className="organic-divider py-8">
         <div className="flex items-end justify-between gap-4">
@@ -414,29 +584,19 @@ export function FloorTo3D() {
             <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High poly</Button>
           </div>
         </div>
-        {subject === "building" && <>
-          <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em]">Ceiling height</p>
-          {planUnits === "meters"
-            ? <label className="mt-3 block text-xs">Meters
-                <Input value={heightMeters} onChange={(event) => setHeightMeters(event.target.value)} type="number" min="1" max="10" step="0.1" inputMode="decimal" className="mt-2 h-12" />
-              </label>
-            : <div className="mt-3 grid grid-cols-2 gap-3">
-                <label className="text-xs">Feet
-                  <Input value={heightFeet} onChange={(event) => setHeightFeet(event.target.value)} type="number" min="0" max="33" step="1" inputMode="numeric" className="mt-2 h-12" />
-                </label>
-                <label className="text-xs">Inches
-                  <Input value={heightInches} onChange={(event) => setHeightInches(event.target.value)} type="number" min="0" max="11" step="1" inputMode="numeric" className="mt-2 h-12" />
-                </label>
-              </div>}
-        </>}
       </div>
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
+      {subject === "building" && <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={busy !== "" || floors.length === 0 || stage === "modeling" || stage === "ready"} onClick={() => void buildFromDrawings()}>
+        <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlan ? " + roof" : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
+        {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+      </Button>}
+
       {/* When the user supplies BOTH a 2D plan and a reference rendering,
           we bypass the master-prompt + approval render and go straight to
           the live 3D preview using the rendering as the fidelity target. */}
-      {fileDataUrl && referenceImages.length === 0 && <>
+      {subject === "furniture" && fileDataUrl && referenceImages.length === 0 && <>
         {/* Step 2 — Write master prompt */}
         <div className="mt-8">{stepHeading(2, "Master rendering prompt", stage === "upload" || stage === "prompted", stage === "rendered" || stage === "modeling" || stage === "ready")}</div>
         <Button variant="studio" className="mt-3 h-12 w-full justify-between" disabled={!fileDataUrl || busy !== ""} onClick={() => void generatePrompt()}>

@@ -10,7 +10,8 @@ const FloorTo3DInput = z.object({
   fileDataUrl: z
     .string()
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
-    .max(2_700_000_000),
+    .max(2_700_000_000)
+    .optional(),
   wallHeightMeters: z.number().min(0.1).max(15).default(2.7),
   planUnits: PlanUnits.default("meters"),
   outputUnits: OutputUnits.default("meters"),
@@ -34,6 +35,50 @@ const FloorTo3DInput = z.object({
     .array(z.string().regex(/^data:image\/(png|jpeg|webp);base64,/).max(50_000_000))
     .max(6)
     .default([])
+    .optional(),
+  // NEW — multi-image building flow: one image per floor + optional roof
+  // plan + elevations. When present (and subject === "building"), this
+  // payload is used INSTEAD of the single-image fileDataUrl flow and the
+  // 3D model is built directly from the drawings, with no master prompt
+  // and no approval render.
+  building: z
+    .object({
+      floors: z
+        .array(
+          z.object({
+            imageDataUrl: z
+              .string()
+              .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+              .max(50_000_000),
+            label: z.string().max(60).optional(),
+            heightMeters: z.number().min(1).max(10).default(2.7),
+          }),
+        )
+        .min(1)
+        .max(10),
+      roof: z
+        .object({
+          imageDataUrl: z
+            .string()
+            .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+            .max(50_000_000),
+        })
+        .optional(),
+      elevations: z
+        .array(
+          z.object({
+            imageDataUrl: z
+              .string()
+              .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+              .max(50_000_000),
+            facing: z.enum(["N", "S", "E", "W", "other"]).default("other"),
+            label: z.string().max(60).optional(),
+          }),
+        )
+        .max(8)
+        .default([])
+        .optional(),
+    })
     .optional(),
 });
 
@@ -158,6 +203,36 @@ const FurniturePlanSchema = z.object({
 type BuildingPlan = z.infer<typeof BuildingPlanSchema>;
 type FurniturePlan = z.infer<typeof FurniturePlanSchema>;
 
+const MultiFloorBuildingPlanSchema = z.object({
+  kind: z.literal("multi_floor_building"),
+  units: z.literal("meters"),
+  bounds: z.object({ width: z.number().positive(), length: z.number().positive() }),
+  floors: z
+    .array(
+      z.object({
+        index: z.number().int().min(0).max(20),
+        label: z.string().max(60).optional(),
+        heightMeters: z.number().min(1).max(10),
+        walls: z.array(WallSchema).min(0).max(600).default([]),
+        columns: z.array(ColumnSchema).max(200).default([]),
+        stairs: z.array(StairSchema).max(40).default([]),
+        fixtures: z.array(FixtureSchema).max(400).default([]),
+      }),
+    )
+    .min(1)
+    .max(10),
+  roof: z
+    .object({
+      kind: z.enum(["flat", "gable", "hip", "shed"]).default("flat"),
+      thicknessMeters: z.number().min(0.05).max(0.6).default(0.2),
+      overhangMeters: z.number().min(0).max(2).default(0.3).optional(),
+      ridgeHeightMeters: z.number().min(0).max(8).optional(),
+      ridgeAxis: z.enum(["x", "y"]).optional(),
+    })
+    .optional(),
+});
+type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
+
 type GenerateFloor3DResult =
   | { ok: true; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string; elementCount: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet"; plan: BuildingPlan | FurniturePlan }
   | { ok: false; error: string };
@@ -214,6 +289,43 @@ Rules:
 - IGNORE all MEP content entirely: HVAC ducts and diffusers, plumbing risers and waste lines, electrical outlets, switches, lighting fixtures, panels, conduit, fire sprinklers, data jacks, mechanical equipment schedules and any MEP legends. Do not output them as walls, columns or fixtures.
 - Skip door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
 - Keep the model SIMPLE: only walls, doors, windows, columns, stairs and visible furniture / cabinets / bath fixtures. Each distinct element is its own entry so it becomes its own group on import.
+
+${ACCURACY_RULES}`;
+}
+
+function multiFloorBuildingInstruction(planUnits: z.infer<typeof PlanUnits>) {
+  return `You are an architectural CAD vectorizer. You will receive MULTIPLE drawings of the SAME building, one per message part, each preceded by a text label such as "FLOOR 0 — ground (height 3.0 m)", "ROOF PLAN", "ELEVATION — North". Cross-read all of them and return ONE STRICT JSON describing every floor stacked bottom-up, plus the roof.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{
+  "kind": "multi_floor_building",
+  "units": "meters",
+  "bounds": { "width": <overall plan width m>, "length": <overall plan length m> },
+  "floors": [
+    {
+      "index": 0,
+      "label": "Ground floor",
+      "heightMeters": <floor-to-floor height in m, taken from the user's per-floor value and cross-checked against the elevations>,
+      "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "openings": [ { "kind": "door"|"window", "position": <m>, "width": <m>, "sillHeight": <m>, "headHeight": <m> } ] } ],
+      "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+      "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
+      "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
+    }
+  ],
+  "roof": { "kind": "flat"|"gable"|"hip"|"shed", "thicknessMeters": <m>, "overhangMeters": <m, optional>, "ridgeHeightMeters": <m above top floor's ceiling, only for gable/hip/shed>, "ridgeAxis": "x"|"y" }
+}
+
+Rules:
+- Origin (0,0) at the bottom-left corner of the floor plan, +x right, +y up. Use the SAME origin and the SAME bounds for every floor and for the roof plan so the floors stack vertically aligned. If a floor plan is drawn at a different size, scale and align it to the ground floor's outline.
+- Trace every exterior and interior wall on EACH floor as one straight segment between endpoints. Split walls at intersections. Put doors and windows in the wall's "openings" array — never split the wall at an opening.
+- "position" is the distance from (x1,y1) along the wall to the START of the opening. Doors: sillHeight 0, headHeight ~2.1 m. Windows: sillHeight ~0.9 m, headHeight ~2.1 m. When the elevations show different sill/head heights, USE those — elevations are the ground truth for vertical positions.
+- Use printed wall thicknesses when shown; otherwise 0.20 m exterior, 0.10 m interior.
+- Use the elevations to confirm the total building height, floor-to-floor heights, parapet heights, and the roof shape (flat vs pitched). The "roof.kind" must match what the elevations show. For gable/hip/shed, set "ridgeHeightMeters" to the height of the ridge ABOVE the top floor's ceiling and "ridgeAxis" to the axis the ridge runs along.
+- Output every floor in the "floors" array in physical stacking order, index 0 = ground floor.
+- IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
+- Be EXACT — geometry, locations and proportions must reproduce the drawings 1:1. Do not invent walls or openings that are not in the drawings, and do not omit any that are.
 
 ${ACCURACY_RULES}`;
 }
@@ -1147,6 +1259,92 @@ function buildDae(
   outputUnits: "meters" | "feet",
 ) {
   const groups = buildGroups(plan, wallHeightMeters, outputUnits);
+  return emitDaeFromGroups(groups, outputUnits);
+}
+
+function buildMultiFloorBuildingDae(
+  multi: MultiFloorBuildingPlan,
+  outputUnits: "meters" | "feet",
+): { dae: string; elementCount: number } {
+  const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
+  const allGroups: Group[] = [];
+  let elementCount = 0;
+
+  // Ground slab
+  const ground = makeGroupBuilder("group_slab_ground", "Ground slab", scale, "concrete_polished");
+  ground.addBox(0, 0, -0.2, multi.bounds.width, multi.bounds.length, 0);
+  allGroups.push(ground.group);
+
+  // Sort floors by index, ground → top
+  const sortedFloors = [...multi.floors].sort((a, b) => a.index - b.index);
+
+  let zOffset = 0;
+  for (let i = 0; i < sortedFloors.length; i++) {
+    const floor = sortedFloors[i];
+    const subPlan: BuildingPlan = {
+      kind: "building",
+      units: "meters",
+      bounds: multi.bounds,
+      walls: floor.walls,
+      columns: floor.columns,
+      stairs: floor.stairs,
+      fixtures: floor.fixtures,
+    };
+    const floorGroups = buildGroups(subPlan, floor.heightMeters, outputUnits)
+      // strip the per-floor slab and ceiling — multi-floor adds them explicitly
+      .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
+    const dzScaled = zOffset * scale;
+    const label = floor.label?.trim() || `Floor ${floor.index}`;
+    for (const g of floorGroups) {
+      for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
+      g.id = `f${floor.index}_${g.id}`;
+      g.name = `${label} — ${g.name}`;
+      allGroups.push(g);
+    }
+    elementCount += floor.walls.length + floor.columns.length + floor.stairs.length + floor.fixtures.length;
+
+    zOffset += floor.heightMeters;
+
+    // Inter-floor slab (acts as ceiling of below + floor of above).
+    // The roof above replaces the slab on top.
+    const isTop = i === sortedFloors.length - 1;
+    if (!isTop) {
+      const slab = makeGroupBuilder(
+        `group_slab_between_${floor.index}_${floor.index + 1}`,
+        `Slab — between ${label} and floor ${floor.index + 1}`,
+        scale,
+        "concrete_polished",
+      );
+      slab.addBox(0, 0, zOffset - 0.12, multi.bounds.width, multi.bounds.length, zOffset);
+      allGroups.push(slab.group);
+    }
+  }
+
+  // Roof — v1 always renders a flat slab with optional overhang and thickness.
+  // Pitched roof kinds are captured in the JSON for future use but currently
+  // assembled as a flat slab to keep geometry predictable.
+  const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
+  const overhang = roof.overhangMeters ?? 0;
+  const roofSlab = makeGroupBuilder(
+    "group_roof",
+    `Roof — ${roof.kind}`,
+    scale,
+    "concrete_polished",
+  );
+  roofSlab.addBox(
+    -overhang,
+    -overhang,
+    zOffset,
+    multi.bounds.width + overhang,
+    multi.bounds.length + overhang,
+    zOffset + roof.thicknessMeters,
+  );
+  allGroups.push(roofSlab.group);
+
+  return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount };
+}
+
+function emitDaeFromGroups(groups: Group[], outputUnits: "meters" | "feet") {
   const created = new Date().toISOString();
   const unitTag = outputUnits === "feet"
     ? '<unit name="foot" meter="0.3048"/>'
@@ -1235,6 +1433,16 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
+    // NEW PATH — multi-image building flow. The 3D model is built directly
+    // from the per-floor plans + roof + elevations, with no master prompt
+    // and no approval render in between.
+    if (data.subject === "building" && data.building && data.building.floors.length) {
+      return await runMultiFloorBuilding(key, data);
+    }
+
+    if (!data.fileDataUrl) {
+      return { ok: false, error: "No drawing was uploaded." };
+    }
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
     const instruction = data.referenceOnly
       ? (data.subject === "furniture" ? furnitureReferenceRenderingInstruction() : buildingReferenceRenderingInstruction())
@@ -1338,3 +1546,101 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       : plan.parts.length;
     return { ok: true, daeDataUrl, objDataUrl, fbxDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan };
   });
+
+async function runMultiFloorBuilding(
+  key: string,
+  data: z.infer<typeof FloorTo3DInput>,
+): Promise<GenerateFloor3DResult> {
+  const building = data.building!;
+  const userContent: Array<Record<string, unknown>> = [
+    { type: "text", text: multiFloorBuildingInstruction(data.planUnits) },
+  ];
+  const attach = (label: string, url: string) => {
+    userContent.push({ type: "text", text: label });
+    if (url.startsWith("data:application/pdf")) {
+      userContent.push({ type: "file", file: { filename: `${label}.pdf`, file_data: url } });
+    } else {
+      userContent.push({ type: "image_url", image_url: { url } });
+    }
+  };
+
+  const sorted = [...building.floors].sort((a, b) => 0).map((f, i) => ({ ...f, index: i }));
+  for (const floor of sorted) {
+    const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
+    attach(`FLOOR ${floor.index} — ${lbl} (floor-to-floor height ${floor.heightMeters.toFixed(2)} m)`, floor.imageDataUrl);
+  }
+  if (building.roof) attach("ROOF PLAN", building.roof.imageDataUrl);
+  for (const elev of building.elevations ?? []) {
+    const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
+    attach(`ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""}`, elev.imageDataUrl);
+  }
+
+  const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-pro",
+      messages: [{ role: "user", content: userContent }],
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  if (!upstream.ok) {
+    const detail = await upstream.text().catch(() => "");
+    console.error("multi-floor extract failed", upstream.status, detail.slice(0, 400));
+    if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
+    if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+    return { ok: false, error: "The drawings could not be analysed." };
+  }
+
+  const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const text = payload.choices?.[0]?.message?.content?.trim();
+  if (!text) return { ok: false, error: "The AI did not return a description." };
+
+  let parsed: unknown;
+  try {
+    const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    parsed = JSON.parse(cleaned);
+  } catch {
+    return { ok: false, error: "The AI response was not valid JSON." };
+  }
+
+  const planResult = MultiFloorBuildingPlanSchema.safeParse(parsed);
+  if (!planResult.success) {
+    console.error("multi-floor plan invalid", planResult.error.issues.slice(0, 5));
+    return { ok: false, error: "The detected geometry was incomplete. Try clearer drawings with visible dimensions." };
+  }
+
+  const { dae, elementCount } = buildMultiFloorBuildingDae(planResult.data, data.outputUnits);
+  const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
+  const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
+  const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
+  const groups = parseDaeToTriangles(dae);
+  const { obj } = trianglesToObj(groups);
+  const fbx = trianglesToFbxAscii(groups);
+  const objDataUrl = toDataUrl(obj, "model/obj");
+  const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
+
+  // Return a flattened BuildingPlan stub so the existing client-side
+  // summary keeps working. The actual geometry is in the .dae.
+  const flat: BuildingPlan = {
+    kind: "building",
+    units: "meters",
+    bounds: { width: planResult.data.bounds.width, length: planResult.data.bounds.length },
+    walls: planResult.data.floors.flatMap((f) => f.walls),
+    columns: planResult.data.floors.flatMap((f) => f.columns),
+    stairs: planResult.data.floors.flatMap((f) => f.stairs),
+    fixtures: planResult.data.floors.flatMap((f) => f.fixtures),
+  };
+
+  return {
+    ok: true,
+    daeDataUrl,
+    objDataUrl,
+    fbxDataUrl,
+    elementCount,
+    subject: "building",
+    outputUnits: data.outputUnits,
+    plan: flat,
+  };
+}
