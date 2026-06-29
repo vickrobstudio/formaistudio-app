@@ -2215,14 +2215,22 @@ async function runMultiFloorBuilding(
   };
 
   const { dae, elementCount } = buildMultiFloorBuildingDae(assembledPlan, data.outputUnits);
-  const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
   const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
   const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
   const groups = parseDaeToTriangles(dae);
-  const { obj } = trianglesToObj(groups);
-  const fbx = trianglesToFbxAscii(groups);
-  const objDataUrl = toDataUrl(obj, "model/obj");
-  const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
+  const assembledValidation = validateMeshGeometry(groups);
+  // If the assembled full-building mesh is invalid, skip its export but
+  // continue with per-part exports below — any individually valid floor,
+  // site, or roof can still ship.
+  const assembledValid = assembledValidation.ok;
+  if (!assembledValid) {
+    console.error(`[assembled] geometry validation failed — skipping combined export: ${assembledValidation.reason}`);
+  }
+  const daeDataUrl = assembledValid
+    ? `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`
+    : "";
+  const objDataUrl = assembledValid ? toDataUrl(trianglesToObj(groups).obj, "model/obj") : "";
+  const fbxDataUrl = assembledValid ? toDataUrl(trianglesToFbxAscii(groups), "application/octet-stream") : "";
 
   // ── Per-floor exports ──────────────────────────────────────────────
   // Build separate .dae / .obj / .fbx files. The client orchestrates the
@@ -2238,21 +2246,33 @@ async function runMultiFloorBuilding(
     objDataUrl: string;
     fbxDataUrl: string;
   }> = [];
+  const skippedParts: Array<{ label: string; reason: string }> = [];
   const emitPart = (
     index: number,
     label: string,
     plan: MultiFloorBuildingPlan,
     opts: { includeSite?: boolean; includeRoof?: boolean; includeFloors?: boolean; includeInterFloorSlab?: boolean },
   ) => {
-    const { dae: partDae } = buildMultiFloorBuildingDae(plan, data.outputUnits, opts);
-    const partGroups = parseDaeToTriangles(partDae);
+    let partDae: string;
+    let partGroups: ReturnType<typeof parseDaeToTriangles>;
+    try {
+      partDae = buildMultiFloorBuildingDae(plan, data.outputUnits, opts).dae;
+      partGroups = parseDaeToTriangles(partDae);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "build/parse failed";
+      console.error(`[${label}] geometry build failed — skipping export: ${reason}`);
+      skippedParts.push({ label, reason });
+      return;
+    }
     if (partGroups.length === 0) {
-      console.error(`empty 3d output skipped for ${label}`);
+      console.error(`[${label}] empty 3d output — skipping export`);
+      skippedParts.push({ label, reason: "no mesh groups" });
       return;
     }
     const validation = validateMeshGeometry(partGroups);
     if (!validation.ok) {
       console.error(`[${label}] geometry validation failed — skipping export: ${validation.reason}`);
+      skippedParts.push({ label, reason: validation.reason });
       return;
     }
     const { obj: partObj } = trianglesToObj(partGroups);
@@ -2315,8 +2335,14 @@ async function runMultiFloorBuilding(
     }
   }
 
-  if (floorParts.length === 0) {
-    return { ok: false, error: "The drawings were read but no usable 3D wall geometry was extracted. Try a clearer cropped floor-plan image with visible walls and dimensions." };
+  if (floorParts.length === 0 && !assembledValid) {
+    const detail = skippedParts.length
+      ? ` (skipped: ${skippedParts.map((s) => `${s.label} — ${s.reason}`).join("; ")})`
+      : "";
+    return { ok: false, error: `The drawings were read but no usable 3D geometry could be exported${detail}. Try a clearer cropped floor-plan image with visible walls and dimensions.` };
+  }
+  if (skippedParts.length) {
+    console.warn(`[generateFloor3D] continuing with ${floorParts.length} valid part(s); skipped ${skippedParts.length}: ${skippedParts.map((s) => s.label).join(", ")}`);
   }
 
   // Return a flattened BuildingPlan stub so the existing client-side
