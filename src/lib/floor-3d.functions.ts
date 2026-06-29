@@ -259,8 +259,8 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 // can be temporarily unavailable or rejected by the chat endpoint, so the
 // drafter pipeline automatically falls back instead of returning "could not be
 // analysed" for the whole drawing set.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 125_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 110_000;
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 90_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 75_000;
 const BUILDING_ANALYSIS_MODELS = [
   "google/gemini-3.1-pro-preview",
   "google/gemini-2.5-pro",
@@ -2000,6 +2000,7 @@ async function runMultiFloorBuilding(
           lastMessage = detail;
           console.error(`[${label}] extract failed on ${model}`, res.status, detail.slice(0, 300));
           if (res.status === 404 || res.status === 410) continue;
+          if (res.status === 408 || res.status >= 500) continue;
           const err = new Error(`upstream_${res.status}`);
           (err as Error & { status?: number }).status = res.status;
           throw err;
@@ -2022,7 +2023,12 @@ async function runMultiFloorBuilding(
         }
         return json;
       } catch (error) {
-        if (error instanceof DOMException && error.name === "TimeoutError") throw error;
+        if (error instanceof DOMException && error.name === "TimeoutError") {
+          lastStatus = 408;
+          lastMessage = `${model} timed out after ${Math.round(timeoutMs / 1000)}s`;
+          console.warn(`[${label}] ${lastMessage} — trying the next model instead of failing this drawing.`);
+          continue;
+        }
         if ((error as { status?: number }).status) throw error;
         lastMessage = error instanceof Error ? error.message : String(error);
         console.error(`[${label}] extract parse failed on ${model}`, lastMessage.slice(0, 300));
