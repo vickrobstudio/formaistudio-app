@@ -1784,7 +1784,7 @@ async function runMultiFloorBuilding(
         // small enough to finish inside the worker timeout.
         model: "google/gemini-2.5-pro",
         messages: [{ role: "user", content }],
-        max_tokens: 16000,
+        max_tokens: 32000,
         response_format: { type: "json_object" },
       }),
     });
@@ -1795,8 +1795,12 @@ async function runMultiFloorBuilding(
       (err as Error & { status?: number }).status = res.status;
       throw err;
     }
-    const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
     const text = payload.choices?.[0]?.message?.content?.trim();
+    const finishReason = payload.choices?.[0]?.finish_reason;
+    if (finishReason === "length") {
+      console.warn(`[${label}] response was TRUNCATED (finish_reason=length) — increase max_tokens or split the work.`);
+    }
     if (!text) throw new Error(`[${label}] empty response`);
     const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     return JSON.parse(cleaned);
