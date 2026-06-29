@@ -232,6 +232,7 @@ export function FloorTo3D() {
       setDae(result.daeDataUrl);
       setObj(result.objDataUrl);
       setFbx(result.fbxDataUrl);
+      setFloorParts(result.floorParts ?? []);
       setSummary({ count: result.elementCount, subject: result.subject, outputUnits: result.outputUnits });
       setStage("ready");
     } catch (cause) {
