@@ -63,7 +63,7 @@ export function FloorTo3D() {
   // Multi-image building flow — one image per floor, optional roof plan,
   // multiple elevations. When the user uses this flow we skip the master
   // prompt + approval render and build the 3D model straight from drawings.
-  type FloorEntry = { imageDataUrl: string; label: string; heightMeters: number; fileName: string };
+  type FloorEntry = { imageDataUrl: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string };
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
   const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
@@ -104,6 +104,7 @@ export function FloorTo3D() {
         imageDataUrl: url,
         label: prev.length === 0 ? "Ground floor" : `Floor ${prev.length}`,
         heightMeters: 2.7,
+        heightUnit: prev[prev.length - 1]?.heightUnit ?? "m",
         fileName: file.name,
       }]);
     }
@@ -464,9 +465,15 @@ export function FloorTo3D() {
               <label className="text-[10px] uppercase tracking-[0.18em]">Label
                 <Input value={floor.label} onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, label: event.target.value } : f))} className="mt-1 h-10" />
               </label>
-              <label className="text-[10px] uppercase tracking-[0.18em]">Height (m)
-                <Input type="number" min="1" max="10" step="0.1" inputMode="decimal" value={floor.heightMeters} onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: Number(event.target.value) || 0 } : f))} className="mt-1 h-10" />
-              </label>
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-[0.18em]">Floor height</span>
+                  <div className="flex overflow-hidden rounded-md border border-border">
+                    {(["m", "ft"] as const).map((u) => <button key={u} type="button" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightUnit: u } : f))} className={`px-2 py-0.5 text-[10px] font-bold uppercase ${floor.heightUnit === u ? "bg-foreground text-background" : "bg-background text-foreground"}`}>{u}</button>)}
+                  </div>
+                </div>
+                <Input type="number" min={floor.heightUnit === "ft" ? 3 : 1} max={floor.heightUnit === "ft" ? 33 : 10} step={floor.heightUnit === "ft" ? 0.25 : 0.1} inputMode="decimal" value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters} onChange={(event) => { const v = Number(event.target.value) || 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: meters } : f)); }} className="mt-1 h-10" />
+              </div>
             </div>
           </div>)}
           <Button type="button" variant="outline" className="h-12 w-full justify-between" onClick={() => void addFloor()} disabled={floors.length >= 10}>
