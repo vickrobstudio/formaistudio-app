@@ -293,6 +293,43 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
+function multiFloorBuildingInstruction(planUnits: z.infer<typeof PlanUnits>) {
+  return `You are an architectural CAD vectorizer. You will receive MULTIPLE drawings of the SAME building, one per message part, each preceded by a text label such as "FLOOR 0 — ground (height 3.0 m)", "ROOF PLAN", "ELEVATION — North". Cross-read all of them and return ONE STRICT JSON describing every floor stacked bottom-up, plus the roof.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{
+  "kind": "multi_floor_building",
+  "units": "meters",
+  "bounds": { "width": <overall plan width m>, "length": <overall plan length m> },
+  "floors": [
+    {
+      "index": 0,
+      "label": "Ground floor",
+      "heightMeters": <floor-to-floor height in m, taken from the user's per-floor value and cross-checked against the elevations>,
+      "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "openings": [ { "kind": "door"|"window", "position": <m>, "width": <m>, "sillHeight": <m>, "headHeight": <m> } ] } ],
+      "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+      "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
+      "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
+    }
+  ],
+  "roof": { "kind": "flat"|"gable"|"hip"|"shed", "thicknessMeters": <m>, "overhangMeters": <m, optional>, "ridgeHeightMeters": <m above top floor's ceiling, only for gable/hip/shed>, "ridgeAxis": "x"|"y" }
+}
+
+Rules:
+- Origin (0,0) at the bottom-left corner of the floor plan, +x right, +y up. Use the SAME origin and the SAME bounds for every floor and for the roof plan so the floors stack vertically aligned. If a floor plan is drawn at a different size, scale and align it to the ground floor's outline.
+- Trace every exterior and interior wall on EACH floor as one straight segment between endpoints. Split walls at intersections. Put doors and windows in the wall's "openings" array — never split the wall at an opening.
+- "position" is the distance from (x1,y1) along the wall to the START of the opening. Doors: sillHeight 0, headHeight ~2.1 m. Windows: sillHeight ~0.9 m, headHeight ~2.1 m. When the elevations show different sill/head heights, USE those — elevations are the ground truth for vertical positions.
+- Use printed wall thicknesses when shown; otherwise 0.20 m exterior, 0.10 m interior.
+- Use the elevations to confirm the total building height, floor-to-floor heights, parapet heights, and the roof shape (flat vs pitched). The "roof.kind" must match what the elevations show. For gable/hip/shed, set "ridgeHeightMeters" to the height of the ridge ABOVE the top floor's ceiling and "ridgeAxis" to the axis the ridge runs along.
+- Output every floor in the "floors" array in physical stacking order, index 0 = ground floor.
+- IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
+- Be EXACT — geometry, locations and proportions must reproduce the drawings 1:1. Do not invent walls or openings that are not in the drawings, and do not omit any that are.
+
+${ACCURACY_RULES}`;
+}
+
 function buildingReferenceRenderingInstruction() {
   return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
 
