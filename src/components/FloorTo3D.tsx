@@ -539,10 +539,13 @@ export function FloorTo3D() {
     const map = { dae: part.daeDataUrl, obj: part.objDataUrl, fbx: part.fbxDataUrl } as const;
     const href = map[downloadFormat];
     if (!href) return;
-    const num = String(part.index + 1).padStart(2, "0");
-    const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `floor-${num}`;
-    const suffix = part.index === 0 ? "_with-site" : isTop ? "_with-roof" : "";
-    downloadHref(href, `floor-${num}_${slug}${suffix}.${downloadFormat}`);
+    void isTop;
+    const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `part`;
+    let prefix: string;
+    if (part.index === -1) prefix = "00_site";
+    else if (part.index === 9999) prefix = "99_roof";
+    else prefix = `${String(part.index + 1).padStart(2, "0")}_floor`;
+    downloadHref(href, `${prefix}_${slug}.${downloadFormat}`);
   }
 
   async function reconstructMesh(urlOverride?: string) {
