@@ -1433,6 +1433,16 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
+    // NEW PATH — multi-image building flow. The 3D model is built directly
+    // from the per-floor plans + roof + elevations, with no master prompt
+    // and no approval render in between.
+    if (data.subject === "building" && data.building && data.building.floors.length) {
+      return await runMultiFloorBuilding(key, data);
+    }
+
+    if (!data.fileDataUrl) {
+      return { ok: false, error: "No drawing was uploaded." };
+    }
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
     const instruction = data.referenceOnly
       ? (data.subject === "furniture" ? furnitureReferenceRenderingInstruction() : buildingReferenceRenderingInstruction())
