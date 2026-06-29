@@ -1676,6 +1676,9 @@ async function runMultiFloorBuilding(
   const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    // Multi-floor extraction with floors + roof + site + elevations is a heavy
+    // multimodal call; allow up to 5 minutes before aborting.
+    signal: AbortSignal.timeout(5 * 60 * 1000),
     body: JSON.stringify({
       model: "google/gemini-2.5-pro",
       messages: [{ role: "user", content: userContent }],
