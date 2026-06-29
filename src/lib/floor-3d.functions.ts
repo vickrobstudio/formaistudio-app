@@ -1398,29 +1398,35 @@ function buildDae(
 function buildMultiFloorBuildingDae(
   multi: MultiFloorBuildingPlan,
   outputUnits: "meters" | "feet",
+  options: { includeSite?: boolean; includeRoof?: boolean; includeInterFloorSlab?: boolean } = {},
 ): { dae: string; elementCount: number } {
   const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
   const allGroups: Group[] = [];
   let elementCount = 0;
 
+  const includeSite = options.includeSite ?? true;
+  const includeRoof = options.includeRoof ?? true;
+  const includeInterFloorSlab = options.includeInterFloorSlab ?? true;
+
   // ── Site: ground slab + grass apron around the building footprint.
   // Both sit under a top-level "Site" group so they import as their own
   // selectable SketchUp folder, separate from the building floors.
-  const ground = makeGroupBuilder("site_ground_slab", "Ground slab", scale, "concrete_polished");
-  ground.addBox(0, 0, -0.2, multi.bounds.width, multi.bounds.length, 0);
-  ground.group.parentPath = ["Site"];
-  allGroups.push(ground.group);
+  if (includeSite) {
+    const ground = makeGroupBuilder("site_ground_slab", "Ground slab", scale, "concrete_polished");
+    ground.addBox(0, 0, -0.2, multi.bounds.width, multi.bounds.length, 0);
+    ground.group.parentPath = ["Site"];
+    allGroups.push(ground.group);
 
-  const grassMargin = Math.max(4, Math.min(multi.bounds.width, multi.bounds.length) * 0.5);
-  const grass = makeGroupBuilder("site_grass", "Grass", scale, "other");
-  grass.group.colorOverride = [0.36, 0.55, 0.27];
-  // Four rectangles around the building to keep the footprint cut out.
-  grass.addBox(-grassMargin, -grassMargin, -0.22, multi.bounds.width + grassMargin, 0, -0.2); // south
-  grass.addBox(-grassMargin, multi.bounds.length, -0.22, multi.bounds.width + grassMargin, multi.bounds.length + grassMargin, -0.2); // north
-  grass.addBox(-grassMargin, 0, -0.22, 0, multi.bounds.length, -0.2); // west
-  grass.addBox(multi.bounds.width, 0, -0.22, multi.bounds.width + grassMargin, multi.bounds.length, -0.2); // east
-  grass.group.parentPath = ["Site"];
-  allGroups.push(grass.group);
+    const grassMargin = Math.max(4, Math.min(multi.bounds.width, multi.bounds.length) * 0.5);
+    const grass = makeGroupBuilder("site_grass", "Grass", scale, "other");
+    grass.group.colorOverride = [0.36, 0.55, 0.27];
+    grass.addBox(-grassMargin, -grassMargin, -0.22, multi.bounds.width + grassMargin, 0, -0.2);
+    grass.addBox(-grassMargin, multi.bounds.length, -0.22, multi.bounds.width + grassMargin, multi.bounds.length + grassMargin, -0.2);
+    grass.addBox(-grassMargin, 0, -0.22, 0, multi.bounds.length, -0.2);
+    grass.addBox(multi.bounds.width, 0, -0.22, multi.bounds.width + grassMargin, multi.bounds.length, -0.2);
+    grass.group.parentPath = ["Site"];
+    allGroups.push(grass.group);
+  }
 
   // Category label derived from the buildGroups id prefix so each floor gets
   // a clean Walls / Doors / Windows / Columns / Stairs / Fixtures / Slabs /
@@ -1479,7 +1485,7 @@ function buildMultiFloorBuildingDae(
     // Inter-floor slab (acts as ceiling of below + floor of above).
     // The roof above replaces the slab on top.
     const isTop = i === sortedFloors.length - 1;
-    if (!isTop) {
+    if (!isTop && includeInterFloorSlab) {
       const slab = makeGroupBuilder(
         `group_slab_between_${floor.index}_${floor.index + 1}`,
         `Slab above ${floorTitle}`,
@@ -1492,27 +1498,26 @@ function buildMultiFloorBuildingDae(
     }
   }
 
-  // Roof — v1 always renders a flat slab with optional overhang and thickness.
-  // Pitched roof kinds are captured in the JSON for future use but currently
-  // assembled as a flat slab to keep geometry predictable.
-  const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
-  const overhang = roof.overhangMeters ?? 0;
-  const roofSlab = makeGroupBuilder(
-    "roof_slab",
-    `Roof — ${roof.kind}`,
-    scale,
-    "concrete_polished",
-  );
-  roofSlab.addBox(
-    -overhang,
-    -overhang,
-    zOffset,
-    multi.bounds.width + overhang,
-    multi.bounds.length + overhang,
-    zOffset + roof.thicknessMeters,
-  );
-  roofSlab.group.parentPath = ["Roof"];
-  allGroups.push(roofSlab.group);
+  if (includeRoof) {
+    const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
+    const overhang = roof.overhangMeters ?? 0;
+    const roofSlab = makeGroupBuilder(
+      "roof_slab",
+      `Roof — ${roof.kind}`,
+      scale,
+      "concrete_polished",
+    );
+    roofSlab.addBox(
+      -overhang,
+      -overhang,
+      zOffset,
+      multi.bounds.width + overhang,
+      multi.bounds.length + overhang,
+      zOffset + roof.thicknessMeters,
+    );
+    roofSlab.group.parentPath = ["Roof"];
+    allGroups.push(roofSlab.group);
+  }
 
   return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount };
 }
