@@ -1695,7 +1695,7 @@ async function runMultiFloorBuilding(
     // multimodal call; allow up to 5 minutes before aborting.
     signal: AbortSignal.timeout(5 * 60 * 1000),
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+      model: "google/gemini-3-flash-preview",
       messages: [{ role: "user", content: userContent }],
       response_format: { type: "json_object" },
     }),
