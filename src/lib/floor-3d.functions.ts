@@ -2003,10 +2003,11 @@ async function runMultiFloorBuilding(
   const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
 
   // ── Per-floor exports ──────────────────────────────────────────────
-  // Build one .dae / .obj / .fbx per floor so the user can download the
-  // building in parts: ground floor (with site), each upper floor on its
-  // own, and the top floor includes the roof. Each part is a self-contained
-  // model placed at z=0 so it opens cleanly in SketchUp / Blender.
+  // Build separate .dae / .obj / .fbx files. The client orchestrates the
+  // ordered sequence: Site → Floor 1 → Floor 2 → … → Roof, each as its
+  // own request with `scope` set. We honor that scope here and emit ONLY
+  // the requested piece so each download is a clean self-contained model
+  // sitting at z=0 in SketchUp / Blender.
   const sortedFloorsForParts = [...floorsForPlan].sort((a, b) => a.index - b.index);
   const floorParts: Array<{
     index: number;
@@ -2015,32 +2016,72 @@ async function runMultiFloorBuilding(
     objDataUrl: string;
     fbxDataUrl: string;
   }> = [];
-  for (let i = 0; i < sortedFloorsForParts.length; i++) {
-    const f = sortedFloorsForParts[i];
-    const isGround = i === 0;
-    const isTop = i === sortedFloorsForParts.length - 1;
-    const singleFloorPlan: MultiFloorBuildingPlan = {
-      kind: "multi_floor_building",
-      units: "meters",
-      bounds: assembledPlan.bounds,
-      floors: [{ ...f, index: 0 }], // re-index so geometry sits at z=0
-      roof: isTop ? assembledPlan.roof : undefined,
-    };
-    const { dae: partDae } = buildMultiFloorBuildingDae(singleFloorPlan, data.outputUnits, {
-      includeSite: isGround,
-      includeRoof: isTop,
-      includeInterFloorSlab: false,
-    });
+  const emitPart = (
+    index: number,
+    label: string,
+    plan: MultiFloorBuildingPlan,
+    opts: { includeSite?: boolean; includeRoof?: boolean; includeFloors?: boolean; includeInterFloorSlab?: boolean },
+  ) => {
+    const { dae: partDae } = buildMultiFloorBuildingDae(plan, data.outputUnits, opts);
     const partGroups = parseDaeToTriangles(partDae);
     const { obj: partObj } = trianglesToObj(partGroups);
     const partFbx = trianglesToFbxAscii(partGroups);
     floorParts.push({
-      index: f.index,
-      label: f.label,
+      index,
+      label,
       daeDataUrl: `data:model/vnd.collada+xml;base64,${Buffer.from(partDae, "utf8").toString("base64")}`,
       objDataUrl: toDataUrl(partObj, "model/obj"),
       fbxDataUrl: toDataUrl(partFbx, "application/octet-stream"),
     });
+  };
+
+  const scope = building.scope;
+  if (scope === "site") {
+    // Site: ground slab + grass apron over the building footprint.
+    const plan: MultiFloorBuildingPlan = {
+      kind: "multi_floor_building",
+      units: "meters",
+      bounds: assembledPlan.bounds,
+      floors: [{ ...sortedFloorsForParts[0], index: 0 }],
+    };
+    emitPart(-1, "Site", plan, { includeSite: true, includeFloors: false, includeRoof: false, includeInterFloorSlab: false });
+  } else if (scope === "roof") {
+    // Roof-only: the roof slab over the building bounds at z=0.
+    const top = sortedFloorsForParts[sortedFloorsForParts.length - 1];
+    const plan: MultiFloorBuildingPlan = {
+      kind: "multi_floor_building",
+      units: "meters",
+      bounds: assembledPlan.bounds,
+      floors: [{ ...top, index: 0 }],
+      roof: assembledPlan.roof ?? { kind: "flat", thicknessMeters: 0.2 },
+    };
+    emitPart(9999, "Roof", plan, { includeSite: false, includeFloors: false, includeRoof: true, includeInterFloorSlab: false });
+  } else if (scope === "floor") {
+    // Single floor — no site, no roof bundled. Those come in their own calls.
+    for (const f of sortedFloorsForParts) {
+      const plan: MultiFloorBuildingPlan = {
+        kind: "multi_floor_building",
+        units: "meters",
+        bounds: assembledPlan.bounds,
+        floors: [{ ...f, index: 0 }],
+      };
+      emitPart(f.index, f.label, plan, { includeSite: false, includeFloors: true, includeRoof: false, includeInterFloorSlab: false });
+    }
+  } else {
+    // Legacy path: ground includes site, top includes roof.
+    for (let i = 0; i < sortedFloorsForParts.length; i++) {
+      const f = sortedFloorsForParts[i];
+      const isGround = i === 0;
+      const isTop = i === sortedFloorsForParts.length - 1;
+      const plan: MultiFloorBuildingPlan = {
+        kind: "multi_floor_building",
+        units: "meters",
+        bounds: assembledPlan.bounds,
+        floors: [{ ...f, index: 0 }],
+        roof: isTop ? assembledPlan.roof : undefined,
+      };
+      emitPart(f.index, f.label, plan, { includeSite: isGround, includeRoof: isTop, includeInterFloorSlab: false });
+    }
   }
 
   // Return a flattened BuildingPlan stub so the existing client-side
