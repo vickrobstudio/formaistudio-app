@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
-import { generateFloor3D } from "@/lib/floor-3d.functions";
+import { generateFloor3D, extractFurnitureBounds } from "@/lib/floor-3d.functions";
 import { buildMasterPrompt } from "@/lib/floor-3d-prompt.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
@@ -59,6 +59,7 @@ export function FloorTo3D() {
   const writePrompt = useServerFn(buildMasterPrompt);
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
+  const fetchFurnitureBounds = useServerFn(extractFurnitureBounds);
 
   // Multi-image building flow — one image per floor, optional roof plan,
   // multiple elevations. When the user uses this flow we skip the master
@@ -368,13 +369,28 @@ export function FloorTo3D() {
     const source = urlOverride ?? renderUrl;
     if (!source) return;
     setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setStage("modeling");
-    setReconStatus("Uploading rendering to mesh reconstructor…");
+    setReconStatus("Reading dimensions from your 2D drawing…");
     if (!(await consume())) {
       setBusy(""); setStage("rendered");
       if (!signedIn) { void navigate({ to: "/auth" }); return; }
       setError("You have no credits left. Open your Wallet to continue."); return;
     }
     try {
+      // For furniture, the mesh reconstructor returns a normalised unit-cube
+      // mesh. Read printed dimensions from the 2D technical sheet first so the
+      // downloaded .dae opens at 1:1 scale in SketchUp / Blender. Falls back
+      // silently if extraction fails (we still produce a model, just not scaled).
+      let furnitureBounds: { width: number; depth: number; height: number } | undefined =
+        plan?.bounds ? { width: plan.bounds.width, depth: plan.bounds.depth, height: plan.bounds.height } : undefined;
+      if (subject === "furniture" && !furnitureBounds && fileDataUrl) {
+        try {
+          const b = await fetchFurnitureBounds({
+            data: { fileDataUrl, planUnits, referenceImages },
+          });
+          if (b.ok) furnitureBounds = { width: b.width, depth: b.depth, height: b.height };
+        } catch { /* keep unscaled fallback */ }
+      }
+      setReconStatus("Uploading rendering to mesh reconstructor…");
       // Render data URLs may be remote URLs from the streaming image; fetch to data URL first.
       let imageDataUrl = source;
       if (!imageDataUrl.startsWith("data:")) {
@@ -404,13 +420,7 @@ export function FloorTo3D() {
             // Pass the real-world bounds parsed from the 2D plan so the
             // downloaded .dae has the exact width/depth/height the user
             // typed in — not Trellis's normalised unit-cube output.
-            targetBoundsMeters: plan?.bounds
-              ? {
-                  width: plan.bounds.width,
-                  depth: plan.bounds.depth,
-                  height: plan.bounds.height,
-                }
-              : undefined,
+            targetBoundsMeters: furnitureBounds,
           },
         });
         if (!polled.ok) { setError(polled.error); setStage("rendered"); return; }
