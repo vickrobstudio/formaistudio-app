@@ -255,13 +255,17 @@ const MultiFloorBuildingPlanSchema = z.object({
 });
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
-// gpt-5.5-pro is the strongest plan-analyzing model available in the
-// gateway: extended reasoning, multimodal, never simplifies. One image set
-// per call keeps total latency under the Worker budget while we still run
-// all floors in parallel.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 115_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 100_000;
-const BUILDING_ANALYSIS_MODEL = "openai/gpt-5.5-pro";
+// Ordered strongest-first multimodal plan analysis chain. Some premium models
+// can be temporarily unavailable or rejected by the chat endpoint, so the
+// drafter pipeline automatically falls back instead of returning "could not be
+// analysed" for the whole drawing set.
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 125_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 110_000;
+const BUILDING_ANALYSIS_MODELS = [
+  "openai/gpt-5.4-pro",
+  "google/gemini-3.1-pro-preview",
+  "google/gemini-2.5-pro",
+] as const;
 
 type GenerateFloor3DResult =
   | {
@@ -1868,38 +1872,53 @@ async function runMultiFloorBuilding(
 
   // Helper: one multimodal chat call, returns parsed JSON or throws.
   async function callJson(content: Array<Record<string, unknown>>, label: string, timeoutMs = BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS): Promise<unknown> {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(timeoutMs),
-      body: JSON.stringify({
-        // The strongest available reasoning model. Acts as a senior drafter:
-        // reads every printed dimension, traces every wall, cross-checks
-        // floor plans against elevations and the site plan, and never
-        // simplifies or omits geometry. This is the single biggest fidelity
-        // lever in the entire pipeline.
-        model: BUILDING_ANALYSIS_MODEL,
-        messages: [{ role: "user", content }],
-        max_tokens: 12000,
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      console.error(`[${label}] extract failed`, res.status, detail.slice(0, 300));
-      const err = new Error(`upstream_${res.status}`);
-      (err as Error & { status?: number }).status = res.status;
-      throw err;
+    let lastStatus: number | undefined;
+    let lastMessage = "";
+
+    for (const model of BUILDING_ANALYSIS_MODELS) {
+      try {
+        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(timeoutMs),
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content }],
+            max_tokens: 12000,
+            response_format: { type: "json_object" },
+          }),
+        });
+        if (!res.ok) {
+          const detail = await res.text().catch(() => "");
+          lastStatus = res.status;
+          lastMessage = detail;
+          console.error(`[${label}] extract failed on ${model}`, res.status, detail.slice(0, 300));
+          if (res.status === 404 || res.status === 410) continue;
+          const err = new Error(`upstream_${res.status}`);
+          (err as Error & { status?: number }).status = res.status;
+          throw err;
+        }
+        const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
+        const text = payload.choices?.[0]?.message?.content?.trim();
+        const finishReason = payload.choices?.[0]?.finish_reason;
+        if (finishReason === "length") {
+          console.warn(`[${label}] response was TRUNCATED on ${model} (finish_reason=length) — increase max_tokens or split the work.`);
+        }
+        if (!text) throw new Error(`[${label}] empty response`);
+        const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+        return JSON.parse(cleaned);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "TimeoutError") throw error;
+        if ((error as { status?: number }).status) throw error;
+        lastMessage = error instanceof Error ? error.message : String(error);
+        console.error(`[${label}] extract parse failed on ${model}`, lastMessage.slice(0, 300));
+      }
     }
-    const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
-    const text = payload.choices?.[0]?.message?.content?.trim();
-    const finishReason = payload.choices?.[0]?.finish_reason;
-    if (finishReason === "length") {
-      console.warn(`[${label}] response was TRUNCATED (finish_reason=length) — increase max_tokens or split the work.`);
-    }
-    if (!text) throw new Error(`[${label}] empty response`);
-    const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-    return JSON.parse(cleaned);
+
+    const err = new Error(`upstream_${lastStatus ?? "analysis"}`);
+    (err as Error & { status?: number; detail?: string }).status = lastStatus;
+    (err as Error & { status?: number; detail?: string }).detail = lastMessage;
+    throw err;
   }
 
   const attachImg = (parts: Array<Record<string, unknown>>, url: string, filename: string) => {
