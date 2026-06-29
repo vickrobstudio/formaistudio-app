@@ -463,6 +463,7 @@ export function FloorTo3D() {
         <p className="mt-2 text-xs text-muted-foreground">Upload each floor plan separately so the 3D model stacks them in real-world order. Set the floor-to-floor height for each level.</p>
         <input ref={floorInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onFloorPicked} />
         <input ref={roofInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onRoofPicked} />
+        <input ref={siteInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onSitePicked} />
         <input ref={elevationInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onElevationsPicked} />
         <div className="mt-3 space-y-3">
           {floors.map((floor, index) => <div key={index} className="rounded-2xl border border-border p-3">
