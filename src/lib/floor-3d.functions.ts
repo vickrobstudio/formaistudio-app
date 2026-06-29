@@ -1745,3 +1745,88 @@ async function runMultiFloorBuilding(
     plan: flat,
   };
 }
+
+// Quick bounding-box extractor for the furniture flow. The mesh reconstructor
+// (Trellis) returns a normalised unit-cube mesh, which makes the downloaded
+// .dae open at the wrong scale in SketchUp. Before reconstruction we read the
+// 2D technical sheet for printed width/depth/height (or infer them from a
+// reference image when no dimensions are printed) so the .dae imports 1:1.
+const FurnitureBoundsInput = z.object({
+  fileDataUrl: z
+    .string()
+    .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+    .max(2_700_000_000),
+  planUnits: PlanUnits.default("meters"),
+  referenceImages: z
+    .array(z.string().regex(/^data:image\/(png|jpeg|webp);base64,/).max(50_000_000))
+    .max(4)
+    .default([])
+    .optional(),
+});
+
+const FurnitureBoundsSchema = z.object({
+  width: z.number().positive().max(20),
+  depth: z.number().positive().max(20),
+  height: z.number().positive().max(20),
+});
+
+export const extractFurnitureBounds = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => FurnitureBoundsInput.parse(input))
+  .handler(async ({ data }): Promise<
+    | { ok: true; width: number; depth: number; height: number }
+    | { ok: false; error: string }
+  > => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
+    const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
+    const planUnitNote = data.planUnits === "feet-inches"
+      ? "The drawing is dimensioned in feet & inches. Convert every reading to METERS before responding (1 ft = 0.3048 m, 1 in = 0.0254 m)."
+      : "The drawing is dimensioned in meters.";
+    const userContent: Array<Record<string, unknown>> = [
+      {
+        type: "text",
+        text: `You are reading a technical drawing of ONE furniture piece (top/plan, front and side views, usually with printed dimensions). Return STRICT JSON with the overall bounding box of the piece in METERS:
+{"width": <m, left-to-right, X>, "depth": <m, front-to-back, Y>, "height": <m, bottom-to-top, Z>}
+Rules:
+- ${planUnitNote}
+- Prefer printed dimensions. If none are printed, infer realistic furniture scale from the views and any reference photo.
+- Use the overall extents of the piece (including legs, base, glides), not a single part.
+- Numbers only, no units in the output.`,
+      },
+      isPdf
+        ? { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } }
+        : { type: "image_url", image_url: { url: data.fileDataUrl } },
+    ];
+    for (const url of data.referenceImages ?? []) {
+      if (url === data.fileDataUrl) continue;
+      userContent.push({ type: "image_url", image_url: { url } });
+    }
+    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(2 * 60 * 1000),
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [{ role: "user", content: userContent }],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!upstream.ok) {
+      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
+      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+      return { ok: false, error: "Could not read dimensions from the drawing." };
+    }
+    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = payload.choices?.[0]?.message?.content?.trim();
+    if (!text) return { ok: false, error: "The AI did not return dimensions." };
+    let parsed: unknown;
+    try {
+      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
+      return { ok: false, error: "The AI response was not valid JSON." };
+    }
+    const result = FurnitureBoundsSchema.safeParse(parsed);
+    if (!result.success) return { ok: false, error: "Dimensions returned by the AI were not valid." };
+    return { ok: true, ...result.data };
+  });
