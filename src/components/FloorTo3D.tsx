@@ -542,17 +542,22 @@ export function FloorTo3D() {
           </Button>
         </div>
 
-        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Roof plan (optional)</p>
-        <p className="mt-2 text-xs text-muted-foreground">A top-down view of the roof. Used together with the elevations to set the roof outline.</p>
-        {roofPlan ? <div className="mt-3 rounded-2xl border border-border p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Roof</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setRoofPlan(null)}><X className="size-3" />Remove</Button>
-          </div>
-          <button type="button" onClick={() => roofInputRef.current?.click()} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
-            {roofPlan.imageDataUrl.startsWith("data:image/") ? <img src={roofPlan.imageDataUrl} alt="Roof plan" className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{roofPlan.fileName}</span>}
-          </button>
-        </div> : <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()}><span>Add roof plan</span><Plus /></Button>}
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Roof plans (optional)</p>
+        <p className="mt-2 text-xs text-muted-foreground">Top-down views of the roof. You can add multiple (e.g. structural plan, finish plan, drainage). Used together with the elevations to set the roof outline.</p>
+        {roofPlans.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {roofPlans.map((roof, index) => <div key={index} className="rounded-2xl border border-border p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Roof {index + 1}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setRoofPlans((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
+            </div>
+            <div className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+              {roof.imageDataUrl.startsWith("data:image/") ? <img src={roof.imageDataUrl} alt={`Roof plan ${index + 1}`} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{roof.fileName}</span>}
+            </div>
+          </div>)}
+        </div>}
+        <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()} disabled={roofPlans.length >= 6}>
+          <span>{roofPlans.length === 0 ? "Add roof plan" : `Add another roof plan (${roofPlans.length}/6)`}</span><Plus />
+        </Button>
 
         <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Elevations</p>
         <p className="mt-2 text-xs text-muted-foreground">Add one image per facade (North, South, East, West). Used to lock heights, window positions and roof shape.</p>
