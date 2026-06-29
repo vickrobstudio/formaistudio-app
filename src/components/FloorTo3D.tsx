@@ -427,6 +427,25 @@ export function FloorTo3D() {
     anchor.remove();
   }
 
+  function downloadHref(href: string, filename: string) {
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  function downloadFloorPart(part: { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string }, isTop: boolean) {
+    const map = { dae: part.daeDataUrl, obj: part.objDataUrl, fbx: part.fbxDataUrl } as const;
+    const href = map[downloadFormat];
+    if (!href) return;
+    const num = String(part.index + 1).padStart(2, "0");
+    const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `floor-${num}`;
+    const suffix = part.index === 0 ? "_with-site" : isTop ? "_with-roof" : "";
+    downloadHref(href, `floor-${num}_${slug}${suffix}.${downloadFormat}`);
+  }
+
   async function reconstructMesh(urlOverride?: string) {
     const source = urlOverride ?? renderUrl;
     if (!source) return;
