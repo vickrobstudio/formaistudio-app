@@ -255,8 +255,10 @@ const MultiFloorBuildingPlanSchema = z.object({
 });
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 40_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 18_000;
+// Gemini 2.5 Pro is slower than flash but reads every dimension faithfully.
+// One image per call keeps total latency under the Worker budget.
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 100_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 60_000;
 
 type GenerateFloor3DResult =
   | {
