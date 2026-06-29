@@ -89,6 +89,13 @@ export function FloorTo3D() {
   const [modelProgress, setModelProgress] = useState(0);
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
   const [summary, setSummary] = useState<{ count: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet" } | null>(null);
+  const [floorParts, setFloorParts] = useState<Array<{
+    index: number;
+    label: string;
+    daeDataUrl: string;
+    objDataUrl: string;
+    fbxDataUrl: string;
+  }>>([]);
   const { credits, signedIn, vip, consume } = useCredits();
   const navigate = useNavigate();
   const generate = useServerFn(generateFloor3D);
@@ -200,7 +207,7 @@ export function FloorTo3D() {
 
   async function buildFromDrawings() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
-    setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setStage("modeling");
+    setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setFloorParts([]); setStage("modeling");
     if (!(await consume())) {
       setBusy(""); setStage("upload");
       if (!signedIn) { void navigate({ to: "/auth" }); return; }
@@ -225,6 +232,7 @@ export function FloorTo3D() {
       setDae(result.daeDataUrl);
       setObj(result.objDataUrl);
       setFbx(result.fbxDataUrl);
+      setFloorParts(result.floorParts ?? []);
       setSummary({ count: result.elementCount, subject: result.subject, outputUnits: result.outputUnits });
       setStage("ready");
     } catch (cause) {
@@ -261,16 +269,8 @@ export function FloorTo3D() {
     if ((dae || glb) && stage === "ready") setModelProgress(100);
   }, [dae, glb, stage]);
 
-  // Buildings skip the live 3D viewer and go straight to a .dae download.
-  const buildingAutoDownloaded = useRef(false);
-  useEffect(() => {
-    if (subject !== "building") { buildingAutoDownloaded.current = false; return; }
-    if (stage === "ready" && dae && !buildingAutoDownloaded.current) {
-      buildingAutoDownloaded.current = true;
-      setDownloadFormat("dae");
-      download("dae");
-    }
-  }, [stage, dae, subject]);
+  // Buildings skip the live 3D viewer — the user picks which floor(s) to
+  // download from the per-floor list below.
 
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -425,6 +425,25 @@ export function FloorTo3D() {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
+  }
+
+  function downloadHref(href: string, filename: string) {
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  function downloadFloorPart(part: { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string }, isTop: boolean) {
+    const map = { dae: part.daeDataUrl, obj: part.objDataUrl, fbx: part.fbxDataUrl } as const;
+    const href = map[downloadFormat];
+    if (!href) return;
+    const num = String(part.index + 1).padStart(2, "0");
+    const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `floor-${num}`;
+    const suffix = part.index === 0 ? "_with-site" : isTop ? "_with-roof" : "";
+    downloadHref(href, `floor-${num}_${slug}${suffix}.${downloadFormat}`);
   }
 
   async function reconstructMesh(urlOverride?: string) {
@@ -779,14 +798,30 @@ export function FloorTo3D() {
         {(dae || glb) && subject !== "building" && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
         {(dae || glb || obj || fbx) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : subject === "building" && floorParts.length > 0 ? `${floorParts.length} floor part${floorParts.length === 1 ? "" : "s"} · ${summary.outputUnits} · ground floor includes site, top floor includes roof` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
           <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
           <div className="mt-2 flex rounded-xl border border-foreground p-1">
             <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
             <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" disabled={!obj} onClick={() => setDownloadFormat("obj")}>.obj</Button>
             <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae} onClick={() => setDownloadFormat("dae")}>.dae</Button>
           </div>
-          <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>
+          {subject === "building" && floorParts.length > 0 ? <div className="mt-4 space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Download by floor</p>
+            {floorParts.map((part, i) => {
+              const isTop = i === floorParts.length - 1;
+              const num = String(part.index + 1).padStart(2, "0");
+              const title = part.label?.trim() || `Floor ${num}`;
+              const extra = part.index === 0 ? " + site" : isTop ? " + roof" : "";
+              return <Button key={part.index} variant="default" className="h-11 w-full justify-between" onClick={() => downloadFloorPart(part, isTop)}>
+                <span>Floor {num} — {title}{extra}</span>
+                <Download />
+              </Button>;
+            })}
+            <Button variant="outline" className="mt-2 h-11 w-full justify-between" onClick={() => download(downloadFormat)}>
+              <span>Or download whole building (.{downloadFormat})</span>
+              <Download />
+            </Button>
+          </div> : <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>}
         </div>}
       </div>}
 
