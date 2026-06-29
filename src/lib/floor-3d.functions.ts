@@ -10,7 +10,8 @@ const FloorTo3DInput = z.object({
   fileDataUrl: z
     .string()
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
-    .max(2_700_000_000),
+    .max(2_700_000_000)
+    .optional(),
   wallHeightMeters: z.number().min(0.1).max(15).default(2.7),
   planUnits: PlanUnits.default("meters"),
   outputUnits: OutputUnits.default("meters"),
@@ -34,6 +35,50 @@ const FloorTo3DInput = z.object({
     .array(z.string().regex(/^data:image\/(png|jpeg|webp);base64,/).max(50_000_000))
     .max(6)
     .default([])
+    .optional(),
+  // NEW — multi-image building flow: one image per floor + optional roof
+  // plan + elevations. When present (and subject === "building"), this
+  // payload is used INSTEAD of the single-image fileDataUrl flow and the
+  // 3D model is built directly from the drawings, with no master prompt
+  // and no approval render.
+  building: z
+    .object({
+      floors: z
+        .array(
+          z.object({
+            imageDataUrl: z
+              .string()
+              .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+              .max(50_000_000),
+            label: z.string().max(60).optional(),
+            heightMeters: z.number().min(1).max(10).default(2.7),
+          }),
+        )
+        .min(1)
+        .max(10),
+      roof: z
+        .object({
+          imageDataUrl: z
+            .string()
+            .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+            .max(50_000_000),
+        })
+        .optional(),
+      elevations: z
+        .array(
+          z.object({
+            imageDataUrl: z
+              .string()
+              .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+              .max(50_000_000),
+            facing: z.enum(["N", "S", "E", "W", "other"]).default("other"),
+            label: z.string().max(60).optional(),
+          }),
+        )
+        .max(8)
+        .default([])
+        .optional(),
+    })
     .optional(),
 });
 
