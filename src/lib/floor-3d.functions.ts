@@ -250,6 +250,9 @@ const MultiFloorBuildingPlanSchema = z.object({
 });
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 40_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 18_000;
+
 type GenerateFloor3DResult =
   | {
       ok: true;
@@ -1799,19 +1802,17 @@ async function runMultiFloorBuilding(
   const floors = building.floors.map((f, i) => ({ ...f, index: i }));
 
   // Helper: one multimodal chat call, returns parsed JSON or throws.
-  async function callJson(content: Array<Record<string, unknown>>, label: string): Promise<unknown> {
+  async function callJson(content: Array<Record<string, unknown>>, label: string, timeoutMs = BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS): Promise<unknown> {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(90 * 1000),
+      signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
-        // gemini-2.5-pro reads architectural CAD plans much more accurately
-        // than flash — it traces angled walls, reads stamped dimensions, and
-        // doesn't truncate. We split the work per floor so each call stays
-        // small enough to finish inside the worker timeout.
-        model: "google/gemini-2.5-pro",
+        // Use the fast multimodal model for building extraction so the app
+        // returns before the server request timeout instead of spinning.
+        model: "google/gemini-3-flash-preview",
         messages: [{ role: "user", content }],
-        max_tokens: 16000,
+        max_tokens: 12000,
         response_format: { type: "json_object" },
       }),
     });
@@ -1864,7 +1865,7 @@ async function runMultiFloorBuilding(
       attachImg(parts, floor.imageDataUrl2, `floor_${floor.index}_b`);
     }
     try {
-      const json = await callJson(parts, `floor-${floor.index}`);
+      const json = await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS);
       const parsed = floorExtractSchema.safeParse(json);
       if (!parsed.success) {
         console.error(`floor ${floor.index} schema invalid`, parsed.error.issues.slice(0, 3));
@@ -1873,6 +1874,9 @@ async function runMultiFloorBuilding(
       return { ...parsed.data, index: floor.index, label: lbl, heightMeters: floor.heightMeters };
     } catch (e) {
       const status = (e as { status?: number }).status;
+      if (e instanceof DOMException && e.name === "TimeoutError") {
+        return { error: `Floor ${floor.index + 1} analysis timed out.`, status: 408 };
+      }
       return { error: `Floor ${floor.index + 1} extraction failed.`, status };
     }
   });
@@ -1907,7 +1911,7 @@ async function runMultiFloorBuilding(
           attachImg(parts, elev.imageDataUrl, `elev_${facingName}`);
         }
         try {
-          const json = await callJson(parts, "roof-elev");
+          const json = await callJson(parts, "roof-elev", BUILDING_ROOF_ANALYSIS_TIMEOUT_MS);
           const parsed = roofSchema.safeParse(json);
           return parsed.success ? parsed.data : null;
         } catch (e) {
@@ -1924,8 +1928,9 @@ async function runMultiFloorBuilding(
   if (goodFloors.length === 0) {
     const first = floorResults[0] as { error?: string; status?: number };
     if (first?.status === 402) return { ok: false, error: "AI credits are exhausted." };
-      if (first?.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      if (first?.status === 401 || first?.status === 403) return { ok: false, error: "The 2D to 3D service is unavailable." };
+    if (first?.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+    if (first?.status === 401 || first?.status === 403) return { ok: false, error: "The 2D to 3D service is unavailable." };
+    if (first?.status === 408) return { ok: false, error: "Analysis timed out on this drawing. Try a clearer cropped floor-plan image first, then add roof/elevations after the floor works." };
     return { ok: false, error: "The drawings could not be analysed. Try clearer images with visible dimensions." };
   }
 
