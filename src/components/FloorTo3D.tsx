@@ -59,6 +59,7 @@ export function FloorTo3D() {
   const writePrompt = useServerFn(buildMasterPrompt);
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
+  const fetchFurnitureBounds = useServerFn(extractFurnitureBounds);
 
   // Multi-image building flow — one image per floor, optional roof plan,
   // multiple elevations. When the user uses this flow we skip the master
