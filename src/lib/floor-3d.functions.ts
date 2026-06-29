@@ -1405,6 +1405,56 @@ function emitDaeFromGroups(groups: Group[], outputUnits: "meters" | "feet") {
       </node>`;
   }).join("\n");
 
+  // Build a nested <node> tree from each group's parentPath so SketchUp /
+  // Blender / 3ds Max import the model with a clean group hierarchy:
+  //   Scene
+  //     Floor 01 — Ground
+  //       Walls / Exterior
+  //         <geometry>
+  //       Walls / Interior
+  //       Doors
+  //       Windows
+  //       ...
+  //     Floor 02
+  //     Roof
+  //     Site
+  type TreeNode = { name: string; id: string; children: Map<string, TreeNode>; leaves: Group[] };
+  const root: TreeNode = { name: "Scene", id: "Scene", children: new Map(), leaves: [] };
+  let nodeIdCounter = 0;
+  const slugify = (s: string) => s.replace(/[^a-z0-9]+/gi, "_").toLowerCase().replace(/^_|_$/g, "") || `n${nodeIdCounter++}`;
+  for (const g of groups) {
+    let cursor = root;
+    for (const seg of g.parentPath ?? []) {
+      let child = cursor.children.get(seg);
+      if (!child) {
+        child = { name: seg, id: `${cursor.id}_${slugify(seg)}`, children: new Map(), leaves: [] };
+        cursor.children.set(seg, child);
+      }
+      cursor = child;
+    }
+    cursor.leaves.push(g);
+  }
+  const renderLeaf = (g: Group, indent: string) => {
+    const sym = matSymbol(g.id);
+    return `${indent}<node id="${g.id}_node" name="${escapeXml(g.name)}">
+${indent}  <instance_geometry url="#${g.id}_geom">
+${indent}    <bind_material><technique_common><instance_material symbol="${sym}" target="#${matIdOf(g.id)}"/></technique_common></bind_material>
+${indent}  </instance_geometry>
+${indent}</node>`;
+  };
+  const renderTree = (node: TreeNode, indent: string): string => {
+    const parts: string[] = [];
+    for (const leaf of node.leaves) parts.push(renderLeaf(leaf, indent));
+    for (const child of node.children.values()) {
+      const inner = renderTree(child, indent + "  ");
+      parts.push(`${indent}<node id="${child.id}_node" name="${escapeXml(child.name)}">
+${inner}
+${indent}</node>`);
+    }
+    return parts.join("\n");
+  };
+  const sceneTreeXml = renderTree(root, "      ");
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
   <asset>
