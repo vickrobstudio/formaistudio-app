@@ -179,7 +179,7 @@ export function FloorTo3D() {
           subject: "building",
           building: {
             floors: floors.map((f) => ({ imageDataUrl: f.imageDataUrl, imageDataUrl2: f.imageDataUrl2, label: f.label, heightMeters: f.heightMeters })),
-            roof: roofPlan ? { imageDataUrl: roofPlan.imageDataUrl } : undefined,
+            roof: roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
             site: sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
             elevations: elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })),
           },
