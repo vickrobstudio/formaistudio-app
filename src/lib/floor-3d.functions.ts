@@ -1275,10 +1275,44 @@ function buildMultiFloorBuildingDae(
   const allGroups: Group[] = [];
   let elementCount = 0;
 
-  // Ground slab
-  const ground = makeGroupBuilder("group_slab_ground", "Ground slab", scale, "concrete_polished");
+  // ── Site: ground slab + grass apron around the building footprint.
+  // Both sit under a top-level "Site" group so they import as their own
+  // selectable SketchUp folder, separate from the building floors.
+  const ground = makeGroupBuilder("site_ground_slab", "Ground slab", scale, "concrete_polished");
   ground.addBox(0, 0, -0.2, multi.bounds.width, multi.bounds.length, 0);
+  ground.group.parentPath = ["Site"];
   allGroups.push(ground.group);
+
+  const grassMargin = Math.max(4, Math.min(multi.bounds.width, multi.bounds.length) * 0.5);
+  const grass = makeGroupBuilder("site_grass", "Grass", scale, "other");
+  grass.group.colorOverride = [0.36, 0.55, 0.27];
+  // Four rectangles around the building to keep the footprint cut out.
+  grass.addBox(-grassMargin, -grassMargin, -0.22, multi.bounds.width + grassMargin, 0, -0.2); // south
+  grass.addBox(-grassMargin, multi.bounds.length, -0.22, multi.bounds.width + grassMargin, multi.bounds.length + grassMargin, -0.2); // north
+  grass.addBox(-grassMargin, 0, -0.22, 0, multi.bounds.length, -0.2); // west
+  grass.addBox(multi.bounds.width, 0, -0.22, multi.bounds.width + grassMargin, multi.bounds.length, -0.2); // east
+  grass.group.parentPath = ["Site"];
+  allGroups.push(grass.group);
+
+  // Category label derived from the buildGroups id prefix so each floor gets
+  // a clean Walls / Doors / Windows / Columns / Stairs / Fixtures / Slabs /
+  // Ceiling subfolder on .dae import.
+  const categoryFor = (id: string): string => {
+    if (id.startsWith("group_walls_exterior")) return "Walls / Exterior";
+    if (id.startsWith("group_walls_interior")) return "Walls / Interior";
+    if (id === "group_doors") return "Doors";
+    if (id === "group_window_glass" || id === "group_window_frames") return "Windows";
+    if (id.startsWith("group_columns")) return "Columns";
+    if (id.startsWith("group_stairs")) return "Stairs";
+    if (id.startsWith("group_fixtures_")) {
+      const layer = id.replace(/^group_fixtures_/, "").split("__")[0];
+      const pretty = layer.charAt(0).toUpperCase() + layer.slice(1);
+      return `Fixtures / ${pretty}`;
+    }
+    if (id === "group_ceiling") return "Ceiling";
+    if (id === "group_slab") return "Slab";
+    return "Other";
+  };
 
   // Sort floors by index, ground → top
   const sortedFloors = [...multi.floors].sort((a, b) => a.index - b.index);
@@ -1299,11 +1333,15 @@ function buildMultiFloorBuildingDae(
       // strip the per-floor slab and ceiling — multi-floor adds them explicitly
       .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
     const dzScaled = zOffset * scale;
-    const label = floor.label?.trim() || `Floor ${floor.index}`;
+    const floorNum = String(floor.index + 1).padStart(2, "0");
+    const floorTitle = floor.label?.trim()
+      ? `Floor ${floorNum} — ${floor.label.trim()}`
+      : `Floor ${floorNum}`;
     for (const g of floorGroups) {
       for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
+      const category = categoryFor(g.id);
       g.id = `f${floor.index}_${g.id}`;
-      g.name = `${label} — ${g.name}`;
+      g.parentPath = [floorTitle, category];
       allGroups.push(g);
     }
     elementCount += floor.walls.length + floor.columns.length + floor.stairs.length + floor.fixtures.length;
@@ -1316,11 +1354,12 @@ function buildMultiFloorBuildingDae(
     if (!isTop) {
       const slab = makeGroupBuilder(
         `group_slab_between_${floor.index}_${floor.index + 1}`,
-        `Slab — between ${label} and floor ${floor.index + 1}`,
+        `Slab above ${floorTitle}`,
         scale,
         "concrete_polished",
       );
       slab.addBox(0, 0, zOffset - 0.12, multi.bounds.width, multi.bounds.length, zOffset);
+      slab.group.parentPath = [floorTitle, "Ceiling / Slab above"];
       allGroups.push(slab.group);
     }
   }
@@ -1331,7 +1370,7 @@ function buildMultiFloorBuildingDae(
   const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
   const overhang = roof.overhangMeters ?? 0;
   const roofSlab = makeGroupBuilder(
-    "group_roof",
+    "roof_slab",
     `Roof — ${roof.kind}`,
     scale,
     "concrete_polished",
@@ -1344,6 +1383,7 @@ function buildMultiFloorBuildingDae(
     multi.bounds.length + overhang,
     zOffset + roof.thicknessMeters,
   );
+  roofSlab.group.parentPath = ["Roof"];
   allGroups.push(roofSlab.group);
 
   return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount };
