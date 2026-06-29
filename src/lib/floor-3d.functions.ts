@@ -95,6 +95,11 @@ const FloorTo3DInput = z.object({
         .max(8)
         .default([])
         .optional(),
+      // Scope of THIS request — when present the server emits only the
+      // requested piece (site slab, a single floor, or the roof). The
+      // client orchestrates the four ordered calls (site → floors → roof)
+      // so each piece downloads as its own file.
+      scope: z.enum(["site", "floor", "roof"]).optional(),
     })
     .optional(),
 });
