@@ -1776,7 +1776,7 @@ async function runMultiFloorBuilding(
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(2 * 60 * 1000),
+      signal: AbortSignal.timeout(90 * 1000),
       body: JSON.stringify({
         // gemini-2.5-pro reads architectural CAD plans much more accurately
         // than flash — it traces angled walls, reads stamped dimensions, and
@@ -1784,7 +1784,7 @@ async function runMultiFloorBuilding(
         // small enough to finish inside the worker timeout.
         model: "google/gemini-2.5-pro",
         messages: [{ role: "user", content }],
-        max_tokens: 32000,
+        max_tokens: 16000,
         response_format: { type: "json_object" },
       }),
     });
