@@ -51,7 +51,7 @@ const FloorTo3DInput = z.object({
               .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
               .max(50_000_000),
             label: z.string().max(60).optional(),
-            heightMeters: z.number().min(1).max(10).default(2.7),
+            heightMeters: z.number().min(0.3).max(15).default(2.7),
           }),
         )
         .min(1)

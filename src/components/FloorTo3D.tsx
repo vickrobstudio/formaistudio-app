@@ -495,7 +495,7 @@ export function FloorTo3D() {
                     {(["m", "ft"] as const).map((u) => <button key={u} type="button" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightUnit: u } : f))} className={`px-2 py-0.5 text-[10px] font-bold uppercase ${floor.heightUnit === u ? "bg-foreground text-background" : "bg-background text-foreground"}`}>{u}</button>)}
                   </div>
                 </div>
-                <Input type="number" min={floor.heightUnit === "ft" ? 3 : 1} max={floor.heightUnit === "ft" ? 33 : 10} step={floor.heightUnit === "ft" ? 0.25 : 0.1} inputMode="decimal" value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters} onChange={(event) => { const v = Number(event.target.value) || 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: meters } : f)); }} className="mt-1 h-10" />
+                <Input type="number" min={floor.heightUnit === "ft" ? 1 : 0.3} max={floor.heightUnit === "ft" ? 50 : 15} step={floor.heightUnit === "ft" ? 0.25 : 0.1} inputMode="decimal" value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters} onChange={(event) => { const raw = Number(event.target.value); const v = Number.isFinite(raw) && raw > 0 ? raw : 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; const clamped = Math.min(15, Math.max(0.3, meters || 2.7)); setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: clamped } : f)); }} className="mt-1 h-10" />
               </div>
             </div>
           </div>)}
