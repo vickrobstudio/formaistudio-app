@@ -1979,7 +1979,7 @@ async function runMultiFloorBuilding(
       .object({
         kind: z.enum(["flat", "gable", "hip", "shed"]).default("hip"),
         thicknessMeters: z.number().min(0.05).max(0.6).default(0.2),
-        overhangMeters: z.number().min(0).max(2).default(0.4).optional(),
+        overhangMeters: z.number().min(0).max(2).default(0).optional(),
         ridgeHeightMeters: z.number().min(0).max(8).optional(),
         ridgeAxis: z.enum(["x", "y"]).optional(),
       })
