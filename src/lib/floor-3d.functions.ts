@@ -1669,7 +1669,10 @@ async function runMultiFloorBuilding(
   const sorted = [...building.floors].sort((a, b) => 0).map((f, i) => ({ ...f, index: i }));
   for (const floor of sorted) {
     const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
-    attach(`FLOOR ${floor.index} — ${lbl} (floor-to-floor height ${floor.heightMeters.toFixed(2)} m)`, floor.imageDataUrl);
+    attach(`FLOOR ${floor.index} — ${lbl} (floor-to-floor height ${floor.heightMeters.toFixed(2)} m) — primary drawing`, floor.imageDataUrl);
+    if (floor.imageDataUrl2) {
+      attach(`FLOOR ${floor.index} — ${lbl} — secondary drawing (same floor, e.g. furnished plan, RCP, or dimensioned variant)`, floor.imageDataUrl2);
+    }
   }
   if (building.roof) attach("ROOF PLAN", building.roof.imageDataUrl);
   if (building.site) attach("SITE PLAN — top-down view of the site (property lines, setbacks, driveway, landscaping). Use it to orient and place the building footprint on the ground.", building.site.imageDataUrl);
