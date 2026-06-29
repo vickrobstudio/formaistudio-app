@@ -391,7 +391,17 @@ function singleFloorExtractInstruction(
   label: string,
   heightMeters: number,
 ) {
-  return `You are an architectural CAD vectorizer. You will receive ONE floor plan ("${label}", floor-to-floor height ${heightMeters.toFixed(2)} m) of a real building. Trace EVERY wall, opening, column, stair and fixture on that floor and return STRICT JSON.
+  return `You are an architectural CAD vectorizer. You will receive the COMPLETE drawing set of a real building and must extract ONE floor only — "${label}" (floor-to-floor height ${heightMeters.toFixed(2)} m).
+
+The message parts arrive in this order:
+  1) PRIMARY DRAWING — the floor plan of "${label}". This is the footprint ground truth.
+  2) Optional SECONDARY DRAWING — same floor, different sheet (RCP, dimensioned plan).
+  3) Optional SITE PLAN — used ONLY to verify exterior wall envelope, set-backs and overall footprint orientation. Do NOT output site geometry here.
+  4) Optional OTHER FLOOR PLANS — used ONLY for vertical alignment (stair shafts, plumbing chases, columns line up floor-to-floor). Do NOT extract their walls.
+  5) Optional ROOF PLAN — used ONLY to verify the exterior envelope of the top floor and the location of skylights / openings above. Do NOT extract roof geometry here.
+  6) Optional ELEVATIONS (N/S/E/W) — the VERTICAL ground truth. Every window and door on every exterior wall of "${label}" MUST appear in the matching elevation at the same X position, width, sill height and head height. Count them.
+
+You MUST inspect EVERY attached image before answering. Cross-read the floor plan against the elevations to fix opening counts, widths, positions and sill/head heights, and against the site plan + other floors to fix the exterior envelope alignment. The output JSON describes ONLY "${label}".
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
@@ -411,8 +421,10 @@ Rules:
 - Use printed wall thicknesses when shown; otherwise 0.20 m exterior, 0.10 m interior.
 - Capture every column, every staircase, every kitchen/bath/built-in fixture as its own entry.
 - IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
-- 100% FIDELITY IS MANDATORY. If the plan shows N windows on a facade, the JSON must contain N windows; if a wall is 12'-6" long the JSON has 3.81 m; if a wall runs at 45° the JSON keeps that angle. Do not simplify, merge or omit.
+- 100% FIDELITY IS MANDATORY. If the plan shows N windows on a facade, the JSON must contain N windows AND the matching elevation must also show N windows at the same X positions and widths — if those disagree, look again and reconcile (the printed dimension wins, then the elevation, then the plan). If a wall is 12'-6" long the JSON has 3.81 m; if a wall runs at 45° the JSON keeps that angle. Do not simplify, merge or omit.
+- For EACH exterior facade of "${label}", explicitly count the openings in the elevation that faces that wall and place that many openings on the wall, with widths and X positions matching the elevation. Read sill and head heights from the elevation, not from defaults.
 - If a SECONDARY drawing of the same floor is attached, cross-read both to pick up dimensions one drawing omits.
+- Other floor plans and the roof plan are CONTEXT ONLY — never copy their walls into this floor's output.
 
 ${ACCURACY_RULES}`;
 }
