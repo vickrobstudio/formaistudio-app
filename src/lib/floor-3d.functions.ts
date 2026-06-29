@@ -567,6 +567,11 @@ type Group = {
   // this overrides the palette colour in both the .dae export and any client
   // that reads the .dae effects (the live preview loads the .dae).
   colorOverride?: [number, number, number];
+  // Hierarchical scene-graph path for the .dae <visual_scene>. Each entry
+  // becomes a parent <node>, so SketchUp / Blender / 3ds Max import the model
+  // with a clean group tree: e.g. ["Floor 01 — Ground", "Walls / Exterior"].
+  // When omitted the group sits at the scene root (backward compatible).
+  parentPath?: string[];
 };
 
 function escapeXml(value: string) {
