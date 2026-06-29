@@ -394,17 +394,26 @@ function singleFloorExtractInstruction(
   label: string,
   heightMeters: number,
 ) {
-  return `You are an architectural CAD vectorizer. You will receive the COMPLETE drawing set of a real building and must extract ONE floor only — "${label}" (floor-to-floor height ${heightMeters.toFixed(2)} m).
+  return `You are a SENIOR ARCHITECTURAL DRAFTER. You are receiving the COMPLETE drawing set of a real building (site plan, every floor plan, the roof plan, and the elevations) and your job is to draft ONE floor only — "${label}" (floor-to-floor height ${heightMeters.toFixed(2)} m) — at 100% fidelity, then return its geometry as STRICT JSON.
 
-The message parts arrive in this order:
-  1) PRIMARY DRAWING — the floor plan of "${label}". This is the footprint ground truth.
-  2) Optional SECONDARY DRAWING — same floor, different sheet (RCP, dimensioned plan).
-  3) Optional SITE PLAN — used ONLY to verify exterior wall envelope, set-backs and overall footprint orientation. Do NOT output site geometry here.
-  4) Optional OTHER FLOOR PLANS — used ONLY for vertical alignment (stair shafts, plumbing chases, columns line up floor-to-floor). Do NOT extract their walls.
-  5) Optional ROOF PLAN — used ONLY to verify the exterior envelope of the top floor and the location of skylights / openings above. Do NOT extract roof geometry here.
-  6) Optional ELEVATIONS (N/S/E/W) — the VERTICAL ground truth. Every window and door on every exterior wall of "${label}" MUST appear in the matching elevation at the same X position, width, sill height and head height. Count them.
+You must work the way a real drafter works on a multi-sheet set: read every sheet, build a mental model of the whole building, then commit one floor to paper. Skipping a sheet, simplifying geometry, or "rounding" a number is a failure of the job.
 
-You MUST inspect EVERY attached image before answering. Cross-read the floor plan against the elevations to fix opening counts, widths, positions and sill/head heights, and against the site plan + other floors to fix the exterior envelope alignment. The output JSON describes ONLY "${label}".
+THE DRAWING SET — message parts arrive in this order:
+  1) PRIMARY DRAWING — the floor plan of "${label}". Footprint ground truth.
+  2) Optional SECONDARY DRAWING — same floor, different sheet (dimensioned plan, RCP, demolition plan). Use it to recover any dimension the primary sheet omits.
+  3) Optional SITE PLAN — exterior envelope, orientation (north arrow), set-backs, attached terraces and walkways. Do NOT output its geometry here, but USE it to confirm the orientation and outline of the exterior walls of "${label}".
+  4) Optional OTHER FLOOR PLANS — vertical alignment of stair shafts, elevator cores, columns, plumbing chases, structural walls. Do NOT extract their walls into this output, but USE them so the things that must stack actually stack.
+  5) Optional ROOF PLAN — eaves outline, ridge lines, parapet location, skylight cutouts. Do NOT extract roof geometry here; USE it to confirm the exterior envelope of the top floor and the location of openings under skylights.
+  6) Optional ELEVATIONS (N / S / E / W) — vertical ground truth. They DETERMINE: (a) the COUNT of windows and doors on every exterior facade, (b) each opening's X position along its wall, (c) each opening's width, (d) each opening's sill height, (e) each opening's head height, (f) the floor-to-floor height. If a number is printed on an elevation, that number wins over a visual estimate from the plan.
+
+THINK STEP BY STEP BEFORE EMITTING JSON (silently — return JSON only):
+  Step A — IDENTIFY: confirm which sheet is the floor plan of "${label}" (read the title block). If two sheets show this floor, note which is dimensioned and which is graphic.
+  Step B — SCALE: lock down the drawing's scale from the printed dimensions and (if shown) the scale bar. Every coordinate you output must be in real-world METERS at this scale.
+  Step C — FOOTPRINT: trace the exterior envelope of "${label}" as a closed loop of straight wall segments. Cross-check the loop against the site plan, the roof plan, and the other floors so it lines up with what stacks above and below.
+  Step D — INTERIOR PARTITIONS: trace every interior wall — rooms, closets, baths, mechanical chases, hallways, lanais, breezeways, garage walls. Split at intersections.
+  Step E — OPENINGS, PER FACADE: for EACH exterior facade, look at the matching elevation. Count the windows and doors visible in that elevation. Place exactly that many openings on the matching exterior wall(s) of "${label}", at the same X positions and widths. Read sill and head heights from the elevation. For interior doors, take width from the plan; sillHeight 0, headHeight ~2.1 m.
+  Step F — VERTICAL ELEMENTS: capture every column (rectangular, or round → bounding rectangle), every staircase (overall run + step count), and every fixed fixture (kitchen cabinets, bath fixtures, built-ins, appliances).
+  Step G — SELF-AUDIT: re-count exterior wall segments, interior partitions, openings per facade, columns and stairs. If your JSON disagrees with the drawings, fix the JSON.
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
@@ -428,6 +437,8 @@ Rules:
 - For EACH exterior facade of "${label}", explicitly count the openings in the elevation that faces that wall and place that many openings on the wall, with widths and X positions matching the elevation. Read sill and head heights from the elevation, not from defaults.
 - If a SECONDARY drawing of the same floor is attached, cross-read both to pick up dimensions one drawing omits.
 - Other floor plans and the roof plan are CONTEXT ONLY — never copy their walls into this floor's output.
+- RECONCILIATION ORDER when sources disagree: (1) printed numerical dimension wins, (2) elevation wins for vertical info and opening counts, (3) floor plan wins for horizontal placement and partition layout, (4) site/roof/other floors win for envelope alignment.
+- NEVER invent geometry that is not visible in the drawings. NEVER omit geometry that IS visible. If you are not sure whether something is a wall, a hatch or a dimension line, look at the line weight and at the other sheets — drafters never guess.
 
 ${ACCURACY_RULES}`;
 }
