@@ -24,8 +24,8 @@ const information: ToolInfoSection[] = [
       "3 · Add one floor plan per level, bottom → top — up to 2 images per floor (e.g. dimensioned + furnished)",
       "4 · Set the floor-to-floor height for each level",
       "5 · (Optional) Add roof plans and elevations (N / S / E / W) to lock heights and roof shape",
-      "6 · Tap 'Build 3D model from drawings' — live 3D preview opens in your browser",
-      "7 · Download .dae / .obj / .fbx with real-world dimensions, one group per floor",
+      "6 · Tap 'Build 3D model from drawings' — each floor is analysed and exported separately",
+      "7 · Download one .dae / .obj / .fbx per floor with real-world dimensions",
     ],
   },
   {
@@ -49,7 +49,7 @@ const information: ToolInfoSection[] = [
   {
     title: "Output",
     items: [
-      "Live in-browser 3D viewer — rotate, zoom, pan",
+      "Direct 3D downloads — no live preview step for buildings",
       "Collada .dae · OBJ · FBX — Z-up, units of your choice",
       "Buildings: one group per floor (Ground floor, Floor 1, Roof) so SketchUp / Blender shows separate layers",
       "Furniture: scaled 1:1 to the drawing so dimensions match in SketchUp",
@@ -214,31 +214,62 @@ export function FloorTo3D() {
       setError("You have no credits left. Open your Wallet to continue."); return;
     }
     try {
-      const result = await generate({
-        data: {
-          wallHeightMeters: floors[0]?.heightMeters || 2.7,
-          planUnits,
-          outputUnits,
-          subject: "building",
-          building: {
-            floors: floors.map((f) => ({ imageDataUrl: f.imageDataUrl, imageDataUrl2: f.imageDataUrl2, label: f.label, heightMeters: f.heightMeters })),
-            roof: roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
-            site: sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
-            elevations: elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })),
+      const parts: Array<{ index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string }> = [];
+      let totalElements = 0;
+      let firstError = "";
+
+      for (let index = 0; index < floors.length; index += 1) {
+        const floor = floors[index];
+        const isGround = index === 0;
+        const isTop = index === floors.length - 1;
+        const label = floor.label?.trim() || (isGround ? "Ground floor" : `Floor ${index}`);
+        setReconStatus(`Analyzing ${label} (${index + 1}/${floors.length})…`);
+
+        const result = await generate({
+          data: {
+            wallHeightMeters: floor.heightMeters || 2.7,
+            planUnits,
+            outputUnits,
+            subject: "building",
+            building: {
+              floors: [{ imageDataUrl: floor.imageDataUrl, imageDataUrl2: floor.imageDataUrl2, label, heightMeters: floor.heightMeters }],
+              roof: isTop && roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
+              site: isGround && sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
+              elevations: isTop ? elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })) : [],
+            },
           },
-        },
-      });
-      if (!result.ok) { setError(result.error); setStage("upload"); return; }
-      setDae(result.daeDataUrl);
-      setObj(result.objDataUrl);
-      setFbx(result.fbxDataUrl);
-      setFloorParts(result.floorParts ?? []);
-      setSummary({ count: result.elementCount, subject: result.subject, outputUnits: result.outputUnits });
+        });
+
+        if (!result.ok) {
+          firstError ||= result.error;
+          continue;
+        }
+
+        const part = result.floorParts?.[0] ?? {
+          index,
+          label,
+          daeDataUrl: result.daeDataUrl,
+          objDataUrl: result.objDataUrl,
+          fbxDataUrl: result.fbxDataUrl,
+        };
+        parts.push({ ...part, index, label });
+        totalElements += result.elementCount;
+        setFloorParts([...parts]);
+        setSummary({ count: totalElements, subject: "building", outputUnits });
+      }
+
+      if (parts.length === 0) { setError(firstError || "The drawings could not be analysed. Try clearer images with visible dimensions."); setStage("upload"); return; }
+      if (firstError) setError(`Some floors could not be analysed. ${parts.length} of ${floors.length} floor models are ready.`);
+      setDae(parts[0]?.daeDataUrl ?? null);
+      setObj(parts[0]?.objDataUrl ?? null);
+      setFbx(parts[0]?.fbxDataUrl ?? null);
+      setFloorParts(parts);
+      setSummary({ count: totalElements, subject: "building", outputUnits });
       setStage("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The 3D model could not be generated.");
       setStage("upload");
-    } finally { setBusy(""); }
+    } finally { setBusy(""); setReconStatus(""); }
   }
 
   useEffect(() => {
@@ -269,8 +300,7 @@ export function FloorTo3D() {
     if ((dae || glb) && stage === "ready") setModelProgress(100);
   }, [dae, glb, stage]);
 
-  // Buildings skip the live 3D viewer — the user picks which floor(s) to
-  // download from the per-floor list below.
+  // Buildings skip the live 3D viewer — the user downloads each floor model.
 
   function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -533,7 +563,8 @@ export function FloorTo3D() {
       <span className={`flex size-5 items-center justify-center rounded-full border ${done ? "border-foreground bg-foreground text-background" : active ? "border-foreground" : "border-border"}`}>{done ? <Check className="size-3" /> : n}</span>
       {label}
     </div>;
-  const showLivePreview = stage === "modeling" || stage === "ready" || Boolean(dae) || Boolean(glb);
+  const hasFloorExports = floorParts.length > 0;
+  const showLivePreview = stage === "modeling" || stage === "ready" || Boolean(dae) || Boolean(glb) || hasFloorExports;
 
   return <main className="min-h-screen bg-background"><FormaHeader /><div className="px-5 pt-7"><BackLink /></div>
     <PageIntro eyebrow="2D to 3D" title="2D plan to 3D model" description="Upload a fully dimensioned floor plan or furniture drawing. AI reads every printed dimension and exports an editable Collada .dae model in the units you choose.">
@@ -767,7 +798,7 @@ export function FloorTo3D() {
 
       {/* Step 4 — Live 3D + download */}
       {showLivePreview && <div ref={previewRef}>
-        <div className="mt-8">{stepHeading(4, subject === "building" ? "Download 3D model" : "Live 3D preview", stage === "modeling" || stage === "ready", Boolean(dae))}</div>
+        <div className="mt-8">{stepHeading(4, subject === "building" ? "Download 3D models by floor" : "Live 3D preview", stage === "modeling" || stage === "ready", Boolean(dae) || hasFloorExports)}</div>
         {busy === "model" && <div className="mt-3 rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between text-xs">
             <span className="inline-flex items-center gap-2 font-bold uppercase tracking-[0.14em]">
@@ -789,21 +820,21 @@ export function FloorTo3D() {
                 : modelProgress < 100 ? "Assembling .dae"
                 : "Complete")
               : (modelProgress < 25 ? "Analyzing drawing"
-                : modelProgress < 55 ? "Extracting walls, openings & elements"
-                : modelProgress < 80 ? "Triangulating geometry"
-                : modelProgress < 100 ? "Assembling .dae"
+                : modelProgress < 55 ? "Extracting this floor's walls, openings & elements"
+                : modelProgress < 80 ? "Triangulating floor geometry"
+                : modelProgress < 100 ? "Assembling floor .dae files"
                 : "Complete")}
           </p>
         </div>}
         {(dae || glb) && subject !== "building" && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
-        {(dae || glb || obj || fbx) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
+        {(dae || glb || obj || fbx || hasFloorExports) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
           <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : subject === "building" && floorParts.length > 0 ? `${floorParts.length} floor part${floorParts.length === 1 ? "" : "s"} · ${summary.outputUnits} · ground floor includes site, top floor includes roof` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
           <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
           <div className="mt-2 flex rounded-xl border border-foreground p-1">
-            <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
-            <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" disabled={!obj} onClick={() => setDownloadFormat("obj")}>.obj</Button>
-            <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae} onClick={() => setDownloadFormat("dae")}>.dae</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx && !hasFloorExports} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" disabled={!obj && !hasFloorExports} onClick={() => setDownloadFormat("obj")}>.obj</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae && !hasFloorExports} onClick={() => setDownloadFormat("dae")}>.dae</Button>
           </div>
           {subject === "building" && floorParts.length > 0 ? <div className="mt-4 space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Download by floor</p>
@@ -817,10 +848,10 @@ export function FloorTo3D() {
                 <Download />
               </Button>;
             })}
-            <Button variant="outline" className="mt-2 h-11 w-full justify-between" onClick={() => download(downloadFormat)}>
+            {(dae || obj || fbx) && <Button variant="outline" className="mt-2 h-11 w-full justify-between" onClick={() => download(downloadFormat)}>
               <span>Or download whole building (.{downloadFormat})</span>
               <Download />
-            </Button>
+            </Button>}
           </div> : <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>}
         </div>}
       </div>}
