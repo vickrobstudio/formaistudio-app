@@ -409,6 +409,55 @@ Rules:
 - Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 }
 
+// Per-floor SELF-CRITIQUE refinement. We feed the model:
+//   1) the original floor plan drawing(s)
+//   2) every elevation drawing (so it can cross-check opening counts and
+//      vertical positions on each facade)
+//   3) the JSON it produced in pass 1
+// and ask it to act as a strict reviewer: list every error (missing wall,
+// wrong length, missing window, wrong opening width or position, missing
+// column, etc.) and return a CORRECTED JSON. This is the single biggest
+// fidelity boost — it turns one "trust the model" pass into a true
+// extract-then-verify loop the way a human draftsperson would work.
+function refineFloorInstruction(
+  planUnits: z.infer<typeof PlanUnits>,
+  label: string,
+  heightMeters: number,
+  previousJson: string,
+) {
+  return `You are a STRICT architectural reviewer auditing your own previous extraction of floor "${label}" (floor-to-floor height ${heightMeters.toFixed(2)} m). You will receive:
+  1) The ORIGINAL floor plan drawing(s) — the ground truth for the footprint.
+  2) Every available ELEVATION drawing — the ground truth for facades (window count per facade, door positions, sill/head heights).
+  3) Your PREVIOUS extraction JSON for this floor.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Your job is to find every discrepancy between the previous JSON and the drawings, and return a CORRECTED JSON with the same shape (walls/columns/stairs/fixtures/boundsHint). Do NOT preserve the previous JSON as-is — re-trace the plan from scratch and use the previous JSON only as a starting checklist.
+
+AUDIT CHECKLIST — work through every item:
+- Count every exterior wall segment in the plan. Does the JSON contain that many exterior walls? Add missing ones, fix endpoints to match the drawing, remove duplicates.
+- Count every interior partition (rooms, closets, bathrooms, mechanical chases, hallways). Add any that are missing.
+- For EACH exterior facade, count windows and doors in the plan AND in the matching elevation. They MUST agree. If the elevation shows 5 windows on the north facade, the JSON must have 5 windows on the north exterior wall(s). Fix counts that disagree.
+- Verify each opening's WIDTH against printed dimensions (or pixel-accurate measurement against the drawing's scale) and its POSITION along the wall from (x1,y1). Fix any opening that does not match.
+- Verify sill/head heights from the elevations (windows usually sill ≈ 0.9 m, head ≈ 2.1 m unless the elevation shows otherwise).
+- Verify wall thicknesses, angles (preserve diagonals), columns (rectangular OR round → bounding rectangle), stairs (overall run + step count), and fixed fixtures (kitchen cabinets, bath fixtures, built-ins).
+- IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
+
+ABSOLUTE FIDELITY RULES:
+- The drawings are the LAW. Where the previous JSON disagrees with the drawing, the drawing wins.
+- Never invent geometry that is not visible in the drawing.
+- Never omit geometry that IS visible in the drawing.
+- Output JSON ONLY, same shape as the per-floor extractor:
+{ "walls": [...], "columns": [...], "stairs": [...], "fixtures": [...], "boundsHint": { "width": <m>, "length": <m> } }
+
+PREVIOUS EXTRACTION (for review only — DO NOT trust it blindly):
+\`\`\`json
+${previousJson}
+\`\`\`
+
+${ACCURACY_RULES}`;
+}
+
 function buildingReferenceRenderingInstruction() {
   return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
 
