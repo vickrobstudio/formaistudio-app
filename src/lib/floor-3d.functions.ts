@@ -251,7 +251,29 @@ const MultiFloorBuildingPlanSchema = z.object({
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
 type GenerateFloor3DResult =
-  | { ok: true; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string; elementCount: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet"; plan: BuildingPlan | FurniturePlan }
+  | {
+      ok: true;
+      daeDataUrl: string;
+      objDataUrl: string;
+      fbxDataUrl: string;
+      elementCount: number;
+      subject: "building" | "furniture";
+      outputUnits: "meters" | "feet";
+      plan: BuildingPlan | FurniturePlan;
+      /**
+       * One entry per floor (ground → top) when the building was assembled
+       * from multi-floor drawings. The ground floor entry includes the site
+       * (ground slab + grass apron); the top floor entry includes the roof.
+       * Always present for buildings, omitted for furniture.
+       */
+      floorParts?: Array<{
+        index: number;
+        label: string;
+        daeDataUrl: string;
+        objDataUrl: string;
+        fbxDataUrl: string;
+      }>;
+    }
   | { ok: false; error: string };
 
 const PRINTED_UNITS_NOTE: Record<z.infer<typeof PlanUnits>, string> = {
