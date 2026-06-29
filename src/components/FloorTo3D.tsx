@@ -506,6 +506,18 @@ export function FloorTo3D() {
           </button>
         </div> : <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()}><span>Add roof plan</span><Plus /></Button>}
 
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Site plan (optional)</p>
+        <p className="mt-2 text-xs text-muted-foreground">A top-down view of the site — property lines, setbacks, driveway, landscaping. Used to place the building on the ground.</p>
+        {sitePlan ? <div className="mt-3 rounded-2xl border border-border p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Site</span>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSitePlan(null)}><X className="size-3" />Remove</Button>
+          </div>
+          <button type="button" onClick={() => siteInputRef.current?.click()} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+            {sitePlan.imageDataUrl.startsWith("data:image/") ? <img src={sitePlan.imageDataUrl} alt="Site plan" className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{sitePlan.fileName}</span>}
+          </button>
+        </div> : <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => siteInputRef.current?.click()}><span>Add site plan</span><Plus /></Button>}
+
         <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Elevations</p>
         <p className="mt-2 text-xs text-muted-foreground">Add one image per facade (North, South, East, West). Used to lock heights, window positions and roof shape.</p>
         {elevations.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
