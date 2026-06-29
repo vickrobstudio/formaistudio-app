@@ -1475,7 +1475,7 @@ ${geometriesXml}
   </library_geometries>
   <library_visual_scenes>
     <visual_scene id="Scene" name="Scene">
-${nodesXml}
+${sceneTreeXml}
     </visual_scene>
   </library_visual_scenes>
   <scene><instance_visual_scene url="#Scene"/></scene>
