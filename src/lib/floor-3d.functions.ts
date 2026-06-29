@@ -1948,7 +1948,10 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const groups = parseDaeToTriangles(dae);
     const validation = validateMeshGeometry(groups);
     if (!validation.ok) {
-      console.error(`[single] geometry validation failed: ${validation.reason}`);
+      // Single-subject path has only one mesh; there is no remaining
+      // geometry to ship, so surface a clear error instead of exporting
+      // an empty file.
+      console.error(`[single] geometry validation failed — no export: ${validation.reason}`);
       return { ok: false, error: `Generated 3D geometry was empty or degenerate (${validation.reason}). Try a clearer cropped reference image.` } as GenerateFloor3DResult;
     }
     const { obj } = trianglesToObj(groups);
