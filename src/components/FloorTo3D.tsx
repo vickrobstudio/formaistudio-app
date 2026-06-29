@@ -445,6 +445,67 @@ export function FloorTo3D() {
           <Button type="button" variant={subject === "furniture" ? "default" : "outline"} onClick={() => setSubject("furniture")}>Furniture piece</Button>
         </div>
       </div>
+      {subject === "building" && <>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Floors — one image per floor, bottom → top</p>
+        <p className="mt-2 text-xs text-muted-foreground">Upload each floor plan separately so the 3D model stacks them in real-world order. Set the floor-to-floor height for each level.</p>
+        <input ref={floorInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onFloorPicked} />
+        <input ref={roofInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onRoofPicked} />
+        <input ref={elevationInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onElevationsPicked} />
+        <div className="mt-3 space-y-3">
+          {floors.map((floor, index) => <div key={index} className="rounded-2xl border border-border p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Floor {index}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
+            </div>
+            <button type="button" onClick={() => void replaceFloor(index)} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+              {floor.imageDataUrl.startsWith("data:image/") ? <img src={floor.imageDataUrl} alt={floor.label} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{floor.fileName}</span>}
+            </button>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="text-[10px] uppercase tracking-[0.18em]">Label
+                <Input value={floor.label} onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, label: event.target.value } : f))} className="mt-1 h-10" />
+              </label>
+              <label className="text-[10px] uppercase tracking-[0.18em]">Height (m)
+                <Input type="number" min="1" max="10" step="0.1" inputMode="decimal" value={floor.heightMeters} onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: Number(event.target.value) || 0 } : f))} className="mt-1 h-10" />
+              </label>
+            </div>
+          </div>)}
+          <Button type="button" variant="outline" className="h-12 w-full justify-between" onClick={() => void addFloor()} disabled={floors.length >= 10}>
+            <span>{floors.length === 0 ? "Add ground floor plan" : `Add floor ${floors.length}`}</span><Plus />
+          </Button>
+        </div>
+
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Roof plan (optional)</p>
+        <p className="mt-2 text-xs text-muted-foreground">A top-down view of the roof. Used together with the elevations to set the roof outline.</p>
+        {roofPlan ? <div className="mt-3 rounded-2xl border border-border p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Roof</span>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setRoofPlan(null)}><X className="size-3" />Remove</Button>
+          </div>
+          <button type="button" onClick={() => roofInputRef.current?.click()} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+            {roofPlan.imageDataUrl.startsWith("data:image/") ? <img src={roofPlan.imageDataUrl} alt="Roof plan" className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{roofPlan.fileName}</span>}
+          </button>
+        </div> : <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()}><span>Add roof plan</span><Plus /></Button>}
+
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Elevations</p>
+        <p className="mt-2 text-xs text-muted-foreground">Add one image per facade (North, South, East, West). Used to lock heights, window positions and roof shape.</p>
+        {elevations.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {elevations.map((elev, index) => <div key={index} className="rounded-2xl border border-border p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Elevation</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setElevations((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
+            </div>
+            {elev.imageDataUrl.startsWith("data:image/") ? <img src={elev.imageDataUrl} alt={`Elevation ${elev.facing}`} className="mt-2 aspect-[4/3] w-full rounded-xl border border-border bg-secondary object-contain" /> : <div className="mt-2 grid aspect-[4/3] w-full place-items-center rounded-xl border border-border bg-secondary text-xs text-muted-foreground">{elev.fileName}</div>}
+            <div className="mt-2 flex gap-1">
+              {(["N", "E", "S", "W", "other"] as const).map((dir) => <Button key={dir} type="button" size="sm" variant={elev.facing === dir ? "default" : "outline"} className="flex-1" onClick={() => setElevations((prev) => prev.map((e, i) => i === index ? { ...e, facing: dir } : e))}>{dir}</Button>)}
+            </div>
+          </div>)}
+        </div>}
+        <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => elevationInputRef.current?.click()} disabled={elevations.length >= 8}>
+          <span>{elevations.length === 0 ? "Add elevations" : `Add more elevations (${elevations.length}/8)`}</span><Plus />
+        </Button>
+      </>}
+
+      {subject === "furniture" && <>
       <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg" className="sr-only" onChange={upload} />
       <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
         {fileDataUrl && !isPdf
