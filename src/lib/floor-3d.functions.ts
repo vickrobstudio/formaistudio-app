@@ -1918,7 +1918,12 @@ async function runMultiFloorBuilding(
   const floors = building.floors.map((f, i) => ({ ...f, index: i }));
 
   // Helper: one multimodal chat call, returns parsed JSON or throws.
-  async function callJson(content: Array<Record<string, unknown>>, label: string, timeoutMs = BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS): Promise<unknown> {
+  async function callJson(
+    content: Array<Record<string, unknown>>,
+    label: string,
+    timeoutMs = BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS,
+    validate?: (json: unknown) => string | null,
+  ): Promise<unknown> {
     let lastStatus: number | undefined;
     let lastMessage = "";
 
@@ -1931,7 +1936,7 @@ async function runMultiFloorBuilding(
           body: JSON.stringify({
             model,
             messages: [{ role: "user", content }],
-            max_tokens: 12000,
+            max_tokens: 16000,
             response_format: { type: "json_object" },
           }),
         });
@@ -1949,10 +1954,19 @@ async function runMultiFloorBuilding(
         const text = payload.choices?.[0]?.message?.content?.trim();
         const finishReason = payload.choices?.[0]?.finish_reason;
         if (finishReason === "length") {
-          console.warn(`[${label}] response was TRUNCATED on ${model} (finish_reason=length) — increase max_tokens or split the work.`);
+          lastMessage = "response truncated before complete geometry was returned";
+          console.warn(`[${label}] response was TRUNCATED on ${model} (finish_reason=length) — trying the next model instead of exporting a partial/empty file.`);
+          continue;
         }
         if (!text) throw new Error(`[${label}] empty response`);
-        return parseJsonFromModelText(text);
+        const json = parseJsonFromModelText(text);
+        const invalidReason = validate?.(json);
+        if (invalidReason) {
+          lastMessage = invalidReason;
+          console.error(`[${label}] ${model} returned unusable geometry`, invalidReason.slice(0, 300));
+          continue;
+        }
+        return json;
       } catch (error) {
         if (error instanceof DOMException && error.name === "TimeoutError") throw error;
         if ((error as { status?: number }).status) throw error;
@@ -1985,6 +1999,16 @@ async function runMultiFloorBuilding(
   });
 
   type FloorOut = z.infer<typeof floorExtractSchema> & { index: number; label: string; heightMeters: number };
+
+  const floorWallCount = (floor: z.infer<typeof floorExtractSchema>) =>
+    floor.walls.filter((wall) => Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) >= 0.1).length;
+
+  const validateFloorExtraction = (raw: unknown): string | null => {
+    const parsed = floorExtractSchema.safeParse(coerceFloorExtractionJson(raw));
+    if (!parsed.success) return `schema invalid: ${parsed.error.issues.slice(0, 3).map((issue) => issue.path.join(".") || issue.message).join(", ")}`;
+    if (floorWallCount(parsed.data) === 0) return "no wall geometry was extracted from the drawing";
+    return null;
+  };
 
   const floorPromises = floors.map(async (floor): Promise<FloorOut | { error: string; status?: number }> => {
     const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
@@ -2021,11 +2045,14 @@ async function runMultiFloorBuilding(
       attachImg(parts, elev.imageDataUrl, `elev_${facingName}_ref`);
     }
     try {
-      const json = coerceFloorExtractionJson(await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS));
+      const json = coerceFloorExtractionJson(await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS, validateFloorExtraction));
       const parsed = floorExtractSchema.safeParse(json);
       if (!parsed.success) {
         console.error(`floor ${floor.index} schema invalid`, parsed.error.issues.slice(0, 3));
         return { error: `Floor ${floor.index + 1} could not be parsed.` };
+      }
+      if (floorWallCount(parsed.data) === 0) {
+        return { error: `Floor ${floor.index + 1} returned no wall geometry.` };
       }
       return { ...parsed.data, index: floor.index, label: lbl, heightMeters: floor.heightMeters };
     } catch (e) {
@@ -2168,6 +2195,10 @@ async function runMultiFloorBuilding(
   ) => {
     const { dae: partDae } = buildMultiFloorBuildingDae(plan, data.outputUnits, opts);
     const partGroups = parseDaeToTriangles(partDae);
+    if (partGroups.length === 0) {
+      console.error(`empty 3d output skipped for ${label}`);
+      return;
+    }
     const { obj: partObj } = trianglesToObj(partGroups);
     const partFbx = trianglesToFbxAscii(partGroups);
     floorParts.push({
@@ -2226,6 +2257,10 @@ async function runMultiFloorBuilding(
       };
       emitPart(f.index, f.label, plan, { includeSite: isGround, includeRoof: isTop, includeInterFloorSlab: false });
     }
+  }
+
+  if (floorParts.length === 0) {
+    return { ok: false, error: "The drawings were read but no usable 3D wall geometry was extracted. Try a clearer cropped floor-plan image with visible walls and dimensions." };
   }
 
   // Return a flattened BuildingPlan stub so the existing client-side
