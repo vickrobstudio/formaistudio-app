@@ -1878,8 +1878,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
 
     let parsed: unknown;
     try {
-      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-      parsed = JSON.parse(cleaned);
+      parsed = parseJsonFromModelText(text);
     } catch {
       return { ok: false, error: "The AI response was not valid JSON." };
     }
@@ -1953,8 +1952,7 @@ async function runMultiFloorBuilding(
           console.warn(`[${label}] response was TRUNCATED on ${model} (finish_reason=length) — increase max_tokens or split the work.`);
         }
         if (!text) throw new Error(`[${label}] empty response`);
-        const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-        return JSON.parse(cleaned);
+        return parseJsonFromModelText(text);
       } catch (error) {
         if (error instanceof DOMException && error.name === "TimeoutError") throw error;
         if ((error as { status?: number }).status) throw error;
@@ -2023,7 +2021,7 @@ async function runMultiFloorBuilding(
       attachImg(parts, elev.imageDataUrl, `elev_${facingName}_ref`);
     }
     try {
-      const json = await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS);
+      const json = coerceFloorExtractionJson(await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS));
       const parsed = floorExtractSchema.safeParse(json);
       if (!parsed.success) {
         console.error(`floor ${floor.index} schema invalid`, parsed.error.issues.slice(0, 3));
@@ -2330,8 +2328,7 @@ Rules:
     if (!text) return { ok: false, error: "The AI did not return dimensions." };
     let parsed: unknown;
     try {
-      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-      parsed = JSON.parse(cleaned);
+      parsed = parseJsonFromModelText(text);
     } catch {
       return { ok: false, error: "The AI response was not valid JSON." };
     }
