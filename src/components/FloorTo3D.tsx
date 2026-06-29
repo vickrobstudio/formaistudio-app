@@ -584,29 +584,19 @@ export function FloorTo3D() {
             <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High poly</Button>
           </div>
         </div>
-        {subject === "building" && <>
-          <p className="mt-6 text-[10px] font-bold uppercase tracking-[0.2em]">Ceiling height</p>
-          {planUnits === "meters"
-            ? <label className="mt-3 block text-xs">Meters
-                <Input value={heightMeters} onChange={(event) => setHeightMeters(event.target.value)} type="number" min="1" max="10" step="0.1" inputMode="decimal" className="mt-2 h-12" />
-              </label>
-            : <div className="mt-3 grid grid-cols-2 gap-3">
-                <label className="text-xs">Feet
-                  <Input value={heightFeet} onChange={(event) => setHeightFeet(event.target.value)} type="number" min="0" max="33" step="1" inputMode="numeric" className="mt-2 h-12" />
-                </label>
-                <label className="text-xs">Inches
-                  <Input value={heightInches} onChange={(event) => setHeightInches(event.target.value)} type="number" min="0" max="11" step="1" inputMode="numeric" className="mt-2 h-12" />
-                </label>
-              </div>}
-        </>}
       </div>
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
+      {subject === "building" && <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={busy !== "" || floors.length === 0 || stage === "modeling" || stage === "ready"} onClick={() => void buildFromDrawings()}>
+        <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlan ? " + roof" : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
+        {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+      </Button>}
+
       {/* When the user supplies BOTH a 2D plan and a reference rendering,
           we bypass the master-prompt + approval render and go straight to
           the live 3D preview using the rendering as the fidelity target. */}
-      {fileDataUrl && referenceImages.length === 0 && <>
+      {subject === "furniture" && fileDataUrl && referenceImages.length === 0 && <>
         {/* Step 2 — Write master prompt */}
         <div className="mt-8">{stepHeading(2, "Master rendering prompt", stage === "upload" || stage === "prompted", stage === "rendered" || stage === "modeling" || stage === "ready")}</div>
         <Button variant="studio" className="mt-3 h-12 w-full justify-between" disabled={!fileDataUrl || busy !== ""} onClick={() => void generatePrompt()}>
