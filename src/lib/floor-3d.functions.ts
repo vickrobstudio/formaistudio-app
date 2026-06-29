@@ -1259,6 +1259,10 @@ function buildDae(
   outputUnits: "meters" | "feet",
 ) {
   const groups = buildGroups(plan, wallHeightMeters, outputUnits);
+  return emitDaeFromGroups(groups, outputUnits);
+}
+
+function emitDaeFromGroups(groups: Group[], outputUnits: "meters" | "feet") {
   const created = new Date().toISOString();
   const unitTag = outputUnits === "feet"
     ? '<unit name="foot" meter="0.3048"/>'
