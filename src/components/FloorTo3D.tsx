@@ -267,54 +267,68 @@ export function FloorTo3D() {
       let totalElements = 0;
       let firstError = "";
 
-      for (let index = 0; index < floors.length; index += 1) {
-        const floor = floors[index];
-        if (!floor) continue;
-        const isGround = index === 0;
-        const isTop = index === floors.length - 1;
-        const label = floor.label?.trim() || (isGround ? "Ground floor" : `Floor ${index}`);
-        setReconStatus(`Analyzing ${label} (${index + 1}/${floors.length})…`);
+      // Ordered sequence: SITE → FLOOR 1 → FLOOR 2 → … → ROOF.
+      // Each step is its own server call and produces its own downloadable
+      // file. 100% fidelity per piece — the AI reads only the drawings for
+      // the part it is building.
+      type Step =
+        | { kind: "site" }
+        | { kind: "floor"; index: number }
+        | { kind: "roof" };
+      const steps: Step[] = [];
+      if (sitePlan) steps.push({ kind: "site" });
+      for (let i = 0; i < floors.length; i += 1) steps.push({ kind: "floor", index: i });
+      const hasRoofData = roofPlans.length > 0 || elevations.length > 0;
+      if (hasRoofData) steps.push({ kind: "roof" });
+
+      const topIndex = floors.length - 1;
+
+      for (let s = 0; s < steps.length; s += 1) {
+        const step = steps[s];
+        const stepLabel = step.kind === "site" ? "Site" : step.kind === "roof" ? "Roof" : (floors[step.index].label?.trim() || (step.index === 0 ? "Ground floor" : `Floor ${step.index}`));
+        setReconStatus(`Building ${stepLabel} (${s + 1}/${steps.length})…`);
+
+        const floorForBounds = step.kind === "site" ? floors[0] : step.kind === "roof" ? floors[topIndex] : floors[step.index];
+        const scope: "site" | "floor" | "roof" = step.kind;
 
         try {
           const result = await withTimeout(generate({
             data: {
-              wallHeightMeters: floor.heightMeters || 2.7,
+              wallHeightMeters: floorForBounds.heightMeters || 2.7,
               planUnits,
               outputUnits,
               subject: "building",
               building: {
-                floors: [{ imageDataUrl: floor.imageDataUrl, imageDataUrl2: floor.imageDataUrl2, label, heightMeters: floor.heightMeters }],
-                roof: isTop && roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
-                site: isGround && sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
-                elevations: isTop ? elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })) : [],
+                scope,
+                floors: [{
+                  imageDataUrl: floorForBounds.imageDataUrl,
+                  imageDataUrl2: floorForBounds.imageDataUrl2,
+                  label: floorForBounds.label,
+                  heightMeters: floorForBounds.heightMeters,
+                }],
+                roof: step.kind === "roof" && roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
+                site: step.kind === "site" && sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
+                elevations: step.kind === "roof" ? elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })) : [],
               },
             },
-          }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${label} analysis took too long. Try a clearer cropped floor-plan image first, then add roof/elevations after the floor works.`);
+          }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${stepLabel} analysis took too long. Try a clearer cropped image.`);
 
-          if (!result.ok) {
-            firstError ||= result.error;
-            continue;
-          }
+          if (!result.ok) { firstError ||= result.error; continue; }
 
-          const part = result.floorParts?.[0] ?? {
-            index,
-            label,
-            daeDataUrl: result.daeDataUrl,
-            objDataUrl: result.objDataUrl,
-            fbxDataUrl: result.fbxDataUrl,
-          };
-          parts.push({ ...part, index, label });
+          const got = result.floorParts?.[0];
+          if (!got) { firstError ||= `${stepLabel} returned no model.`; continue; }
+          parts.push(got);
           totalElements += result.elementCount;
           setFloorParts([...parts]);
           setSummary({ count: totalElements, subject: "building", outputUnits });
         } catch (cause) {
-          firstError ||= cause instanceof Error ? cause.message : `${label} analysis failed.`;
+          firstError ||= cause instanceof Error ? cause.message : `${stepLabel} analysis failed.`;
           continue;
         }
       }
 
       if (parts.length === 0) { setError(firstError || "The drawings could not be analysed. Try clearer images with visible dimensions."); setStage("upload"); return; }
-      if (firstError) setError(`Some floors could not be analysed. ${parts.length} of ${floors.length} floor models are ready.`);
+      if (firstError) setError(`Some parts could not be analysed. ${parts.length} model${parts.length === 1 ? "" : "s"} ready.`);
       setDae(null);
       setObj(null);
       setFbx(null);
