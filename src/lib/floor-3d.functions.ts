@@ -349,6 +349,66 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
+// Per-floor extractor. ONE floor plan image (plus optional secondary drawing
+// of the same floor) → JSON for just that floor. Running these in parallel
+// keeps each call small enough to finish well inside the worker timeout and
+// lets the powerful model (gemini-2.5-pro) read every wall instead of
+// truncating the way one giant multi-floor call does.
+function singleFloorExtractInstruction(
+  planUnits: z.infer<typeof PlanUnits>,
+  label: string,
+  heightMeters: number,
+) {
+  return `You are an architectural CAD vectorizer. You will receive ONE floor plan ("${label}", floor-to-floor height ${heightMeters.toFixed(2)} m) of a real building. Trace EVERY wall, opening, column, stair and fixture on that floor and return STRICT JSON.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{
+  "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "openings": [ { "kind": "door"|"window", "position": <m from (x1,y1)>, "width": <m>, "sillHeight": <m>, "headHeight": <m> } ] } ],
+  "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+  "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
+  "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+  "boundsHint": { "width": <overall plan width m>, "length": <overall plan length m> }
+}
+
+Rules:
+- Origin (0,0) at the bottom-left corner of the floor plan, +x right, +y up. Keep these coordinates in METERS at real-world scale.
+- Trace EVERY exterior and interior wall as one straight segment between endpoints — do not skip rooms, closets, baths, lanais, breezeways, port cocheres, garage walls or any other partition that is drawn. Split walls at intersections. Diagonal/angled walls keep their true angle.
+- Doors and windows go in the parent wall's "openings" array — never split the wall at an opening. Doors: sillHeight 0, headHeight ~2.1 m. Windows: sillHeight ~0.9 m, headHeight ~2.1 m. Use printed dimensions when shown.
+- Use printed wall thicknesses when shown; otherwise 0.20 m exterior, 0.10 m interior.
+- Capture every column, every staircase, every kitchen/bath/built-in fixture as its own entry.
+- IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
+- 100% FIDELITY IS MANDATORY. If the plan shows N windows on a facade, the JSON must contain N windows; if a wall is 12'-6" long the JSON has 3.81 m; if a wall runs at 45° the JSON keeps that angle. Do not simplify, merge or omit.
+- If a SECONDARY drawing of the same floor is attached, cross-read both to pick up dimensions one drawing omits.
+
+${ACCURACY_RULES}`;
+}
+
+// Elevations + roof plans → roof shape, total height, per-floor heights.
+// Only used to override defaults; floor footprints come from the per-floor
+// passes above.
+function roofAndElevationsInstruction(
+  planUnits: z.infer<typeof PlanUnits>,
+  floorCount: number,
+) {
+  return `You are an architectural reviewer. You will receive elevation drawings and (optionally) roof plans of a ${floorCount}-floor building. Read the vertical information ONLY and return STRICT JSON.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{
+  "floorHeightsMeters": [<floor 0 height>, <floor 1 height>, ...],   // floor-to-floor for each of the ${floorCount} floors, in order
+  "roof": { "kind": "flat"|"gable"|"hip"|"shed", "thicknessMeters": <m, default 0.2>, "overhangMeters": <m, default 0.4>, "ridgeHeightMeters": <m above top floor's ceiling, omit for flat>, "ridgeAxis": "x"|"y" }
+}
+
+Rules:
+- Read floor-to-floor heights from the elevation drawings (look at the dimension lines, finish-floor markers, ceiling markers and NAVD elevations). Match each height to a floor index in physical stacking order — index 0 = ground floor.
+- "roof.kind" MUST match what the elevations show. Most Florida-style residences with sloped metal roofs are "hip". Use "gable" only when a triangular end wall is clearly visible. Use "flat" when the elevation shows a parapet with no slope.
+- For gable/hip/shed, "ridgeHeightMeters" is the height of the ridge ABOVE the top floor's ceiling (use the ROOF BRG and the highest ridge marker). "ridgeAxis" is the axis the ridge runs along in plan: "x" if the ridge runs east-west, "y" if it runs north-south. When in doubt, look at the roof plan.
+- Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
+}
+
 function buildingReferenceRenderingInstruction() {
   return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
 
@@ -1660,76 +1720,171 @@ async function runMultiFloorBuilding(
   data: z.infer<typeof FloorTo3DInput>,
 ): Promise<GenerateFloor3DResult> {
   const building = data.building!;
-  const userContent: Array<Record<string, unknown>> = [
-    { type: "text", text: multiFloorBuildingInstruction(data.planUnits) },
-  ];
-  const attach = (label: string, url: string) => {
-    userContent.push({ type: "text", text: label });
+  const floors = building.floors.map((f, i) => ({ ...f, index: i }));
+
+  // Helper: one multimodal chat call, returns parsed JSON or throws.
+  async function callJson(content: Array<Record<string, unknown>>, label: string): Promise<unknown> {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(2 * 60 * 1000),
+      body: JSON.stringify({
+        // gemini-2.5-pro reads architectural CAD plans much more accurately
+        // than flash — it traces angled walls, reads stamped dimensions, and
+        // doesn't truncate. We split the work per floor so each call stays
+        // small enough to finish inside the worker timeout.
+        model: "google/gemini-2.5-pro",
+        messages: [{ role: "user", content }],
+        max_tokens: 16000,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.error(`[${label}] extract failed`, res.status, detail.slice(0, 300));
+      const err = new Error(`upstream_${res.status}`);
+      (err as Error & { status?: number }).status = res.status;
+      throw err;
+    }
+    const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = payload.choices?.[0]?.message?.content?.trim();
+    if (!text) throw new Error(`[${label}] empty response`);
+    const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    return JSON.parse(cleaned);
+  }
+
+  const attachImg = (parts: Array<Record<string, unknown>>, url: string, filename: string) => {
     if (url.startsWith("data:application/pdf")) {
-      userContent.push({ type: "file", file: { filename: `${label}.pdf`, file_data: url } });
+      parts.push({ type: "file", file: { filename: `${filename}.pdf`, file_data: url } });
     } else {
-      userContent.push({ type: "image_url", image_url: { url } });
+      parts.push({ type: "image_url", image_url: { url } });
     }
   };
 
-  const sorted = [...building.floors].sort((a, b) => 0).map((f, i) => ({ ...f, index: i }));
-  for (const floor of sorted) {
-    const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
-    attach(`FLOOR ${floor.index} — ${lbl} (floor-to-floor height ${floor.heightMeters.toFixed(2)} m) — primary drawing`, floor.imageDataUrl);
-    if (floor.imageDataUrl2) {
-      attach(`FLOOR ${floor.index} — ${lbl} — secondary drawing (same floor, e.g. furnished plan, RCP, or dimensioned variant)`, floor.imageDataUrl2);
-    }
-  }
-  for (const [i, roof] of (building.roof ?? []).entries()) {
-    const lbl = roof.label?.trim() ? ` — ${roof.label.trim()}` : "";
-    attach(`ROOF PLAN ${i + 1}${lbl}`, roof.imageDataUrl);
-  }
-  if (building.site) attach("SITE PLAN — top-down view of the site (property lines, setbacks, driveway, landscaping). Use it to orient and place the building footprint on the ground.", building.site.imageDataUrl);
-  for (const elev of building.elevations ?? []) {
-    const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
-    attach(`ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""}`, elev.imageDataUrl);
-  }
-
-  const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    // Multi-floor extraction with floors + roof + site + elevations is a heavy
-    // multimodal call; allow up to 5 minutes before aborting.
-    signal: AbortSignal.timeout(5 * 60 * 1000),
-    body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
-      messages: [{ role: "user", content: userContent }],
-      response_format: { type: "json_object" },
-    }),
+  // Per-floor extraction in parallel.
+  const floorExtractSchema = z.object({
+    walls: z.array(WallSchema).max(600).default([]),
+    columns: z.array(ColumnSchema).max(200).default([]),
+    stairs: z.array(StairSchema).max(40).default([]),
+    fixtures: z.array(FixtureSchema).max(400).default([]),
+    boundsHint: z.object({ width: z.number().positive(), length: z.number().positive() }).optional(),
   });
 
-  if (!upstream.ok) {
-    const detail = await upstream.text().catch(() => "");
-    console.error("multi-floor extract failed", upstream.status, detail.slice(0, 400));
-    if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
-    if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-    return { ok: false, error: "The drawings could not be analysed." };
+  type FloorOut = z.infer<typeof floorExtractSchema> & { index: number; label: string; heightMeters: number };
+
+  const floorPromises = floors.map(async (floor): Promise<FloorOut | { error: string; status?: number }> => {
+    const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
+    const parts: Array<Record<string, unknown>> = [
+      { type: "text", text: singleFloorExtractInstruction(data.planUnits, lbl, floor.heightMeters) },
+      { type: "text", text: `PRIMARY DRAWING — ${lbl}` },
+    ];
+    attachImg(parts, floor.imageDataUrl, `floor_${floor.index}_a`);
+    if (floor.imageDataUrl2) {
+      parts.push({ type: "text", text: `SECONDARY DRAWING — same floor (${lbl})` });
+      attachImg(parts, floor.imageDataUrl2, `floor_${floor.index}_b`);
+    }
+    try {
+      const json = await callJson(parts, `floor-${floor.index}`);
+      const parsed = floorExtractSchema.safeParse(json);
+      if (!parsed.success) {
+        console.error(`floor ${floor.index} schema invalid`, parsed.error.issues.slice(0, 3));
+        return { error: `Floor ${floor.index + 1} could not be parsed.` };
+      }
+      return { ...parsed.data, index: floor.index, label: lbl, heightMeters: floor.heightMeters };
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      return { error: `Floor ${floor.index + 1} extraction failed.`, status };
+    }
+  });
+
+  // Roof + elevations pass in parallel.
+  const roofSchema = z.object({
+    floorHeightsMeters: z.array(z.number().min(1).max(10)).max(10).optional(),
+    roof: z
+      .object({
+        kind: z.enum(["flat", "gable", "hip", "shed"]).default("hip"),
+        thicknessMeters: z.number().min(0.05).max(0.6).default(0.2),
+        overhangMeters: z.number().min(0).max(2).default(0.4).optional(),
+        ridgeHeightMeters: z.number().min(0).max(8).optional(),
+        ridgeAxis: z.enum(["x", "y"]).optional(),
+      })
+      .optional(),
+  });
+
+  const hasRoofOrElev = (building.roof?.length ?? 0) > 0 || (building.elevations?.length ?? 0) > 0;
+  const roofPromise: Promise<z.infer<typeof roofSchema> | null> = hasRoofOrElev
+    ? (async () => {
+        const parts: Array<Record<string, unknown>> = [
+          { type: "text", text: roofAndElevationsInstruction(data.planUnits, floors.length) },
+        ];
+        for (const [i, roof] of (building.roof ?? []).entries()) {
+          parts.push({ type: "text", text: `ROOF PLAN ${i + 1}${roof.label ? ` — ${roof.label}` : ""}` });
+          attachImg(parts, roof.imageDataUrl, `roof_${i}`);
+        }
+        for (const elev of building.elevations ?? []) {
+          const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
+          parts.push({ type: "text", text: `ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""}` });
+          attachImg(parts, elev.imageDataUrl, `elev_${facingName}`);
+        }
+        try {
+          const json = await callJson(parts, "roof-elev");
+          const parsed = roofSchema.safeParse(json);
+          return parsed.success ? parsed.data : null;
+        } catch (e) {
+          console.error("roof/elev extract failed", e);
+          return null;
+        }
+      })()
+    : Promise.resolve(null);
+
+  const [floorResults, roofResult] = await Promise.all([Promise.all(floorPromises), roofPromise]);
+
+  // Fail fast if every floor failed.
+  const goodFloors = floorResults.filter((f): f is FloorOut => !("error" in f));
+  if (goodFloors.length === 0) {
+    const first = floorResults[0] as { error?: string; status?: number };
+    if (first?.status === 402) return { ok: false, error: "AI credits are exhausted." };
+    if (first?.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+    return { ok: false, error: "The drawings could not be analysed. Try clearer images with visible dimensions." };
   }
 
-  const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const text = payload.choices?.[0]?.message?.content?.trim();
-  if (!text) return { ok: false, error: "The AI did not return a description." };
-
-  let parsed: unknown;
-  try {
-    const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-    parsed = JSON.parse(cleaned);
-  } catch {
-    return { ok: false, error: "The AI response was not valid JSON." };
+  // Compute overall bounds from each floor's boundsHint or wall extents.
+  let maxW = 0, maxL = 0;
+  for (const f of goodFloors) {
+    if (f.boundsHint) {
+      maxW = Math.max(maxW, f.boundsHint.width);
+      maxL = Math.max(maxL, f.boundsHint.length);
+    }
+    for (const w of f.walls) {
+      maxW = Math.max(maxW, w.x1, w.x2);
+      maxL = Math.max(maxL, w.y1, w.y2);
+    }
   }
+  if (maxW < 1) maxW = 30;
+  if (maxL < 1) maxL = 30;
 
-  const planResult = MultiFloorBuildingPlanSchema.safeParse(parsed);
-  if (!planResult.success) {
-    console.error("multi-floor plan invalid", planResult.error.issues.slice(0, 5));
-    return { ok: false, error: "The detected geometry was incomplete. Try clearer drawings with visible dimensions." };
-  }
+  // Apply roof-pass overrides for per-floor heights when available.
+  const floorsForPlan = goodFloors
+    .sort((a, b) => a.index - b.index)
+    .map((f) => ({
+      index: f.index,
+      label: f.label,
+      heightMeters: roofResult?.floorHeightsMeters?.[f.index] ?? f.heightMeters,
+      walls: f.walls,
+      columns: f.columns,
+      stairs: f.stairs,
+      fixtures: f.fixtures,
+    }));
 
-  const { dae, elementCount } = buildMultiFloorBuildingDae(planResult.data, data.outputUnits);
+  const assembledPlan: MultiFloorBuildingPlan = {
+    kind: "multi_floor_building",
+    units: "meters",
+    bounds: { width: maxW, length: maxL },
+    floors: floorsForPlan,
+    roof: roofResult?.roof ?? (hasRoofOrElev ? { kind: "hip", thicknessMeters: 0.2, overhangMeters: 0.4 } : undefined),
+  };
+
+  const { dae, elementCount } = buildMultiFloorBuildingDae(assembledPlan, data.outputUnits);
   const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
   const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
   const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
@@ -1744,11 +1899,11 @@ async function runMultiFloorBuilding(
   const flat: BuildingPlan = {
     kind: "building",
     units: "meters",
-    bounds: { width: planResult.data.bounds.width, length: planResult.data.bounds.length },
-    walls: planResult.data.floors.flatMap((f) => f.walls),
-    columns: planResult.data.floors.flatMap((f) => f.columns),
-    stairs: planResult.data.floors.flatMap((f) => f.stairs),
-    fixtures: planResult.data.floors.flatMap((f) => f.fixtures),
+    bounds: { width: assembledPlan.bounds.width, length: assembledPlan.bounds.length },
+    walls: assembledPlan.floors.flatMap((f) => f.walls),
+    columns: assembledPlan.floors.flatMap((f) => f.columns),
+    stairs: assembledPlan.floors.flatMap((f) => f.stairs),
+    fixtures: assembledPlan.floors.flatMap((f) => f.fixtures),
   };
 
   return {
