@@ -60,6 +60,8 @@ const information: ToolInfoSection[] = [
 type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 
 const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 70_000;
+const BUILDING_IMAGE_MAX_DIMENSION = 2400;
+const BUILDING_IMAGE_JPEG_QUALITY = 0.88;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -68,6 +70,15 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   });
   return Promise.race([promise, timeout]).finally(() => {
     if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
+function readRawDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
+    r.onerror = () => reject(new Error("Could not read file."));
+    r.readAsDataURL(file);
   });
 }
 
@@ -133,11 +144,37 @@ export function FloorTo3D() {
   const elevationInputRef = useRef<HTMLInputElement>(null);
 
   function readFileAsDataUrl(file: File): Promise<string> {
+    if (!file.type.startsWith("image/")) return readRawDataUrl(file);
     return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
-      r.onerror = () => reject(new Error("Could not read file."));
-      r.readAsDataURL(file);
+      const objectUrl = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const sourceWidth = image.naturalWidth || image.width;
+          const sourceHeight = image.naturalHeight || image.height;
+          const scale = Math.min(1, BUILDING_IMAGE_MAX_DIMENSION / Math.max(sourceWidth, sourceHeight));
+          const width = Math.max(1, Math.round(sourceWidth * scale));
+          const height = Math.max(1, Math.round(sourceHeight * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Could not optimize image.");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", BUILDING_IMAGE_JPEG_QUALITY));
+        } catch (cause) {
+          reject(cause instanceof Error ? cause : new Error("Could not optimize image."));
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("Could not read image."));
+      };
+      image.src = objectUrl;
     });
   }
 
