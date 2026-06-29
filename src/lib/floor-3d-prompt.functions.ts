@@ -61,7 +61,7 @@ export const buildMasterPrompt = createServerFn({ method: "POST" })
 
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "google/gemini-2.5-pro",
         messages: [{ role: "user", content: userContent }],

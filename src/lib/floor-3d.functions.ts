@@ -1729,7 +1729,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
 
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       // Buildings with many drawings + Gemini Pro extraction can take minutes;
       // give the model up to 5 min before aborting.
       signal: AbortSignal.timeout(5 * 60 * 1000),
@@ -1802,7 +1802,7 @@ async function runMultiFloorBuilding(
   async function callJson(content: Array<Record<string, unknown>>, label: string): Promise<unknown> {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(90 * 1000),
       body: JSON.stringify({
         // gemini-2.5-pro reads architectural CAD plans much more accurately
@@ -1924,7 +1924,8 @@ async function runMultiFloorBuilding(
   if (goodFloors.length === 0) {
     const first = floorResults[0] as { error?: string; status?: number };
     if (first?.status === 402) return { ok: false, error: "AI credits are exhausted." };
-    if (first?.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+      if (first?.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+      if (first?.status === 401 || first?.status === 403) return { ok: false, error: "The 2D to 3D service is unavailable." };
     return { ok: false, error: "The drawings could not be analysed. Try clearer images with visible dimensions." };
   }
 
@@ -2104,7 +2105,7 @@ Rules:
     }
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(2 * 60 * 1000),
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
