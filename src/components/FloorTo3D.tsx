@@ -207,7 +207,7 @@ export function FloorTo3D() {
 
   async function buildFromDrawings() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
-    setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setStage("modeling");
+    setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setFloorParts([]); setStage("modeling");
     if (!(await consume())) {
       setBusy(""); setStage("upload");
       if (!signedIn) { void navigate({ to: "/auth" }); return; }
