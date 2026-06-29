@@ -1322,7 +1322,6 @@ function buildGroups(
     // the wall geometry cut out (instead of empty rectangles).
     const doorBucket = makeGroupBuilder("group_doors", "Doors", scale, "wood_oak");
     const windowGlass = makeGroupBuilder("group_window_glass", "Windows - Glass", scale, "glass_clear");
-    const windowFrame = makeGroupBuilder("group_window_frames", "Windows - Frames", scale, "metal_aluminum_brushed");
     for (const wall of plan.walls) {
       const dx = wall.x2 - wall.x1;
       const dy = wall.y2 - wall.y1;
@@ -1347,31 +1346,16 @@ function buildGroups(
           const thickness = Math.min(0.04, wall.thickness * 0.4);
           addRotatedBox(doorBucket.addCorners, cx, cy, sill + hOp / 2, wOp - 0.02, thickness, hOp - 0.02, angleDeg);
         } else {
-          // Window: thin glass pane centered in wall, with a slim frame around it.
+          // Window: a single glass pane filling the opening cut out of the
+          // wall — NO invented frame. The drawings already define the
+          // opening; we just fill the hole with glass.
           const glassThickness = Math.min(0.02, wall.thickness * 0.25);
-          const frameDepth = Math.min(0.05, wall.thickness * 0.5);
-          const frameWidth = 0.05;
-          // Glass pane (inset by frame width on all sides)
-          const gW = Math.max(0.05, wOp - 2 * frameWidth);
-          const gH = Math.max(0.05, hOp - 2 * frameWidth);
-          addRotatedBox(windowGlass.addCorners, cx, cy, sill + hOp / 2, gW, glassThickness, gH, angleDeg);
-          // Frame: 4 thin bars (top, bottom, left, right) — drawn as boxes in wall plane
-          // Bottom rail
-          addRotatedBox(windowFrame.addCorners, cx, cy, sill + frameWidth / 2, wOp, frameDepth, frameWidth, angleDeg);
-          // Top rail
-          addRotatedBox(windowFrame.addCorners, cx, cy, head - frameWidth / 2, wOp, frameDepth, frameWidth, angleDeg);
-          // Side stiles — offset along the wall direction
-          const stileOffset = (wOp - frameWidth) / 2;
-          const lx = cx - ux * stileOffset, ly = cy - uy * stileOffset;
-          const rx = cx + ux * stileOffset, ry = cy + uy * stileOffset;
-          addRotatedBox(windowFrame.addCorners, lx, ly, sill + hOp / 2, frameWidth, frameDepth, hOp, angleDeg);
-          addRotatedBox(windowFrame.addCorners, rx, ry, sill + hOp / 2, frameWidth, frameDepth, hOp, angleDeg);
+          addRotatedBox(windowGlass.addCorners, cx, cy, sill + hOp / 2, wOp, glassThickness, hOp, angleDeg);
         }
       }
     }
     if (doorBucket.group.positions.length) groups.push(doorBucket.group);
     if (windowGlass.group.positions.length) groups.push(windowGlass.group);
-    if (windowFrame.group.positions.length) groups.push(windowFrame.group);
 
     if (plan.columns.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
