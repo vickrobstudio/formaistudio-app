@@ -261,9 +261,9 @@ export function FloorTo3D() {
 
       if (parts.length === 0) { setError(firstError || "The drawings could not be analysed. Try clearer images with visible dimensions."); setStage("upload"); return; }
       if (firstError) setError(`Some floors could not be analysed. ${parts.length} of ${floors.length} floor models are ready.`);
-      setDae(parts[0]?.daeDataUrl ?? null);
-      setObj(parts[0]?.objDataUrl ?? null);
-      setFbx(parts[0]?.fbxDataUrl ?? null);
+      setDae(null);
+      setObj(null);
+      setFbx(null);
       setFloorParts(parts);
       setSummary({ count: totalElements, subject: "building", outputUnits });
       setStage("ready");
@@ -849,10 +849,6 @@ export function FloorTo3D() {
                 <Download />
               </Button>;
             })}
-            {(dae || obj || fbx) && <Button variant="outline" className="mt-2 h-11 w-full justify-between" onClick={() => download(downloadFormat)}>
-              <span>Or download whole building (.{downloadFormat})</span>
-              <Download />
-            </Button>}
           </div> : <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>}
         </div>}
       </div>}
