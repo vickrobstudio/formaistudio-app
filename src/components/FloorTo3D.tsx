@@ -662,7 +662,7 @@ export function FloorTo3D() {
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
       {subject === "building" && <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={busy !== "" || floors.length === 0 || stage === "modeling" || stage === "ready"} onClick={() => void buildFromDrawings()}>
-        <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlan ? " + roof" : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
+        <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlans.length ? ` + ${roofPlans.length} roof${roofPlans.length === 1 ? "" : "s"}` : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
         {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
       </Button>}
 
