@@ -1678,7 +1678,10 @@ async function runMultiFloorBuilding(
       attach(`FLOOR ${floor.index} — ${lbl} — secondary drawing (same floor, e.g. furnished plan, RCP, or dimensioned variant)`, floor.imageDataUrl2);
     }
   }
-  if (building.roof) attach("ROOF PLAN", building.roof.imageDataUrl);
+  for (const [i, roof] of (building.roof ?? []).entries()) {
+    const lbl = roof.label?.trim() ? ` — ${roof.label.trim()}` : "";
+    attach(`ROOF PLAN ${i + 1}${lbl}`, roof.imageDataUrl);
+  }
   if (building.site) attach("SITE PLAN — top-down view of the site (property lines, setbacks, driveway, landscaping). Use it to orient and place the building footprint on the ground.", building.site.imageDataUrl);
   for (const elev of building.elevations ?? []) {
     const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
