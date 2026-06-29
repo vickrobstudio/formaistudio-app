@@ -67,7 +67,7 @@ export function FloorTo3D() {
   type FloorEntry = { imageDataUrl: string; imageDataUrl2?: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string; fileName2?: string };
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
-  const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
+  const [roofPlans, setRoofPlans] = useState<Array<{ imageDataUrl: string; fileName: string }>>([]);
   const [sitePlan, setSitePlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
   const floorInputRef = useRef<HTMLInputElement>(null);
@@ -125,12 +125,16 @@ export function FloorTo3D() {
     setError("");
   }
   async function onRoofPicked(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file) return;
-    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
-    const url = await readFileAsDataUrl(file);
-    setRoofPlan({ imageDataUrl: url, fileName: file.name });
+    if (!files.length) return;
+    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
+    const added: Array<{ imageDataUrl: string; fileName: string }> = [];
+    for (const file of files) {
+      const url = await readFileAsDataUrl(file);
+      added.push({ imageDataUrl: url, fileName: file.name });
+    }
+    setRoofPlans((prev) => [...prev, ...added].slice(0, 6));
     setError("");
   }
   async function onSitePicked(event: ChangeEvent<HTMLInputElement>) {
