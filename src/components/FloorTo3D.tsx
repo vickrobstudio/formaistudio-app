@@ -551,6 +551,7 @@ export function FloorTo3D() {
           </Button>
         </div>}
       </div>
+      </>}
 
       <div className="organic-divider py-8">
         <div className="flex items-end justify-between gap-4">
