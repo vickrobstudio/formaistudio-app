@@ -1664,6 +1664,7 @@ async function runMultiFloorBuilding(
     attach(`FLOOR ${floor.index} — ${lbl} (floor-to-floor height ${floor.heightMeters.toFixed(2)} m)`, floor.imageDataUrl);
   }
   if (building.roof) attach("ROOF PLAN", building.roof.imageDataUrl);
+  if (building.site) attach("SITE PLAN — top-down view of the site (property lines, setbacks, driveway, landscaping). Use it to orient and place the building footprint on the ground.", building.site.imageDataUrl);
   for (const elev of building.elevations ?? []) {
     const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
     attach(`ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""}`, elev.imageDataUrl);
