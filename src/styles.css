@@ -34,6 +34,26 @@ main {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
+
+/* Desktop browsers (mouse / trackpad outside the 520px app column) cannot
+ * scroll the inner <main> when the document itself is locked, because the
+ * wheel target is the body. Let the document scroll on pointer:fine devices
+ * so the wheel works anywhere on the page; position:fixed headers/tabbars
+ * remain pinned to the viewport regardless. iOS WKWebView (pointer:coarse)
+ * keeps the locked-document behaviour to preserve fixed chrome. */
+@media (pointer: fine) {
+  html:not(:has(.landing-screen)),
+  body:not(:has(.landing-screen)) {
+    height: auto;
+    overflow: visible;
+  }
+  main {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: visible;
+    overscroll-behavior: auto;
+  }
+}
 body {
   -webkit-user-select: none;
   user-select: none;
