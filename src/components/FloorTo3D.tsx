@@ -64,7 +64,7 @@ export function FloorTo3D() {
   // Multi-image building flow — one image per floor, optional roof plan,
   // multiple elevations. When the user uses this flow we skip the master
   // prompt + approval render and build the 3D model straight from drawings.
-  type FloorEntry = { imageDataUrl: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string };
+  type FloorEntry = { imageDataUrl: string; imageDataUrl2?: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string; fileName2?: string };
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
   const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
@@ -72,6 +72,7 @@ export function FloorTo3D() {
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
   const floorInputRef = useRef<HTMLInputElement>(null);
   const floorInputIndex = useRef<number>(-1);
+  const floorInputSlot = useRef<1 | 2>(1);
   const roofInputRef = useRef<HTMLInputElement>(null);
   const siteInputRef = useRef<HTMLInputElement>(null);
   const elevationInputRef = useRef<HTMLInputElement>(null);
@@ -87,10 +88,17 @@ export function FloorTo3D() {
 
   async function addFloor() {
     floorInputIndex.current = -1;
+    floorInputSlot.current = 1;
     floorInputRef.current?.click();
   }
   async function replaceFloor(index: number) {
     floorInputIndex.current = index;
+    floorInputSlot.current = 1;
+    floorInputRef.current?.click();
+  }
+  async function pickFloorImage2(index: number) {
+    floorInputIndex.current = index;
+    floorInputSlot.current = 2;
     floorInputRef.current?.click();
   }
   async function onFloorPicked(event: ChangeEvent<HTMLInputElement>) {
@@ -100,8 +108,11 @@ export function FloorTo3D() {
     if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
     const url = await readFileAsDataUrl(file);
     const idx = floorInputIndex.current;
+    const slot = floorInputSlot.current;
     if (idx >= 0) {
-      setFloors((prev) => prev.map((f, i) => i === idx ? { ...f, imageDataUrl: url, fileName: file.name } : f));
+      setFloors((prev) => prev.map((f, i) => i === idx
+        ? (slot === 2 ? { ...f, imageDataUrl2: url, fileName2: file.name } : { ...f, imageDataUrl: url, fileName: file.name })
+        : f));
     } else {
       setFloors((prev) => [...prev, {
         imageDataUrl: url,
