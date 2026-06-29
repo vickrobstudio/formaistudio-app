@@ -67,10 +67,12 @@ export function FloorTo3D() {
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
   const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
+  const [sitePlan, setSitePlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
   const floorInputRef = useRef<HTMLInputElement>(null);
   const floorInputIndex = useRef<number>(-1);
   const roofInputRef = useRef<HTMLInputElement>(null);
+  const siteInputRef = useRef<HTMLInputElement>(null);
   const elevationInputRef = useRef<HTMLInputElement>(null);
 
   function readFileAsDataUrl(file: File): Promise<string> {
@@ -119,6 +121,15 @@ export function FloorTo3D() {
     setRoofPlan({ imageDataUrl: url, fileName: file.name });
     setError("");
   }
+  async function onSitePicked(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
+    const url = await readFileAsDataUrl(file);
+    setSitePlan({ imageDataUrl: url, fileName: file.name });
+    setError("");
+  }
   async function onElevationsPicked(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -153,6 +164,7 @@ export function FloorTo3D() {
           building: {
             floors: floors.map((f) => ({ imageDataUrl: f.imageDataUrl, label: f.label, heightMeters: f.heightMeters })),
             roof: roofPlan ? { imageDataUrl: roofPlan.imageDataUrl } : undefined,
+            site: sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
             elevations: elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })),
           },
         },
