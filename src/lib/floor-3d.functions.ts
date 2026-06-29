@@ -1534,6 +1534,8 @@ function buildMultiFloorBuildingDae(
   if (includeRoof) {
     const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
     const overhang = roof.overhangMeters ?? 0;
+    // Roof-only export sits at z=0 so SketchUp/Blender open it cleanly.
+    const roofBase = includeFloors ? zOffset : 0;
     const roofSlab = makeGroupBuilder(
       "roof_slab",
       `Roof — ${roof.kind}`,
@@ -1543,13 +1545,14 @@ function buildMultiFloorBuildingDae(
     roofSlab.addBox(
       -overhang,
       -overhang,
-      zOffset,
+      roofBase,
       multi.bounds.width + overhang,
       multi.bounds.length + overhang,
-      zOffset + roof.thicknessMeters,
+      roofBase + roof.thicknessMeters,
     );
     roofSlab.group.parentPath = ["Roof"];
     allGroups.push(roofSlab.group);
+    elementCount += 1;
   }
 
   return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount };
