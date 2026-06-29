@@ -59,7 +59,7 @@ const information: ToolInfoSection[] = [
 
 type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 
-const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 70_000;
+const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 120_000;
 const BUILDING_IMAGE_MAX_DIMENSION = 2400;
 const BUILDING_IMAGE_JPEG_QUALITY = 0.88;
 
