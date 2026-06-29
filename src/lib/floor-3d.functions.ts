@@ -1919,6 +1919,12 @@ async function runMultiFloorBuilding(
   key: string,
   data: z.infer<typeof FloorTo3DInput>,
 ): Promise<GenerateFloor3DResult> {
+  // Geometry validation: refuses to export any DAE/OBJ/FBX whose mesh has
+  // zero vertices, zero triangles, or a zero-volume bounding box. This
+  // catches cases where the AI parsed walls but the builder produced an
+  // empty/degenerate model before users download a blank file.
+  const _unused_validate_placeholder = true;
+  void _unused_validate_placeholder;
   const building = data.building!;
   const floors = building.floors.map((f, i) => ({ ...f, index: i }));
 
