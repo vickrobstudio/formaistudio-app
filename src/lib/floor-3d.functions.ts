@@ -1483,24 +1483,23 @@ function buildMultiFloorBuildingDae(
   const includeInterFloorSlab = options.includeInterFloorSlab ?? true;
   const includeFloors = options.includeFloors ?? true;
 
-  // ── Site: ground slab + grass apron around the building footprint.
-  // Both sit under a top-level "Site" group so they import as their own
-  // selectable SketchUp folder, separate from the building floors.
-  if (includeSite) {
+  // Sort floors by index, ground → top
+  const sortedFloors = [...multi.floors].sort((a, b) => a.index - b.index);
+
+  // Tight outline of the building taken from the ground floor's exterior
+  // walls. Used for every horizontal slab (site, inter-floor, roof). We
+  // never invent grass, lawns, walkways, set-backs or any other site
+  // geometry that is not present in the drawings.
+  const groundExt = sortedFloors[0]
+    ? exteriorBounds(sortedFloors[0].walls, multi.bounds)
+    : null;
+
+  // ── Site: ground slab ONLY, sized to the actual building footprint.
+  if (includeSite && groundExt) {
     const ground = makeGroupBuilder("site_ground_slab", "Ground slab", scale, "concrete_polished");
-    ground.addBox(0, 0, -0.2, multi.bounds.width, multi.bounds.length, 0);
+    ground.addBox(groundExt.x0, groundExt.y0, -0.2, groundExt.x1, groundExt.y1, 0);
     ground.group.parentPath = ["Site"];
     allGroups.push(ground.group);
-
-    const grassMargin = Math.max(4, Math.min(multi.bounds.width, multi.bounds.length) * 0.5);
-    const grass = makeGroupBuilder("site_grass", "Grass", scale, "other");
-    grass.group.colorOverride = [0.36, 0.55, 0.27];
-    grass.addBox(-grassMargin, -grassMargin, -0.22, multi.bounds.width + grassMargin, 0, -0.2);
-    grass.addBox(-grassMargin, multi.bounds.length, -0.22, multi.bounds.width + grassMargin, multi.bounds.length + grassMargin, -0.2);
-    grass.addBox(-grassMargin, 0, -0.22, 0, multi.bounds.length, -0.2);
-    grass.addBox(multi.bounds.width, 0, -0.22, multi.bounds.width + grassMargin, multi.bounds.length, -0.2);
-    grass.group.parentPath = ["Site"];
-    allGroups.push(grass.group);
   }
 
   // Category label derived from the buildGroups id prefix so each floor gets
@@ -1510,7 +1509,7 @@ function buildMultiFloorBuildingDae(
     if (id.startsWith("group_walls_exterior")) return "Walls / Exterior";
     if (id.startsWith("group_walls_interior")) return "Walls / Interior";
     if (id === "group_doors") return "Doors";
-    if (id === "group_window_glass" || id === "group_window_frames") return "Windows";
+    if (id === "group_window_glass") return "Windows";
     if (id.startsWith("group_columns")) return "Columns";
     if (id.startsWith("group_stairs")) return "Stairs";
     if (id.startsWith("group_fixtures_")) {
@@ -1522,9 +1521,6 @@ function buildMultiFloorBuildingDae(
     if (id === "group_slab") return "Slab";
     return "Other";
   };
-
-  // Sort floors by index, ground → top
-  const sortedFloors = [...multi.floors].sort((a, b) => a.index - b.index);
 
   let zOffset = 0;
   for (let i = 0; i < sortedFloors.length; i++) {
@@ -1563,21 +1559,35 @@ function buildMultiFloorBuildingDae(
     // The roof above replaces the slab on top.
     const isTop = i === sortedFloors.length - 1;
     if (includeFloors && !isTop && includeInterFloorSlab) {
+      // Slab outline = exterior of THIS floor (which is also the floor of
+      // the next level above). Never the full plan bounds.
+      const slabExt = exteriorBounds(floor.walls, multi.bounds);
+      if (slabExt) {
       const slab = makeGroupBuilder(
         `group_slab_between_${floor.index}_${floor.index + 1}`,
         `Slab above ${floorTitle}`,
         scale,
         "concrete_polished",
       );
-      slab.addBox(0, 0, zOffset - 0.12, multi.bounds.width, multi.bounds.length, zOffset);
+        slab.addBox(slabExt.x0, slabExt.y0, zOffset - 0.12, slabExt.x1, slabExt.y1, zOffset);
       slab.group.parentPath = [floorTitle, "Ceiling / Slab above"];
       allGroups.push(slab.group);
+      }
     }
   }
 
   if (includeRoof) {
     const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
+    // Overhang ONLY if the AI read one from the elevations. No invented eave.
     const overhang = roof.overhangMeters ?? 0;
+    // Roof outline = exterior of the TOP floor. Falls back to overall bounds
+    // only if no top floor walls were captured.
+    const topFloor = sortedFloors[sortedFloors.length - 1];
+    const roofExt = topFloor ? exteriorBounds(topFloor.walls, multi.bounds) : null;
+    const rx0 = (roofExt?.x0 ?? 0) - overhang;
+    const ry0 = (roofExt?.y0 ?? 0) - overhang;
+    const rx1 = (roofExt?.x1 ?? multi.bounds.width) + overhang;
+    const ry1 = (roofExt?.y1 ?? multi.bounds.length) + overhang;
     // Roof-only export sits at z=0 so SketchUp/Blender open it cleanly.
     const roofBase = includeFloors ? zOffset : 0;
     const roofSlab = makeGroupBuilder(
@@ -1587,11 +1597,11 @@ function buildMultiFloorBuildingDae(
       "concrete_polished",
     );
     roofSlab.addBox(
-      -overhang,
-      -overhang,
+      rx0,
+      ry0,
       roofBase,
-      multi.bounds.width + overhang,
-      multi.bounds.length + overhang,
+      rx1,
+      ry1,
       roofBase + roof.thicknessMeters,
     );
     roofSlab.group.parentPath = ["Roof"];
