@@ -62,12 +62,16 @@ const FloorTo3DInput = z.object({
         .min(1)
         .max(10),
       roof: z
-        .object({
-          imageDataUrl: z
-            .string()
-            .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
-            .max(50_000_000),
-        })
+        .array(
+          z.object({
+            imageDataUrl: z
+              .string()
+              .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+              .max(50_000_000),
+            label: z.string().max(60).optional(),
+          }),
+        )
+        .max(6)
         .optional(),
       site: z
         .object({
