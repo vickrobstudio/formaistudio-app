@@ -89,6 +89,13 @@ export function FloorTo3D() {
   const [modelProgress, setModelProgress] = useState(0);
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
   const [summary, setSummary] = useState<{ count: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet" } | null>(null);
+  const [floorParts, setFloorParts] = useState<Array<{
+    index: number;
+    label: string;
+    daeDataUrl: string;
+    objDataUrl: string;
+    fbxDataUrl: string;
+  }>>([]);
   const { credits, signedIn, vip, consume } = useCredits();
   const navigate = useNavigate();
   const generate = useServerFn(generateFloor3D);
