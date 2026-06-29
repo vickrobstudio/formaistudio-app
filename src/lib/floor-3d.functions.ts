@@ -255,10 +255,13 @@ const MultiFloorBuildingPlanSchema = z.object({
 });
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
-// Gemini 2.5 Pro is slower than flash but reads every dimension faithfully.
-// One image per call keeps total latency under the Worker budget.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 100_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 60_000;
+// We use gemini-3.1-pro-preview for the per-floor + roof passes: it reasons
+// like a senior drafter (reads every printed dimension, cross-checks plans
+// against elevations, doesn't simplify). One image-set per call keeps total
+// latency under the Worker budget while we still run all floors in parallel.
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 110_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 80_000;
+const BUILDING_ANALYSIS_MODEL = "google/gemini-3.1-pro-preview";
 
 type GenerateFloor3DResult =
   | {
