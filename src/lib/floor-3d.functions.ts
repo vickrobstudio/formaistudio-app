@@ -1546,3 +1546,101 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       : plan.parts.length;
     return { ok: true, daeDataUrl, objDataUrl, fbxDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan };
   });
+
+async function runMultiFloorBuilding(
+  key: string,
+  data: z.infer<typeof FloorTo3DInput>,
+): Promise<GenerateFloor3DResult> {
+  const building = data.building!;
+  const userContent: Array<Record<string, unknown>> = [
+    { type: "text", text: multiFloorBuildingInstruction(data.planUnits) },
+  ];
+  const attach = (label: string, url: string) => {
+    userContent.push({ type: "text", text: label });
+    if (url.startsWith("data:application/pdf")) {
+      userContent.push({ type: "file", file: { filename: `${label}.pdf`, file_data: url } });
+    } else {
+      userContent.push({ type: "image_url", image_url: { url } });
+    }
+  };
+
+  const sorted = [...building.floors].sort((a, b) => 0).map((f, i) => ({ ...f, index: i }));
+  for (const floor of sorted) {
+    const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
+    attach(`FLOOR ${floor.index} — ${lbl} (floor-to-floor height ${floor.heightMeters.toFixed(2)} m)`, floor.imageDataUrl);
+  }
+  if (building.roof) attach("ROOF PLAN", building.roof.imageDataUrl);
+  for (const elev of building.elevations ?? []) {
+    const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
+    attach(`ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""}`, elev.imageDataUrl);
+  }
+
+  const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-pro",
+      messages: [{ role: "user", content: userContent }],
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  if (!upstream.ok) {
+    const detail = await upstream.text().catch(() => "");
+    console.error("multi-floor extract failed", upstream.status, detail.slice(0, 400));
+    if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
+    if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+    return { ok: false, error: "The drawings could not be analysed." };
+  }
+
+  const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const text = payload.choices?.[0]?.message?.content?.trim();
+  if (!text) return { ok: false, error: "The AI did not return a description." };
+
+  let parsed: unknown;
+  try {
+    const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+    parsed = JSON.parse(cleaned);
+  } catch {
+    return { ok: false, error: "The AI response was not valid JSON." };
+  }
+
+  const planResult = MultiFloorBuildingPlanSchema.safeParse(parsed);
+  if (!planResult.success) {
+    console.error("multi-floor plan invalid", planResult.error.issues.slice(0, 5));
+    return { ok: false, error: "The detected geometry was incomplete. Try clearer drawings with visible dimensions." };
+  }
+
+  const { dae, elementCount } = buildMultiFloorBuildingDae(planResult.data, data.outputUnits);
+  const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
+  const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
+  const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
+  const groups = parseDaeToTriangles(dae);
+  const { obj } = trianglesToObj(groups);
+  const fbx = trianglesToFbxAscii(groups);
+  const objDataUrl = toDataUrl(obj, "model/obj");
+  const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
+
+  // Return a flattened BuildingPlan stub so the existing client-side
+  // summary keeps working. The actual geometry is in the .dae.
+  const flat: BuildingPlan = {
+    kind: "building",
+    units: "meters",
+    bounds: { width: planResult.data.bounds.width, length: planResult.data.bounds.length },
+    walls: planResult.data.floors.flatMap((f) => f.walls),
+    columns: planResult.data.floors.flatMap((f) => f.columns),
+    stairs: planResult.data.floors.flatMap((f) => f.stairs),
+    fixtures: planResult.data.floors.flatMap((f) => f.fixtures),
+  };
+
+  return {
+    ok: true,
+    daeDataUrl,
+    objDataUrl,
+    fbxDataUrl,
+    elementCount,
+    subject: "building",
+    outputUnits: data.outputUnits,
+    plan: flat,
+  };
+}
