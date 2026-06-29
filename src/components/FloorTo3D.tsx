@@ -737,7 +737,7 @@ export function FloorTo3D() {
 
       {/* Step 4 — Live 3D + download */}
       {showLivePreview && <div ref={previewRef}>
-        <div className="mt-8">{stepHeading(4, "Live 3D preview", stage === "modeling" || stage === "ready", Boolean(dae))}</div>
+        <div className="mt-8">{stepHeading(4, subject === "building" ? "Download 3D model" : "Live 3D preview", stage === "modeling" || stage === "ready", Boolean(dae))}</div>
         {busy === "model" && <div className="mt-3 rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between text-xs">
             <span className="inline-flex items-center gap-2 font-bold uppercase tracking-[0.14em]">
