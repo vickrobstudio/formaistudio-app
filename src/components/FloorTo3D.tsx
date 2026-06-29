@@ -60,6 +60,114 @@ export function FloorTo3D() {
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
 
+  // Multi-image building flow — one image per floor, optional roof plan,
+  // multiple elevations. When the user uses this flow we skip the master
+  // prompt + approval render and build the 3D model straight from drawings.
+  type FloorEntry = { imageDataUrl: string; label: string; heightMeters: number; fileName: string };
+  type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
+  const [floors, setFloors] = useState<FloorEntry[]>([]);
+  const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
+  const [elevations, setElevations] = useState<ElevationEntry[]>([]);
+  const floorInputRef = useRef<HTMLInputElement>(null);
+  const floorInputIndex = useRef<number>(-1);
+  const roofInputRef = useRef<HTMLInputElement>(null);
+  const elevationInputRef = useRef<HTMLInputElement>(null);
+
+  function readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(typeof r.result === "string" ? r.result : "");
+      r.onerror = () => reject(new Error("Could not read file."));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function addFloor() {
+    floorInputIndex.current = -1;
+    floorInputRef.current?.click();
+  }
+  async function replaceFloor(index: number) {
+    floorInputIndex.current = index;
+    floorInputRef.current?.click();
+  }
+  async function onFloorPicked(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
+    const url = await readFileAsDataUrl(file);
+    const idx = floorInputIndex.current;
+    if (idx >= 0) {
+      setFloors((prev) => prev.map((f, i) => i === idx ? { ...f, imageDataUrl: url, fileName: file.name } : f));
+    } else {
+      setFloors((prev) => [...prev, {
+        imageDataUrl: url,
+        label: prev.length === 0 ? "Ground floor" : `Floor ${prev.length}`,
+        heightMeters: 2.7,
+        fileName: file.name,
+      }]);
+    }
+    setError("");
+  }
+  async function onRoofPicked(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
+    const url = await readFileAsDataUrl(file);
+    setRoofPlan({ imageDataUrl: url, fileName: file.name });
+    setError("");
+  }
+  async function onElevationsPicked(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length) return;
+    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
+    const cycle: ElevationEntry["facing"][] = ["N", "E", "S", "W", "other"];
+    const added: ElevationEntry[] = [];
+    for (const file of files) {
+      const url = await readFileAsDataUrl(file);
+      const facing = cycle[(elevations.length + added.length) % cycle.length];
+      added.push({ imageDataUrl: url, facing, label: "", fileName: file.name });
+    }
+    setElevations((prev) => [...prev, ...added].slice(0, 8));
+    setError("");
+  }
+
+  async function buildFromDrawings() {
+    if (floors.length === 0) { setError("Add at least one floor plan."); return; }
+    setBusy("model"); setError(""); setDae(null); setGlb(null); setObj(null); setFbx(null); setStage("modeling");
+    if (!(await consume())) {
+      setBusy(""); setStage("upload");
+      if (!signedIn) { void navigate({ to: "/auth" }); return; }
+      setError("You have no credits left. Open your Wallet to continue."); return;
+    }
+    try {
+      const result = await generate({
+        data: {
+          wallHeightMeters: floors[0]?.heightMeters || 2.7,
+          planUnits,
+          outputUnits,
+          subject: "building",
+          building: {
+            floors: floors.map((f) => ({ imageDataUrl: f.imageDataUrl, label: f.label, heightMeters: f.heightMeters })),
+            roof: roofPlan ? { imageDataUrl: roofPlan.imageDataUrl } : undefined,
+            elevations: elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })),
+          },
+        },
+      });
+      if (!result.ok) { setError(result.error); setStage("upload"); return; }
+      setDae(result.daeDataUrl);
+      setObj(result.objDataUrl);
+      setFbx(result.fbxDataUrl);
+      setSummary({ count: result.elementCount, subject: result.subject, outputUnits: result.outputUnits });
+      setStage("ready");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The 3D model could not be generated.");
+      setStage("upload");
+    } finally { setBusy(""); }
+  }
+
   useEffect(() => {
     if ((stage === "modeling" || stage === "ready") && previewRef.current) {
       previewRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
