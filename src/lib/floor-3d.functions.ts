@@ -1428,7 +1428,7 @@ function buildDae(
 function buildMultiFloorBuildingDae(
   multi: MultiFloorBuildingPlan,
   outputUnits: "meters" | "feet",
-  options: { includeSite?: boolean; includeRoof?: boolean; includeInterFloorSlab?: boolean } = {},
+  options: { includeSite?: boolean; includeRoof?: boolean; includeInterFloorSlab?: boolean; includeFloors?: boolean } = {},
 ): { dae: string; elementCount: number } {
   const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
   const allGroups: Group[] = [];
@@ -1437,6 +1437,7 @@ function buildMultiFloorBuildingDae(
   const includeSite = options.includeSite ?? true;
   const includeRoof = options.includeRoof ?? true;
   const includeInterFloorSlab = options.includeInterFloorSlab ?? true;
+  const includeFloors = options.includeFloors ?? true;
 
   // ── Site: ground slab + grass apron around the building footprint.
   // Both sit under a top-level "Site" group so they import as their own
