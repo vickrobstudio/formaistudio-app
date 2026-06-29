@@ -93,7 +93,7 @@ export const Route = createFileRoute("/api/generate-image")({
         }
 
         const headers: Record<string, string> = {
-          Authorization: `Bearer ${key}`,
+          "Lovable-API-Key": key,
           Accept: "text/event-stream",
         };
         if (contentType) headers["Content-Type"] = contentType;
