@@ -220,6 +220,7 @@ export function FloorTo3D() {
 
       for (let index = 0; index < floors.length; index += 1) {
         const floor = floors[index];
+        if (!floor) continue;
         const isGround = index === 0;
         const isTop = index === floors.length - 1;
         const label = floor.label?.trim() || (isGround ? "Ground floor" : `Floor ${index}`);
