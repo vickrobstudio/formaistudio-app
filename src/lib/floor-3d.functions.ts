@@ -1244,15 +1244,18 @@ function buildGroups(
   const groups: Group[] = [];
 
   if (plan.kind === "building") {
-    const slab = makeGroupBuilder("group_slab", "Slab", scale);
-    slab.addBox(0, 0, -0.05, plan.bounds.width, plan.bounds.length, 0);
-    groups.push(slab.group);
-
-    // Ceiling slab — full footprint, sitting on top of the default wall
-    // height. Becomes its own selectable layer ("Ceiling") on .dae import.
-    const ceiling = makeGroupBuilder("group_ceiling", "Ceiling", scale, "plaster_white");
-    ceiling.addBox(0, 0, wallHeightMeters, plan.bounds.width, plan.bounds.length, wallHeightMeters + 0.08);
-    groups.push(ceiling.group);
+    // Slab sized to the ACTUAL exterior wall extents — never the AI-reported
+    // plan bounds (which often include the site, the yard, or the title
+    // block). The slab represents the floor of THIS level only.
+    const ext = exteriorBounds(plan.walls, plan.bounds);
+    if (ext) {
+      const slab = makeGroupBuilder("group_slab", "Slab", scale, "concrete_polished");
+      slab.addBox(ext.x0, ext.y0, -0.05, ext.x1, ext.y1, 0);
+      groups.push(slab.group);
+    }
+    // NOTE: No ceiling slab is invented here. In the multi-floor pipeline
+    // the inter-floor slab IS the ceiling of the floor below. In the single
+    // building flow there is no ceiling unless the drawings show one.
 
     // Group by (category, material) so each visually distinct material region
     // in the rendering becomes its own selectable .dae layer.
