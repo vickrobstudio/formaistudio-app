@@ -349,6 +349,66 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
+// Per-floor extractor. ONE floor plan image (plus optional secondary drawing
+// of the same floor) → JSON for just that floor. Running these in parallel
+// keeps each call small enough to finish well inside the worker timeout and
+// lets the powerful model (gemini-2.5-pro) read every wall instead of
+// truncating the way one giant multi-floor call does.
+function singleFloorExtractInstruction(
+  planUnits: z.infer<typeof PlanUnits>,
+  label: string,
+  heightMeters: number,
+) {
+  return `You are an architectural CAD vectorizer. You will receive ONE floor plan ("${label}", floor-to-floor height ${heightMeters.toFixed(2)} m) of a real building. Trace EVERY wall, opening, column, stair and fixture on that floor and return STRICT JSON.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{
+  "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "openings": [ { "kind": "door"|"window", "position": <m from (x1,y1)>, "width": <m>, "sillHeight": <m>, "headHeight": <m> } ] } ],
+  "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+  "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
+  "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
+  "boundsHint": { "width": <overall plan width m>, "length": <overall plan length m> }
+}
+
+Rules:
+- Origin (0,0) at the bottom-left corner of the floor plan, +x right, +y up. Keep these coordinates in METERS at real-world scale.
+- Trace EVERY exterior and interior wall as one straight segment between endpoints — do not skip rooms, closets, baths, lanais, breezeways, port cocheres, garage walls or any other partition that is drawn. Split walls at intersections. Diagonal/angled walls keep their true angle.
+- Doors and windows go in the parent wall's "openings" array — never split the wall at an opening. Doors: sillHeight 0, headHeight ~2.1 m. Windows: sillHeight ~0.9 m, headHeight ~2.1 m. Use printed dimensions when shown.
+- Use printed wall thicknesses when shown; otherwise 0.20 m exterior, 0.10 m interior.
+- Capture every column, every staircase, every kitchen/bath/built-in fixture as its own entry.
+- IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
+- 100% FIDELITY IS MANDATORY. If the plan shows N windows on a facade, the JSON must contain N windows; if a wall is 12'-6" long the JSON has 3.81 m; if a wall runs at 45° the JSON keeps that angle. Do not simplify, merge or omit.
+- If a SECONDARY drawing of the same floor is attached, cross-read both to pick up dimensions one drawing omits.
+
+${ACCURACY_RULES}`;
+}
+
+// Elevations + roof plans → roof shape, total height, per-floor heights.
+// Only used to override defaults; floor footprints come from the per-floor
+// passes above.
+function roofAndElevationsInstruction(
+  planUnits: z.infer<typeof PlanUnits>,
+  floorCount: number,
+) {
+  return `You are an architectural reviewer. You will receive elevation drawings and (optionally) roof plans of a ${floorCount}-floor building. Read the vertical information ONLY and return STRICT JSON.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{
+  "floorHeightsMeters": [<floor 0 height>, <floor 1 height>, ...],   // floor-to-floor for each of the ${floorCount} floors, in order
+  "roof": { "kind": "flat"|"gable"|"hip"|"shed", "thicknessMeters": <m, default 0.2>, "overhangMeters": <m, default 0.4>, "ridgeHeightMeters": <m above top floor's ceiling, omit for flat>, "ridgeAxis": "x"|"y" }
+}
+
+Rules:
+- Read floor-to-floor heights from the elevation drawings (look at the dimension lines, finish-floor markers, ceiling markers and NAVD elevations). Match each height to a floor index in physical stacking order — index 0 = ground floor.
+- "roof.kind" MUST match what the elevations show. Most Florida-style residences with sloped metal roofs are "hip". Use "gable" only when a triangular end wall is clearly visible. Use "flat" when the elevation shows a parapet with no slope.
+- For gable/hip/shed, "ridgeHeightMeters" is the height of the ridge ABOVE the top floor's ceiling (use the ROOF BRG and the highest ridge marker). "ridgeAxis" is the axis the ridge runs along in plan: "x" if the ridge runs east-west, "y" if it runs north-south. When in doubt, look at the roof plan.
+- Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
+}
+
 function buildingReferenceRenderingInstruction() {
   return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
 
