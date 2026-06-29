@@ -1900,6 +1900,11 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
     const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
     const groups = parseDaeToTriangles(dae);
+    const validation = validateMeshGeometry(groups);
+    if (!validation.ok) {
+      console.error(`[single] geometry validation failed: ${validation.reason}`);
+      return { ok: false, error: `Generated 3D geometry was empty or degenerate (${validation.reason}). Try a clearer cropped reference image.` } as GenerateFloor3DResult;
+    }
     const { obj } = trianglesToObj(groups);
     const fbx = trianglesToFbxAscii(groups);
     const objDataUrl = toDataUrl(obj, "model/obj");
