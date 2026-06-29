@@ -259,13 +259,15 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 // can be temporarily unavailable or rejected by the chat endpoint, so the
 // drafter pipeline automatically falls back instead of returning "could not be
 // analysed" for the whole drawing set.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 90_000;
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 75_000;
+const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 55_000;
 const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 75_000;
 const BUILDING_ANALYSIS_MODELS = [
   "google/gemini-3.1-pro-preview",
   "google/gemini-2.5-pro",
   "google/gemini-3-flash-preview",
 ] as const;
+const BUILDING_FAST_FALLBACK_MODELS = ["google/gemini-3-flash-preview"] as const;
 
 type GenerateFloor3DResult =
   | {
@@ -493,6 +495,26 @@ Rules:
 - NEVER invent geometry that is not visible in the drawings. NEVER omit geometry that IS visible. If you are not sure whether something is a wall, a hatch or a dimension line, look at the line weight and at the other sheets — drafters never guess.
 
 ${ACCURACY_RULES}`;
+}
+
+function quickFloorExtractInstruction(
+  planUnits: z.infer<typeof PlanUnits>,
+  label: string,
+  heightMeters: number,
+) {
+  return `You are an architectural CAD vectorizer running a FAST RECOVERY PASS for a drawing that was too complex for the full extractor. Return STRICT compact JSON for floor "${label}" (floor-to-floor height ${heightMeters.toFixed(2)} m).
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Return JSON ONLY in this exact shape:
+{ "walls": [ { "name": "", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "openings": [] } ], "columns": [], "stairs": [], "fixtures": [], "boundsHint": { "width": <m>, "length": <m> } }
+
+Rules:
+- Prioritize a NON-EMPTY usable model over exhaustive detail: exterior footprint first, then major interior partitions, columns and stairs only if obvious.
+- Ignore labels, title blocks, hatching, furniture, door swings, dimension strings and minor fixtures unless they define a wall.
+- Use printed dimensions when visible; otherwise estimate scale from the drawing and keep proportions accurate.
+- Output short minified JSON only. Every wall must be a straight segment in meters with thickness 0.20 m exterior / 0.10 m interior unless printed otherwise.
+- At minimum, return the exterior wall loop. Never return an empty walls array if any building outline is visible.`;
 }
 
 // Elevations + roof plans → roof shape, total height, per-floor heights.
@@ -1977,11 +1999,12 @@ async function runMultiFloorBuilding(
     label: string,
     timeoutMs = BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS,
     validate?: (json: unknown) => string | null,
+    models: readonly string[] = BUILDING_ANALYSIS_MODELS,
   ): Promise<unknown> {
     let lastStatus: number | undefined;
     let lastMessage = "";
 
-    for (const model of BUILDING_ANALYSIS_MODELS) {
+    for (const model of models) {
       try {
         const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
@@ -2117,6 +2140,35 @@ async function runMultiFloorBuilding(
       return { ...parsed.data, index: floor.index, label: lbl, heightMeters: floor.heightMeters };
     } catch (e) {
       const status = (e as { status?: number }).status;
+      if (status === 401 || status === 402 || status === 403 || status === 429) {
+        return { error: `Floor ${floor.index + 1} extraction failed.`, status };
+      }
+      try {
+        const fallbackParts: Array<Record<string, unknown>> = [
+          { type: "text", text: quickFloorExtractInstruction(data.planUnits, lbl, floor.heightMeters) },
+          { type: "text", text: `PRIMARY DRAWING — ${lbl}` },
+        ];
+        attachImg(fallbackParts, floor.imageDataUrl, `floor_${floor.index}_fast_a`);
+        if (floor.imageDataUrl2) {
+          fallbackParts.push({ type: "text", text: `SECONDARY DRAWING — same floor (${lbl})` });
+          attachImg(fallbackParts, floor.imageDataUrl2, `floor_${floor.index}_fast_b`);
+        }
+        const fallbackJson = coerceFloorExtractionJson(await callJson(
+          fallbackParts,
+          `floor-${floor.index}-fast-fallback`,
+          BUILDING_FAST_FALLBACK_TIMEOUT_MS,
+          validateFloorExtraction,
+          BUILDING_FAST_FALLBACK_MODELS,
+        ));
+        const fallbackParsed = floorExtractSchema.safeParse(fallbackJson);
+        if (fallbackParsed.success && floorWallCount(fallbackParsed.data) > 0) {
+          console.warn(`floor ${floor.index} used fast fallback extraction after detailed pass failed`);
+          return { ...fallbackParsed.data, index: floor.index, label: lbl, heightMeters: floor.heightMeters };
+        }
+      } catch (fallbackError) {
+        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        console.error(`floor ${floor.index} fast fallback failed`, fallbackMessage.slice(0, 300));
+      }
       if (e instanceof DOMException && e.name === "TimeoutError") {
         return { error: `Floor ${floor.index + 1} analysis timed out.`, status: 408 };
       }
