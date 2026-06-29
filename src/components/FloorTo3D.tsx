@@ -67,7 +67,7 @@ export function FloorTo3D() {
   type FloorEntry = { imageDataUrl: string; imageDataUrl2?: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string; fileName2?: string };
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
-  const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
+  const [roofPlans, setRoofPlans] = useState<Array<{ imageDataUrl: string; fileName: string }>>([]);
   const [sitePlan, setSitePlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
   const floorInputRef = useRef<HTMLInputElement>(null);
@@ -125,12 +125,16 @@ export function FloorTo3D() {
     setError("");
   }
   async function onRoofPicked(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file) return;
-    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
-    const url = await readFileAsDataUrl(file);
-    setRoofPlan({ imageDataUrl: url, fileName: file.name });
+    if (!files.length) return;
+    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
+    const added: Array<{ imageDataUrl: string; fileName: string }> = [];
+    for (const file of files) {
+      const url = await readFileAsDataUrl(file);
+      added.push({ imageDataUrl: url, fileName: file.name });
+    }
+    setRoofPlans((prev) => [...prev, ...added].slice(0, 6));
     setError("");
   }
   async function onSitePicked(event: ChangeEvent<HTMLInputElement>) {
@@ -175,7 +179,7 @@ export function FloorTo3D() {
           subject: "building",
           building: {
             floors: floors.map((f) => ({ imageDataUrl: f.imageDataUrl, imageDataUrl2: f.imageDataUrl2, label: f.label, heightMeters: f.heightMeters })),
-            roof: roofPlan ? { imageDataUrl: roofPlan.imageDataUrl } : undefined,
+            roof: roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
             site: sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
             elevations: elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })),
           },
@@ -481,7 +485,7 @@ export function FloorTo3D() {
       </div>
       {subject === "building" && <>
         <input ref={floorInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onFloorPicked} />
-        <input ref={roofInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onRoofPicked} />
+        <input ref={roofInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onRoofPicked} />
         <input ref={siteInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onSitePicked} />
         <input ref={elevationInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onElevationsPicked} />
 
@@ -538,17 +542,22 @@ export function FloorTo3D() {
           </Button>
         </div>
 
-        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Roof plan (optional)</p>
-        <p className="mt-2 text-xs text-muted-foreground">A top-down view of the roof. Used together with the elevations to set the roof outline.</p>
-        {roofPlan ? <div className="mt-3 rounded-2xl border border-border p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Roof</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setRoofPlan(null)}><X className="size-3" />Remove</Button>
-          </div>
-          <button type="button" onClick={() => roofInputRef.current?.click()} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
-            {roofPlan.imageDataUrl.startsWith("data:image/") ? <img src={roofPlan.imageDataUrl} alt="Roof plan" className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{roofPlan.fileName}</span>}
-          </button>
-        </div> : <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()}><span>Add roof plan</span><Plus /></Button>}
+        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Roof plans (optional)</p>
+        <p className="mt-2 text-xs text-muted-foreground">Top-down views of the roof. You can add multiple (e.g. structural plan, finish plan, drainage). Used together with the elevations to set the roof outline.</p>
+        {roofPlans.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {roofPlans.map((roof, index) => <div key={index} className="rounded-2xl border border-border p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Roof {index + 1}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setRoofPlans((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
+            </div>
+            <div className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
+              {roof.imageDataUrl.startsWith("data:image/") ? <img src={roof.imageDataUrl} alt={`Roof plan ${index + 1}`} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{roof.fileName}</span>}
+            </div>
+          </div>)}
+        </div>}
+        <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()} disabled={roofPlans.length >= 6}>
+          <span>{roofPlans.length === 0 ? "Add roof plan" : `Add another roof plan (${roofPlans.length}/6)`}</span><Plus />
+        </Button>
 
         <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Elevations</p>
         <p className="mt-2 text-xs text-muted-foreground">Add one image per facade (North, South, East, West). Used to lock heights, window positions and roof shape.</p>
@@ -653,7 +662,7 @@ export function FloorTo3D() {
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
       {subject === "building" && <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={busy !== "" || floors.length === 0 || stage === "modeling" || stage === "ready"} onClick={() => void buildFromDrawings()}>
-        <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlan ? " + roof" : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
+        <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlans.length ? ` + ${roofPlans.length} roof${roofPlans.length === 1 ? "" : "s"}` : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
         {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
       </Button>}
 
