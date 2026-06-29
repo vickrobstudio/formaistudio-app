@@ -1583,6 +1583,9 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      // Buildings with many drawings + Gemini Pro extraction can take minutes;
+      // give the model up to 5 min before aborting.
+      signal: AbortSignal.timeout(5 * 60 * 1000),
       body: JSON.stringify({
         // Furniture pieces need maximum shape fidelity to match the approved
         // rendering, so we spend the extra latency on gemini-2.5-pro. Building
@@ -1673,6 +1676,9 @@ async function runMultiFloorBuilding(
   const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    // Multi-floor extraction with floors + roof + site + elevations is a heavy
+    // multimodal call; allow up to 5 minutes before aborting.
+    signal: AbortSignal.timeout(5 * 60 * 1000),
     body: JSON.stringify({
       model: "google/gemini-2.5-pro",
       messages: [{ role: "user", content: userContent }],
