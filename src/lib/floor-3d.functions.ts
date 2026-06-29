@@ -342,7 +342,9 @@ Rules:
 - Use the elevations to confirm the total building height, floor-to-floor heights, parapet heights, and the roof shape (flat vs pitched). The "roof.kind" must match what the elevations show. For gable/hip/shed, set "ridgeHeightMeters" to the height of the ridge ABOVE the top floor's ceiling and "ridgeAxis" to the axis the ridge runs along.
 - Output every floor in the "floors" array in physical stacking order, index 0 = ground floor.
 - IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
-- Be EXACT — geometry, locations and proportions must reproduce the drawings 1:1. Do not invent walls or openings that are not in the drawings, and do not omit any that are.
+- 100% FIDELITY IS MANDATORY. The drawings are the ground truth. Reproduce them 1:1 — every wall segment, every door, every window, every column, every stair, every fixture that appears in the floor plans MUST appear in the JSON with the same length, position, thickness, opening size and opening position. Cross-check counts: if the plan shows N windows on a facade, the JSON must contain exactly N windows on that wall, and the same N windows must appear at the same X positions in the corresponding elevation. Do not invent, merge, simplify, "round to nearest", omit, or approximate any element. If a measurement is unclear, prefer the printed dimension; if no dimension is printed, measure pixel-accurately against the drawing's scale or another printed dimension.
+- Elevations are the vertical ground truth. Read floor-to-floor height, parapet height, ridge height, window sill height and window head height directly from the elevation drawings — these override any default value. Match window/door widths and X positions across plan and elevation; a mismatch means you misread one of them.
+- Roof shape MUST match the elevations exactly (flat, gable, hip, shed). Set "ridgeHeightMeters" and "ridgeAxis" so the resulting roof silhouette overlays the elevation 1:1.
 
 ${ACCURACY_RULES}`;
 }
