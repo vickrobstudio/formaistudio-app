@@ -1901,9 +1901,68 @@ async function runMultiFloorBuilding(
     return { ok: false, error: "The drawings could not be analysed. Try clearer images with visible dimensions." };
   }
 
+  // ───────────── REFINEMENT PASS ─────────────
+  // Re-run each floor through a strict self-critique that re-reads the plan +
+  // every elevation against the first-pass JSON and returns a corrected
+  // version. This is the single biggest fidelity improvement: it catches
+  // missing walls, miscounted windows, wrong opening widths, dropped
+  // columns/fixtures — all the things one-shot extraction silently misses.
+  const refinedFloors: FloorOut[] = await Promise.all(
+    goodFloors.map(async (floor): Promise<FloorOut> => {
+      const source = floors.find((f) => f.index === floor.index);
+      if (!source) return floor;
+      const previousJson = JSON.stringify(
+        {
+          walls: floor.walls,
+          columns: floor.columns,
+          stairs: floor.stairs,
+          fixtures: floor.fixtures,
+          boundsHint: floor.boundsHint,
+        },
+        null,
+        2,
+      );
+      const parts: Array<Record<string, unknown>> = [
+        {
+          type: "text",
+          text: refineFloorInstruction(data.planUnits, floor.label, floor.heightMeters, previousJson),
+        },
+        { type: "text", text: `ORIGINAL FLOOR PLAN — ${floor.label} (primary)` },
+      ];
+      attachImg(parts, source.imageDataUrl, `floor_${floor.index}_a`);
+      if (source.imageDataUrl2) {
+        parts.push({ type: "text", text: `ORIGINAL FLOOR PLAN — ${floor.label} (secondary)` });
+        attachImg(parts, source.imageDataUrl2, `floor_${floor.index}_b`);
+      }
+      // Attach every elevation so the reviewer can cross-check facade opening counts.
+      for (const elev of building.elevations ?? []) {
+        const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
+        parts.push({ type: "text", text: `ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""}` });
+        attachImg(parts, elev.imageDataUrl, `elev_${facingName}`);
+      }
+      try {
+        const json = await callJson(parts, `floor-${floor.index}-refine`);
+        const parsed = floorExtractSchema.safeParse(json);
+        if (!parsed.success) {
+          console.warn(`floor ${floor.index} refinement invalid — keeping pass-1 result`);
+          return floor;
+        }
+        return {
+          ...parsed.data,
+          index: floor.index,
+          label: floor.label,
+          heightMeters: floor.heightMeters,
+        };
+      } catch (e) {
+        console.warn(`floor ${floor.index} refinement failed — keeping pass-1 result`, e);
+        return floor;
+      }
+    }),
+  );
+
   // Compute overall bounds from each floor's boundsHint or wall extents.
   let maxW = 0, maxL = 0;
-  for (const f of goodFloors) {
+  for (const f of refinedFloors) {
     if (f.boundsHint) {
       maxW = Math.max(maxW, f.boundsHint.width);
       maxL = Math.max(maxL, f.boundsHint.length);
@@ -1917,7 +1976,7 @@ async function runMultiFloorBuilding(
   if (maxL < 1) maxL = 30;
 
   // Apply roof-pass overrides for per-floor heights when available.
-  const floorsForPlan = goodFloors
+  const floorsForPlan = refinedFloors
     .sort((a, b) => a.index - b.index)
     .map((f) => ({
       index: f.index,
