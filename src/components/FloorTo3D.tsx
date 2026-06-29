@@ -909,14 +909,18 @@ export function FloorTo3D() {
             <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae && !hasFloorExports} onClick={() => setDownloadFormat("dae")}>.dae</Button>
           </div>
           {subject === "building" && floorParts.length > 0 ? <div className="mt-4 space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Download by floor</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Download by part — built in order</p>
             {floorParts.map((part, i) => {
               const isTop = i === floorParts.length - 1;
-              const num = String(part.index + 1).padStart(2, "0");
-              const title = part.label?.trim() || `Floor ${num}`;
-              const extra = part.index === 0 ? " + site" : isTop ? " + roof" : "";
-              return <Button key={part.index} variant="default" className="h-11 w-full justify-between" onClick={() => downloadFloorPart(part, isTop)}>
-                <span>Floor {num} — {title}{extra}</span>
+              let title: string;
+              if (part.index === -1) title = "Site";
+              else if (part.index === 9999) title = "Roof";
+              else {
+                const num = String(part.index + 1).padStart(2, "0");
+                title = `Floor ${num} — ${part.label?.trim() || `Floor ${num}`}`;
+              }
+              return <Button key={`${part.index}_${i}`} variant="default" className="h-11 w-full justify-between" onClick={() => downloadFloorPart(part, isTop)}>
+                <span>{title}</span>
                 <Download />
               </Button>;
             })}
