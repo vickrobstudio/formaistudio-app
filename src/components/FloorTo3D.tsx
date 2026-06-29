@@ -16,9 +16,45 @@ import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
 const information: ToolInfoSection[] = [
-  { title: "How it works", items: ["1 · Upload a dimensioned PDF / JPG / PNG and pick units", "2 · AI writes a master rendering prompt from the drawing", "3 · Approve the photoreal render", "4 · Live 3D preview opens in your browser — rotate, zoom, pan", "5 · Download a Collada .dae grouped by material/texture"] },
-  { title: "What to upload", items: ["Building floor plan with walls, openings and printed dimensions", "Or furniture drawing with top, front and side views, printed dimensions and reference photo/render", "PDF, JPG or PNG up to 2 GB"] },
-  { title: "Output", items: ["Photoreal hero rendering you can re-render until you like it", "Live in-browser 3D viewer with PBR materials matching the render", "Collada .dae · Z-up · units of your choice · one group per material so SketchUp / Blender shows separate layers"] },
+  {
+    title: "How it works — Building",
+    items: [
+      "1 · Pick units (meters or feet & inches)",
+      "2 · (Optional) Add a site plan to place the building on the ground",
+      "3 · Add one floor plan per level, bottom → top — up to 2 images per floor (e.g. dimensioned + furnished)",
+      "4 · Set the floor-to-floor height for each level",
+      "5 · (Optional) Add roof plans and elevations (N / S / E / W) to lock heights and roof shape",
+      "6 · Tap 'Build 3D model from drawings' — live 3D preview opens in your browser",
+      "7 · Download .dae / .obj / .fbx with real-world dimensions, one group per floor",
+    ],
+  },
+  {
+    title: "How it works — Furniture",
+    items: [
+      "1 · Pick units (meters or feet & inches)",
+      "2 · Upload a furniture drawing with top, front and side views and printed dimensions — a reference photo or render helps a lot",
+      "3 · AI reads the views and reconstructs the 3D mesh at the printed scale",
+      "4 · Live 3D preview opens in your browser — rotate, zoom, pan",
+      "5 · Download .dae / .obj / .fbx scaled 1:1 so it imports at real size in SketchUp / Blender",
+    ],
+  },
+  {
+    title: "What to upload",
+    items: [
+      "Building: one floor plan per level (PDF, JPG, PNG, WEBP). Optional site plan, roof plans and elevations.",
+      "Furniture: orthographic views (top + front + side) with printed dimensions, plus an optional reference photo or render.",
+      "Each file up to 40 MB.",
+    ],
+  },
+  {
+    title: "Output",
+    items: [
+      "Live in-browser 3D viewer — rotate, zoom, pan",
+      "Collada .dae · OBJ · FBX — Z-up, units of your choice",
+      "Buildings: one group per floor (Ground floor, Floor 1, Roof) so SketchUp / Blender shows separate layers",
+      "Furniture: scaled 1:1 to the drawing so dimensions match in SketchUp",
+    ],
+  },
 ];
 
 type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
