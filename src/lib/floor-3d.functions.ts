@@ -1262,6 +1262,88 @@ function buildDae(
   return emitDaeFromGroups(groups, outputUnits);
 }
 
+function buildMultiFloorBuildingDae(
+  multi: MultiFloorBuildingPlan,
+  outputUnits: "meters" | "feet",
+): { dae: string; elementCount: number } {
+  const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
+  const allGroups: Group[] = [];
+  let elementCount = 0;
+
+  // Ground slab
+  const ground = makeGroupBuilder("group_slab_ground", "Ground slab", scale, "concrete_polished");
+  ground.addBox(0, 0, -0.2, multi.bounds.width, multi.bounds.length, 0);
+  allGroups.push(ground.group);
+
+  // Sort floors by index, ground → top
+  const sortedFloors = [...multi.floors].sort((a, b) => a.index - b.index);
+
+  let zOffset = 0;
+  for (let i = 0; i < sortedFloors.length; i++) {
+    const floor = sortedFloors[i];
+    const subPlan: BuildingPlan = {
+      kind: "building",
+      units: "meters",
+      bounds: multi.bounds,
+      walls: floor.walls,
+      columns: floor.columns,
+      stairs: floor.stairs,
+      fixtures: floor.fixtures,
+    };
+    const floorGroups = buildGroups(subPlan, floor.heightMeters, outputUnits)
+      // strip the per-floor slab and ceiling — multi-floor adds them explicitly
+      .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
+    const dzScaled = zOffset * scale;
+    const label = floor.label?.trim() || `Floor ${floor.index}`;
+    for (const g of floorGroups) {
+      for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
+      g.id = `f${floor.index}_${g.id}`;
+      g.name = `${label} — ${g.name}`;
+      allGroups.push(g);
+    }
+    elementCount += floor.walls.length + floor.columns.length + floor.stairs.length + floor.fixtures.length;
+
+    zOffset += floor.heightMeters;
+
+    // Inter-floor slab (acts as ceiling of below + floor of above).
+    // The roof above replaces the slab on top.
+    const isTop = i === sortedFloors.length - 1;
+    if (!isTop) {
+      const slab = makeGroupBuilder(
+        `group_slab_between_${floor.index}_${floor.index + 1}`,
+        `Slab — between ${label} and floor ${floor.index + 1}`,
+        scale,
+        "concrete_polished",
+      );
+      slab.addBox(0, 0, zOffset - 0.12, multi.bounds.width, multi.bounds.length, zOffset);
+      allGroups.push(slab.group);
+    }
+  }
+
+  // Roof — v1 always renders a flat slab with optional overhang and thickness.
+  // Pitched roof kinds are captured in the JSON for future use but currently
+  // assembled as a flat slab to keep geometry predictable.
+  const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
+  const overhang = roof.overhangMeters ?? 0;
+  const roofSlab = makeGroupBuilder(
+    "group_roof",
+    `Roof — ${roof.kind}`,
+    scale,
+    "concrete_polished",
+  );
+  roofSlab.addBox(
+    -overhang,
+    -overhang,
+    zOffset,
+    multi.bounds.width + overhang,
+    multi.bounds.length + overhang,
+    zOffset + roof.thicknessMeters,
+  );
+  allGroups.push(roofSlab.group);
+
+  return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount };
+}
+
 function emitDaeFromGroups(groups: Group[], outputUnits: "meters" | "feet") {
   const created = new Date().toISOString();
   const unitTag = outputUnits === "feet"
