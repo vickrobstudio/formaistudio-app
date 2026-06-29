@@ -11,6 +11,7 @@ import { useCredits } from "@/hooks/use-credits";
 import { generateFloor3D } from "@/lib/floor-3d.functions";
 import { buildMasterPrompt } from "@/lib/floor-3d-prompt.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
+import { extractFurnitureBounds } from "@/lib/floor-3d.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
