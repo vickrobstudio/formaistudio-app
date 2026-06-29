@@ -1981,6 +1981,47 @@ async function runMultiFloorBuilding(
   const objDataUrl = toDataUrl(obj, "model/obj");
   const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
 
+  // ── Per-floor exports ──────────────────────────────────────────────
+  // Build one .dae / .obj / .fbx per floor so the user can download the
+  // building in parts: ground floor (with site), each upper floor on its
+  // own, and the top floor includes the roof. Each part is a self-contained
+  // model placed at z=0 so it opens cleanly in SketchUp / Blender.
+  const sortedFloorsForParts = [...floorsForPlan].sort((a, b) => a.index - b.index);
+  const floorParts: Array<{
+    index: number;
+    label: string;
+    daeDataUrl: string;
+    objDataUrl: string;
+    fbxDataUrl: string;
+  }> = [];
+  for (let i = 0; i < sortedFloorsForParts.length; i++) {
+    const f = sortedFloorsForParts[i];
+    const isGround = i === 0;
+    const isTop = i === sortedFloorsForParts.length - 1;
+    const singleFloorPlan: MultiFloorBuildingPlan = {
+      kind: "multi_floor_building",
+      units: "meters",
+      bounds: assembledPlan.bounds,
+      floors: [{ ...f, index: 0 }], // re-index so geometry sits at z=0
+      roof: isTop ? assembledPlan.roof : undefined,
+    };
+    const { dae: partDae } = buildMultiFloorBuildingDae(singleFloorPlan, data.outputUnits, {
+      includeSite: isGround,
+      includeRoof: isTop,
+      includeInterFloorSlab: false,
+    });
+    const partGroups = parseDaeToTriangles(partDae);
+    const { obj: partObj } = trianglesToObj(partGroups);
+    const partFbx = trianglesToFbxAscii(partGroups);
+    floorParts.push({
+      index: f.index,
+      label: f.label,
+      daeDataUrl: `data:model/vnd.collada+xml;base64,${Buffer.from(partDae, "utf8").toString("base64")}`,
+      objDataUrl: toDataUrl(partObj, "model/obj"),
+      fbxDataUrl: toDataUrl(partFbx, "application/octet-stream"),
+    });
+  }
+
   // Return a flattened BuildingPlan stub so the existing client-side
   // summary keeps working. The actual geometry is in the .dae.
   const flat: BuildingPlan = {
@@ -2002,6 +2043,7 @@ async function runMultiFloorBuilding(
     subject: "building",
     outputUnits: data.outputUnits,
     plan: flat,
+    floorParts,
   };
 }
 
