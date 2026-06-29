@@ -64,6 +64,14 @@ const FloorTo3DInput = z.object({
             .max(50_000_000),
         })
         .optional(),
+      site: z
+        .object({
+          imageDataUrl: z
+            .string()
+            .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
+            .max(50_000_000),
+        })
+        .optional(),
       elevations: z
         .array(
           z.object({
