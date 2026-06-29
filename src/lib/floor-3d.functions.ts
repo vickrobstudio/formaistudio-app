@@ -203,6 +203,36 @@ const FurniturePlanSchema = z.object({
 type BuildingPlan = z.infer<typeof BuildingPlanSchema>;
 type FurniturePlan = z.infer<typeof FurniturePlanSchema>;
 
+const MultiFloorBuildingPlanSchema = z.object({
+  kind: z.literal("multi_floor_building"),
+  units: z.literal("meters"),
+  bounds: z.object({ width: z.number().positive(), length: z.number().positive() }),
+  floors: z
+    .array(
+      z.object({
+        index: z.number().int().min(0).max(20),
+        label: z.string().max(60).optional(),
+        heightMeters: z.number().min(1).max(10),
+        walls: z.array(WallSchema).min(0).max(600).default([]),
+        columns: z.array(ColumnSchema).max(200).default([]),
+        stairs: z.array(StairSchema).max(40).default([]),
+        fixtures: z.array(FixtureSchema).max(400).default([]),
+      }),
+    )
+    .min(1)
+    .max(10),
+  roof: z
+    .object({
+      kind: z.enum(["flat", "gable", "hip", "shed"]).default("flat"),
+      thicknessMeters: z.number().min(0.05).max(0.6).default(0.2),
+      overhangMeters: z.number().min(0).max(2).default(0.3).optional(),
+      ridgeHeightMeters: z.number().min(0).max(8).optional(),
+      ridgeAxis: z.enum(["x", "y"]).optional(),
+    })
+    .optional(),
+});
+type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
+
 type GenerateFloor3DResult =
   | { ok: true; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string; elementCount: number; subject: "building" | "furniture"; outputUnits: "meters" | "feet"; plan: BuildingPlan | FurniturePlan }
   | { ok: false; error: string };
