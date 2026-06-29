@@ -255,13 +255,13 @@ const MultiFloorBuildingPlanSchema = z.object({
 });
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
-// We use gemini-3.1-pro-preview for the per-floor + roof passes: it reasons
-// like a senior drafter (reads every printed dimension, cross-checks plans
-// against elevations, doesn't simplify). One image-set per call keeps total
-// latency under the Worker budget while we still run all floors in parallel.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 110_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 80_000;
-const BUILDING_ANALYSIS_MODEL = "google/gemini-3.1-pro-preview";
+// gpt-5.5-pro is the strongest plan-analyzing model available in the
+// gateway: extended reasoning, multimodal, never simplifies. One image set
+// per call keeps total latency under the Worker budget while we still run
+// all floors in parallel.
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 115_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 100_000;
+const BUILDING_ANALYSIS_MODEL = "openai/gpt-5.5-pro";
 
 type GenerateFloor3DResult =
   | {
