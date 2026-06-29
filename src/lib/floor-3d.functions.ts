@@ -2199,6 +2199,11 @@ async function runMultiFloorBuilding(
       console.error(`empty 3d output skipped for ${label}`);
       return;
     }
+    const validation = validateMeshGeometry(partGroups);
+    if (!validation.ok) {
+      console.error(`[${label}] geometry validation failed — skipping export: ${validation.reason}`);
+      return;
+    }
     const { obj: partObj } = trianglesToObj(partGroups);
     const partFbx = trianglesToFbxAscii(partGroups);
     floorParts.push({
