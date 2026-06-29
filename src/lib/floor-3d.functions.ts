@@ -262,9 +262,9 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 125_000;
 const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 110_000;
 const BUILDING_ANALYSIS_MODELS = [
-  "openai/gpt-5.4-pro",
   "google/gemini-3.1-pro-preview",
   "google/gemini-2.5-pro",
+  "google/gemini-3-flash-preview",
 ] as const;
 
 type GenerateFloor3DResult =
@@ -304,7 +304,7 @@ const ACCURACY_RULES = `ACCURACY IS CRITICAL:
 - Preserve every angle, alignment, parallel and perpendicular relationship.
 - Round to no more than 3 decimal meters; do not round entire dimensions to whole numbers.
 - Use a scale bar, grid or known reference if explicit dimensions are missing.
-- Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
+- Output compact/minified JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse. Do not pretty-print or add comments.`;
 
 function buildingInstruction(planUnits: z.infer<typeof PlanUnits>) {
   return `You are an architectural CAD vectorizer. Inspect the uploaded floor plan of a building (residential, office, retail, hospitality, industrial, etc.) and return STRICT JSON describing every wall.
@@ -386,6 +386,54 @@ Rules:
 - Roof shape MUST match the elevations exactly (flat, gable, hip, shed). Set "ridgeHeightMeters" and "ridgeAxis" so the resulting roof silhouette overlays the elevation 1:1.
 
 ${ACCURACY_RULES}`;
+}
+
+function parseJsonFromModelText(text: string): unknown {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const firstObject = cleaned.indexOf("{");
+    const firstArray = cleaned.indexOf("[");
+    const starts = [firstObject, firstArray].filter((i) => i >= 0);
+    const start = starts.length ? Math.min(...starts) : -1;
+    if (start < 0) throw new Error("No JSON object found");
+    const lastObject = cleaned.lastIndexOf("}");
+    const lastArray = cleaned.lastIndexOf("]");
+    const end = Math.max(lastObject, lastArray);
+    if (end <= start) throw new Error("No complete JSON object found");
+    return JSON.parse(cleaned.slice(start, end + 1));
+  }
+}
+
+function coerceFloorExtractionJson(raw: unknown): unknown {
+  if (Array.isArray(raw)) {
+    if (raw.length === 1 && raw[0] && typeof raw[0] === "object" && ("walls" in raw[0] || "columns" in raw[0])) {
+      return raw[0];
+    }
+    if (raw.every((item) => item && typeof item === "object" && ("x1" in item || "x2" in item || "openings" in item))) {
+      return { walls: raw, columns: [], stairs: [], fixtures: [] };
+    }
+  }
+  if (!raw || typeof raw !== "object") return raw;
+  const candidate = raw as Record<string, unknown>;
+  if (candidate.floor && typeof candidate.floor === "object") return coerceFloorExtractionJson(candidate.floor);
+  if (candidate.data && typeof candidate.data === "object") return coerceFloorExtractionJson(candidate.data);
+  const boundsHint = candidate.boundsHint;
+  if (boundsHint && typeof boundsHint === "object") {
+    const bounds = boundsHint as Record<string, unknown>;
+    const width = typeof bounds.width === "number" ? bounds.width : undefined;
+    const length = typeof bounds.length === "number" ? bounds.length : undefined;
+    if ((width !== undefined && width <= 0) || (length !== undefined && length <= 0)) {
+      const { boundsHint: _boundsHint, ...rest } = candidate;
+      return rest;
+    }
+  }
+  return candidate;
 }
 
 // Per-floor extractor. ONE floor plan image (plus optional secondary drawing
@@ -1830,8 +1878,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
 
     let parsed: unknown;
     try {
-      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-      parsed = JSON.parse(cleaned);
+      parsed = parseJsonFromModelText(text);
     } catch {
       return { ok: false, error: "The AI response was not valid JSON." };
     }
@@ -1905,8 +1952,7 @@ async function runMultiFloorBuilding(
           console.warn(`[${label}] response was TRUNCATED on ${model} (finish_reason=length) — increase max_tokens or split the work.`);
         }
         if (!text) throw new Error(`[${label}] empty response`);
-        const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-        return JSON.parse(cleaned);
+        return parseJsonFromModelText(text);
       } catch (error) {
         if (error instanceof DOMException && error.name === "TimeoutError") throw error;
         if ((error as { status?: number }).status) throw error;
@@ -1975,7 +2021,7 @@ async function runMultiFloorBuilding(
       attachImg(parts, elev.imageDataUrl, `elev_${facingName}_ref`);
     }
     try {
-      const json = await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS);
+      const json = coerceFloorExtractionJson(await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS));
       const parsed = floorExtractSchema.safeParse(json);
       if (!parsed.success) {
         console.error(`floor ${floor.index} schema invalid`, parsed.error.issues.slice(0, 3));
@@ -2282,8 +2328,7 @@ Rules:
     if (!text) return { ok: false, error: "The AI did not return dimensions." };
     let parsed: unknown;
     try {
-      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-      parsed = JSON.parse(cleaned);
+      parsed = parseJsonFromModelText(text);
     } catch {
       return { ok: false, error: "The AI response was not valid JSON." };
     }
