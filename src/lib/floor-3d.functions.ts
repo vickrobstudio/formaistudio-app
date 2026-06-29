@@ -1836,11 +1836,12 @@ async function runMultiFloorBuilding(
       headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
-        // Per-floor extraction is one image at a time, so we can afford the
-        // higher-fidelity model. This is the single biggest fidelity lever:
-        // 2.5-pro reads every printed dimension, every wall segment and
-        // every opening accurately; flash truncates and "simplifies".
-        model: "google/gemini-2.5-pro",
+        // The strongest available reasoning model. Acts as a senior drafter:
+        // reads every printed dimension, traces every wall, cross-checks
+        // floor plans against elevations and the site plan, and never
+        // simplifies or omits geometry. This is the single biggest fidelity
+        // lever in the entire pipeline.
+        model: BUILDING_ANALYSIS_MODEL,
         messages: [{ role: "user", content }],
         max_tokens: 12000,
         response_format: { type: "json_object" },
