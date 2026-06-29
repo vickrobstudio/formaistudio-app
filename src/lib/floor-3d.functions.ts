@@ -388,6 +388,54 @@ Rules:
 ${ACCURACY_RULES}`;
 }
 
+function parseJsonFromModelText(text: string): unknown {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const firstObject = cleaned.indexOf("{");
+    const firstArray = cleaned.indexOf("[");
+    const starts = [firstObject, firstArray].filter((i) => i >= 0);
+    const start = starts.length ? Math.min(...starts) : -1;
+    if (start < 0) throw new Error("No JSON object found");
+    const lastObject = cleaned.lastIndexOf("}");
+    const lastArray = cleaned.lastIndexOf("]");
+    const end = Math.max(lastObject, lastArray);
+    if (end <= start) throw new Error("No complete JSON object found");
+    return JSON.parse(cleaned.slice(start, end + 1));
+  }
+}
+
+function coerceFloorExtractionJson(raw: unknown): unknown {
+  if (Array.isArray(raw)) {
+    if (raw.length === 1 && raw[0] && typeof raw[0] === "object" && ("walls" in raw[0] || "columns" in raw[0])) {
+      return raw[0];
+    }
+    if (raw.every((item) => item && typeof item === "object" && ("x1" in item || "x2" in item || "openings" in item))) {
+      return { walls: raw, columns: [], stairs: [], fixtures: [] };
+    }
+  }
+  if (!raw || typeof raw !== "object") return raw;
+  const candidate = raw as Record<string, unknown>;
+  if (candidate.floor && typeof candidate.floor === "object") return coerceFloorExtractionJson(candidate.floor);
+  if (candidate.data && typeof candidate.data === "object") return coerceFloorExtractionJson(candidate.data);
+  const boundsHint = candidate.boundsHint;
+  if (boundsHint && typeof boundsHint === "object") {
+    const bounds = boundsHint as Record<string, unknown>;
+    const width = typeof bounds.width === "number" ? bounds.width : undefined;
+    const length = typeof bounds.length === "number" ? bounds.length : undefined;
+    if ((width !== undefined && width <= 0) || (length !== undefined && length <= 0)) {
+      const { boundsHint: _boundsHint, ...rest } = candidate;
+      return rest;
+    }
+  }
+  return candidate;
+}
+
 // Per-floor extractor. ONE floor plan image (plus optional secondary drawing
 // of the same floor) → JSON for just that floor. Running these in parallel
 // keeps each call small enough to finish well inside the worker timeout and
