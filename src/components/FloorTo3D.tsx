@@ -59,7 +59,7 @@ const information: ToolInfoSection[] = [
 
 type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 
-const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 70_000;
+const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 120_000;
 const BUILDING_IMAGE_MAX_DIMENSION = 2400;
 const BUILDING_IMAGE_JPEG_QUALITY = 0.88;
 
@@ -267,54 +267,68 @@ export function FloorTo3D() {
       let totalElements = 0;
       let firstError = "";
 
-      for (let index = 0; index < floors.length; index += 1) {
-        const floor = floors[index];
-        if (!floor) continue;
-        const isGround = index === 0;
-        const isTop = index === floors.length - 1;
-        const label = floor.label?.trim() || (isGround ? "Ground floor" : `Floor ${index}`);
-        setReconStatus(`Analyzing ${label} (${index + 1}/${floors.length})…`);
+      // Ordered sequence: SITE → FLOOR 1 → FLOOR 2 → … → ROOF.
+      // Each step is its own server call and produces its own downloadable
+      // file. 100% fidelity per piece — the AI reads only the drawings for
+      // the part it is building.
+      type Step =
+        | { kind: "site" }
+        | { kind: "floor"; index: number }
+        | { kind: "roof" };
+      const steps: Step[] = [];
+      if (sitePlan) steps.push({ kind: "site" });
+      for (let i = 0; i < floors.length; i += 1) steps.push({ kind: "floor", index: i });
+      const hasRoofData = roofPlans.length > 0 || elevations.length > 0;
+      if (hasRoofData) steps.push({ kind: "roof" });
+
+      const topIndex = floors.length - 1;
+
+      for (let s = 0; s < steps.length; s += 1) {
+        const step = steps[s];
+        const stepLabel = step.kind === "site" ? "Site" : step.kind === "roof" ? "Roof" : (floors[step.index].label?.trim() || (step.index === 0 ? "Ground floor" : `Floor ${step.index}`));
+        setReconStatus(`Building ${stepLabel} (${s + 1}/${steps.length})…`);
+
+        const floorForBounds = step.kind === "site" ? floors[0] : step.kind === "roof" ? floors[topIndex] : floors[step.index];
+        const scope: "site" | "floor" | "roof" = step.kind;
 
         try {
           const result = await withTimeout(generate({
             data: {
-              wallHeightMeters: floor.heightMeters || 2.7,
+              wallHeightMeters: floorForBounds.heightMeters || 2.7,
               planUnits,
               outputUnits,
               subject: "building",
               building: {
-                floors: [{ imageDataUrl: floor.imageDataUrl, imageDataUrl2: floor.imageDataUrl2, label, heightMeters: floor.heightMeters }],
-                roof: isTop && roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
-                site: isGround && sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
-                elevations: isTop ? elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })) : [],
+                scope,
+                floors: [{
+                  imageDataUrl: floorForBounds.imageDataUrl,
+                  imageDataUrl2: floorForBounds.imageDataUrl2,
+                  label: floorForBounds.label,
+                  heightMeters: floorForBounds.heightMeters,
+                }],
+                roof: step.kind === "roof" && roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
+                site: step.kind === "site" && sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
+                elevations: step.kind === "roof" ? elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })) : [],
               },
             },
-          }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${label} analysis took too long. Try a clearer cropped floor-plan image first, then add roof/elevations after the floor works.`);
+          }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${stepLabel} analysis took too long. Try a clearer cropped image.`);
 
-          if (!result.ok) {
-            firstError ||= result.error;
-            continue;
-          }
+          if (!result.ok) { firstError ||= result.error; continue; }
 
-          const part = result.floorParts?.[0] ?? {
-            index,
-            label,
-            daeDataUrl: result.daeDataUrl,
-            objDataUrl: result.objDataUrl,
-            fbxDataUrl: result.fbxDataUrl,
-          };
-          parts.push({ ...part, index, label });
+          const got = result.floorParts?.[0];
+          if (!got) { firstError ||= `${stepLabel} returned no model.`; continue; }
+          parts.push(got);
           totalElements += result.elementCount;
           setFloorParts([...parts]);
           setSummary({ count: totalElements, subject: "building", outputUnits });
         } catch (cause) {
-          firstError ||= cause instanceof Error ? cause.message : `${label} analysis failed.`;
+          firstError ||= cause instanceof Error ? cause.message : `${stepLabel} analysis failed.`;
           continue;
         }
       }
 
       if (parts.length === 0) { setError(firstError || "The drawings could not be analysed. Try clearer images with visible dimensions."); setStage("upload"); return; }
-      if (firstError) setError(`Some floors could not be analysed. ${parts.length} of ${floors.length} floor models are ready.`);
+      if (firstError) setError(`Some parts could not be analysed. ${parts.length} model${parts.length === 1 ? "" : "s"} ready.`);
       setDae(null);
       setObj(null);
       setFbx(null);
@@ -525,10 +539,13 @@ export function FloorTo3D() {
     const map = { dae: part.daeDataUrl, obj: part.objDataUrl, fbx: part.fbxDataUrl } as const;
     const href = map[downloadFormat];
     if (!href) return;
-    const num = String(part.index + 1).padStart(2, "0");
-    const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `floor-${num}`;
-    const suffix = part.index === 0 ? "_with-site" : isTop ? "_with-roof" : "";
-    downloadHref(href, `floor-${num}_${slug}${suffix}.${downloadFormat}`);
+    void isTop;
+    const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `part`;
+    let prefix: string;
+    if (part.index === -1) prefix = "00_site";
+    else if (part.index === 9999) prefix = "99_roof";
+    else prefix = `${String(part.index + 1).padStart(2, "0")}_floor`;
+    downloadHref(href, `${prefix}_${slug}.${downloadFormat}`);
   }
 
   async function reconstructMesh(urlOverride?: string) {
@@ -884,7 +901,7 @@ export function FloorTo3D() {
         {(dae || glb) && subject !== "building" && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
         {(dae || glb || obj || fbx || hasFloorExports) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : subject === "building" && floorParts.length > 0 ? `${floorParts.length} floor part${floorParts.length === 1 ? "" : "s"} · ${summary.outputUnits} · ground floor includes site, top floor includes roof` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : subject === "building" && floorParts.length > 0 ? `${floorParts.length} part${floorParts.length === 1 ? "" : "s"} · ${summary.outputUnits} · built in order — site, each floor, then roof — as separate files at 100% fidelity from your drawings` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
           <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
           <div className="mt-2 flex rounded-xl border border-foreground p-1">
             <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx && !hasFloorExports} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
@@ -892,14 +909,18 @@ export function FloorTo3D() {
             <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae && !hasFloorExports} onClick={() => setDownloadFormat("dae")}>.dae</Button>
           </div>
           {subject === "building" && floorParts.length > 0 ? <div className="mt-4 space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Download by floor</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Download by part — built in order</p>
             {floorParts.map((part, i) => {
               const isTop = i === floorParts.length - 1;
-              const num = String(part.index + 1).padStart(2, "0");
-              const title = part.label?.trim() || `Floor ${num}`;
-              const extra = part.index === 0 ? " + site" : isTop ? " + roof" : "";
-              return <Button key={part.index} variant="default" className="h-11 w-full justify-between" onClick={() => downloadFloorPart(part, isTop)}>
-                <span>Floor {num} — {title}{extra}</span>
+              let title: string;
+              if (part.index === -1) title = "Site";
+              else if (part.index === 9999) title = "Roof";
+              else {
+                const num = String(part.index + 1).padStart(2, "0");
+                title = `Floor ${num} — ${part.label?.trim() || `Floor ${num}`}`;
+              }
+              return <Button key={`${part.index}_${i}`} variant="default" className="h-11 w-full justify-between" onClick={() => downloadFloorPart(part, isTop)}>
+                <span>{title}</span>
                 <Download />
               </Button>;
             })}

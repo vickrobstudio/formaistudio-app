@@ -95,6 +95,11 @@ const FloorTo3DInput = z.object({
         .max(8)
         .default([])
         .optional(),
+      // Scope of THIS request — when present the server emits only the
+      // requested piece (site slab, a single floor, or the roof). The
+      // client orchestrates the four ordered calls (site → floors → roof)
+      // so each piece downloads as its own file.
+      scope: z.enum(["site", "floor", "roof"]).optional(),
     })
     .optional(),
 });
@@ -250,8 +255,10 @@ const MultiFloorBuildingPlanSchema = z.object({
 });
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 40_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 18_000;
+// Gemini 2.5 Pro is slower than flash but reads every dimension faithfully.
+// One image per call keeps total latency under the Worker budget.
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 100_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 60_000;
 
 type GenerateFloor3DResult =
   | {
@@ -1423,7 +1430,7 @@ function buildDae(
 function buildMultiFloorBuildingDae(
   multi: MultiFloorBuildingPlan,
   outputUnits: "meters" | "feet",
-  options: { includeSite?: boolean; includeRoof?: boolean; includeInterFloorSlab?: boolean } = {},
+  options: { includeSite?: boolean; includeRoof?: boolean; includeInterFloorSlab?: boolean; includeFloors?: boolean } = {},
 ): { dae: string; elementCount: number } {
   const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
   const allGroups: Group[] = [];
@@ -1432,6 +1439,7 @@ function buildMultiFloorBuildingDae(
   const includeSite = options.includeSite ?? true;
   const includeRoof = options.includeRoof ?? true;
   const includeInterFloorSlab = options.includeInterFloorSlab ?? true;
+  const includeFloors = options.includeFloors ?? true;
 
   // ── Site: ground slab + grass apron around the building footprint.
   // Both sit under a top-level "Site" group so they import as their own
@@ -1479,38 +1487,40 @@ function buildMultiFloorBuildingDae(
   let zOffset = 0;
   for (let i = 0; i < sortedFloors.length; i++) {
     const floor = sortedFloors[i];
-    const subPlan: BuildingPlan = {
-      kind: "building",
-      units: "meters",
-      bounds: multi.bounds,
-      walls: floor.walls,
-      columns: floor.columns,
-      stairs: floor.stairs,
-      fixtures: floor.fixtures,
-    };
-    const floorGroups = buildGroups(subPlan, floor.heightMeters, outputUnits)
-      // strip the per-floor slab and ceiling — multi-floor adds them explicitly
-      .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
-    const dzScaled = zOffset * scale;
     const floorNum = String(floor.index + 1).padStart(2, "0");
     const floorTitle = floor.label?.trim()
       ? `Floor ${floorNum} — ${floor.label.trim()}`
       : `Floor ${floorNum}`;
-    for (const g of floorGroups) {
-      for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
-      const category = categoryFor(g.id);
-      g.id = `f${floor.index}_${g.id}`;
-      g.parentPath = [floorTitle, category];
-      allGroups.push(g);
+    if (includeFloors) {
+      const subPlan: BuildingPlan = {
+        kind: "building",
+        units: "meters",
+        bounds: multi.bounds,
+        walls: floor.walls,
+        columns: floor.columns,
+        stairs: floor.stairs,
+        fixtures: floor.fixtures,
+      };
+      const floorGroups = buildGroups(subPlan, floor.heightMeters, outputUnits)
+        // strip the per-floor slab and ceiling — multi-floor adds them explicitly
+        .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
+      const dzScaled = zOffset * scale;
+      for (const g of floorGroups) {
+        for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
+        const category = categoryFor(g.id);
+        g.id = `f${floor.index}_${g.id}`;
+        g.parentPath = [floorTitle, category];
+        allGroups.push(g);
+      }
+      elementCount += floor.walls.length + floor.columns.length + floor.stairs.length + floor.fixtures.length;
     }
-    elementCount += floor.walls.length + floor.columns.length + floor.stairs.length + floor.fixtures.length;
 
     zOffset += floor.heightMeters;
 
     // Inter-floor slab (acts as ceiling of below + floor of above).
     // The roof above replaces the slab on top.
     const isTop = i === sortedFloors.length - 1;
-    if (!isTop && includeInterFloorSlab) {
+    if (includeFloors && !isTop && includeInterFloorSlab) {
       const slab = makeGroupBuilder(
         `group_slab_between_${floor.index}_${floor.index + 1}`,
         `Slab above ${floorTitle}`,
@@ -1526,6 +1536,8 @@ function buildMultiFloorBuildingDae(
   if (includeRoof) {
     const roof = multi.roof ?? { kind: "flat" as const, thicknessMeters: 0.2 };
     const overhang = roof.overhangMeters ?? 0;
+    // Roof-only export sits at z=0 so SketchUp/Blender open it cleanly.
+    const roofBase = includeFloors ? zOffset : 0;
     const roofSlab = makeGroupBuilder(
       "roof_slab",
       `Roof — ${roof.kind}`,
@@ -1535,13 +1547,14 @@ function buildMultiFloorBuildingDae(
     roofSlab.addBox(
       -overhang,
       -overhang,
-      zOffset,
+      roofBase,
       multi.bounds.width + overhang,
       multi.bounds.length + overhang,
-      zOffset + roof.thicknessMeters,
+      roofBase + roof.thicknessMeters,
     );
     roofSlab.group.parentPath = ["Roof"];
     allGroups.push(roofSlab.group);
+    elementCount += 1;
   }
 
   return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount };
@@ -1808,9 +1821,11 @@ async function runMultiFloorBuilding(
       headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
-        // Use the fast multimodal model for building extraction so the app
-        // returns before the server request timeout instead of spinning.
-        model: "google/gemini-3-flash-preview",
+        // Per-floor extraction is one image at a time, so we can afford the
+        // higher-fidelity model. This is the single biggest fidelity lever:
+        // 2.5-pro reads every printed dimension, every wall segment and
+        // every opening accurately; flash truncates and "simplifies".
+        model: "google/gemini-2.5-pro",
         messages: [{ role: "user", content }],
         max_tokens: 12000,
         response_format: { type: "json_object" },
@@ -1988,10 +2003,11 @@ async function runMultiFloorBuilding(
   const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
 
   // ── Per-floor exports ──────────────────────────────────────────────
-  // Build one .dae / .obj / .fbx per floor so the user can download the
-  // building in parts: ground floor (with site), each upper floor on its
-  // own, and the top floor includes the roof. Each part is a self-contained
-  // model placed at z=0 so it opens cleanly in SketchUp / Blender.
+  // Build separate .dae / .obj / .fbx files. The client orchestrates the
+  // ordered sequence: Site → Floor 1 → Floor 2 → … → Roof, each as its
+  // own request with `scope` set. We honor that scope here and emit ONLY
+  // the requested piece so each download is a clean self-contained model
+  // sitting at z=0 in SketchUp / Blender.
   const sortedFloorsForParts = [...floorsForPlan].sort((a, b) => a.index - b.index);
   const floorParts: Array<{
     index: number;
@@ -2000,32 +2016,72 @@ async function runMultiFloorBuilding(
     objDataUrl: string;
     fbxDataUrl: string;
   }> = [];
-  for (let i = 0; i < sortedFloorsForParts.length; i++) {
-    const f = sortedFloorsForParts[i];
-    const isGround = i === 0;
-    const isTop = i === sortedFloorsForParts.length - 1;
-    const singleFloorPlan: MultiFloorBuildingPlan = {
-      kind: "multi_floor_building",
-      units: "meters",
-      bounds: assembledPlan.bounds,
-      floors: [{ ...f, index: 0 }], // re-index so geometry sits at z=0
-      roof: isTop ? assembledPlan.roof : undefined,
-    };
-    const { dae: partDae } = buildMultiFloorBuildingDae(singleFloorPlan, data.outputUnits, {
-      includeSite: isGround,
-      includeRoof: isTop,
-      includeInterFloorSlab: false,
-    });
+  const emitPart = (
+    index: number,
+    label: string,
+    plan: MultiFloorBuildingPlan,
+    opts: { includeSite?: boolean; includeRoof?: boolean; includeFloors?: boolean; includeInterFloorSlab?: boolean },
+  ) => {
+    const { dae: partDae } = buildMultiFloorBuildingDae(plan, data.outputUnits, opts);
     const partGroups = parseDaeToTriangles(partDae);
     const { obj: partObj } = trianglesToObj(partGroups);
     const partFbx = trianglesToFbxAscii(partGroups);
     floorParts.push({
-      index: f.index,
-      label: f.label,
+      index,
+      label,
       daeDataUrl: `data:model/vnd.collada+xml;base64,${Buffer.from(partDae, "utf8").toString("base64")}`,
       objDataUrl: toDataUrl(partObj, "model/obj"),
       fbxDataUrl: toDataUrl(partFbx, "application/octet-stream"),
     });
+  };
+
+  const scope = building.scope;
+  if (scope === "site") {
+    // Site: ground slab + grass apron over the building footprint.
+    const plan: MultiFloorBuildingPlan = {
+      kind: "multi_floor_building",
+      units: "meters",
+      bounds: assembledPlan.bounds,
+      floors: [{ ...sortedFloorsForParts[0], index: 0 }],
+    };
+    emitPart(-1, "Site", plan, { includeSite: true, includeFloors: false, includeRoof: false, includeInterFloorSlab: false });
+  } else if (scope === "roof") {
+    // Roof-only: the roof slab over the building bounds at z=0.
+    const top = sortedFloorsForParts[sortedFloorsForParts.length - 1];
+    const plan: MultiFloorBuildingPlan = {
+      kind: "multi_floor_building",
+      units: "meters",
+      bounds: assembledPlan.bounds,
+      floors: [{ ...top, index: 0 }],
+      roof: assembledPlan.roof ?? { kind: "flat", thicknessMeters: 0.2 },
+    };
+    emitPart(9999, "Roof", plan, { includeSite: false, includeFloors: false, includeRoof: true, includeInterFloorSlab: false });
+  } else if (scope === "floor") {
+    // Single floor — no site, no roof bundled. Those come in their own calls.
+    for (const f of sortedFloorsForParts) {
+      const plan: MultiFloorBuildingPlan = {
+        kind: "multi_floor_building",
+        units: "meters",
+        bounds: assembledPlan.bounds,
+        floors: [{ ...f, index: 0 }],
+      };
+      emitPart(f.index, f.label, plan, { includeSite: false, includeFloors: true, includeRoof: false, includeInterFloorSlab: false });
+    }
+  } else {
+    // Legacy path: ground includes site, top includes roof.
+    for (let i = 0; i < sortedFloorsForParts.length; i++) {
+      const f = sortedFloorsForParts[i];
+      const isGround = i === 0;
+      const isTop = i === sortedFloorsForParts.length - 1;
+      const plan: MultiFloorBuildingPlan = {
+        kind: "multi_floor_building",
+        units: "meters",
+        bounds: assembledPlan.bounds,
+        floors: [{ ...f, index: 0 }],
+        roof: isTop ? assembledPlan.roof : undefined,
+      };
+      emitPart(f.index, f.label, plan, { includeSite: isGround, includeRoof: isTop, includeInterFloorSlab: false });
+    }
   }
 
   // Return a flattened BuildingPlan stub so the existing client-side
