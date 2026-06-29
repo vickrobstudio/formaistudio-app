@@ -2065,7 +2065,10 @@ async function runMultiFloorBuilding(
     units: "meters",
     bounds: { width: maxW, length: maxL },
     floors: floorsForPlan,
-    roof: roofResult?.roof ?? (hasRoofOrElev ? { kind: "hip", thicknessMeters: 0.2, overhangMeters: 0.4 } : undefined),
+    // If the AI couldn't read the roof, leave it undefined rather than
+    // invent a hip roof with an overhang. The exterior walls of the top
+    // floor will define the roof outline at zero overhang.
+    roof: roofResult?.roof,
   };
 
   const { dae, elementCount } = buildMultiFloorBuildingDae(assembledPlan, data.outputUnits);
