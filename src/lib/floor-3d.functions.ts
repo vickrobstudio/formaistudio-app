@@ -409,6 +409,55 @@ Rules:
 - Output JSON ONLY, no prose, no Markdown fences, parseable by JSON.parse.`;
 }
 
+// Per-floor SELF-CRITIQUE refinement. We feed the model:
+//   1) the original floor plan drawing(s)
+//   2) every elevation drawing (so it can cross-check opening counts and
+//      vertical positions on each facade)
+//   3) the JSON it produced in pass 1
+// and ask it to act as a strict reviewer: list every error (missing wall,
+// wrong length, missing window, wrong opening width or position, missing
+// column, etc.) and return a CORRECTED JSON. This is the single biggest
+// fidelity boost — it turns one "trust the model" pass into a true
+// extract-then-verify loop the way a human draftsperson would work.
+function refineFloorInstruction(
+  planUnits: z.infer<typeof PlanUnits>,
+  label: string,
+  heightMeters: number,
+  previousJson: string,
+) {
+  return `You are a STRICT architectural reviewer auditing your own previous extraction of floor "${label}" (floor-to-floor height ${heightMeters.toFixed(2)} m). You will receive:
+  1) The ORIGINAL floor plan drawing(s) — the ground truth for the footprint.
+  2) Every available ELEVATION drawing — the ground truth for facades (window count per facade, door positions, sill/head heights).
+  3) Your PREVIOUS extraction JSON for this floor.
+
+${PRINTED_UNITS_NOTE[planUnits]}
+
+Your job is to find every discrepancy between the previous JSON and the drawings, and return a CORRECTED JSON with the same shape (walls/columns/stairs/fixtures/boundsHint). Do NOT preserve the previous JSON as-is — re-trace the plan from scratch and use the previous JSON only as a starting checklist.
+
+AUDIT CHECKLIST — work through every item:
+- Count every exterior wall segment in the plan. Does the JSON contain that many exterior walls? Add missing ones, fix endpoints to match the drawing, remove duplicates.
+- Count every interior partition (rooms, closets, bathrooms, mechanical chases, hallways). Add any that are missing.
+- For EACH exterior facade, count windows and doors in the plan AND in the matching elevation. They MUST agree. If the elevation shows 5 windows on the north facade, the JSON must have 5 windows on the north exterior wall(s). Fix counts that disagree.
+- Verify each opening's WIDTH against printed dimensions (or pixel-accurate measurement against the drawing's scale) and its POSITION along the wall from (x1,y1). Fix any opening that does not match.
+- Verify sill/head heights from the elevations (windows usually sill ≈ 0.9 m, head ≈ 2.1 m unless the elevation shows otherwise).
+- Verify wall thicknesses, angles (preserve diagonals), columns (rectangular OR round → bounding rectangle), stairs (overall run + step count), and fixed fixtures (kitchen cabinets, bath fixtures, built-ins).
+- IGNORE MEP, door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks.
+
+ABSOLUTE FIDELITY RULES:
+- The drawings are the LAW. Where the previous JSON disagrees with the drawing, the drawing wins.
+- Never invent geometry that is not visible in the drawing.
+- Never omit geometry that IS visible in the drawing.
+- Output JSON ONLY, same shape as the per-floor extractor:
+{ "walls": [...], "columns": [...], "stairs": [...], "fixtures": [...], "boundsHint": { "width": <m>, "length": <m> } }
+
+PREVIOUS EXTRACTION (for review only — DO NOT trust it blindly):
+\`\`\`json
+${previousJson}
+\`\`\`
+
+${ACCURACY_RULES}`;
+}
+
 function buildingReferenceRenderingInstruction() {
   return `You are an architectural 3D reconstruction modeler. Inspect the uploaded finished architectural rendering / reference image and return STRICT JSON describing a clean simplified 3D building or interior model that can be exported as Collada .dae.
 
@@ -1735,7 +1784,7 @@ async function runMultiFloorBuilding(
         // small enough to finish inside the worker timeout.
         model: "google/gemini-2.5-pro",
         messages: [{ role: "user", content }],
-        max_tokens: 16000,
+        max_tokens: 32000,
         response_format: { type: "json_object" },
       }),
     });
@@ -1746,8 +1795,12 @@ async function runMultiFloorBuilding(
       (err as Error & { status?: number }).status = res.status;
       throw err;
     }
-    const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
     const text = payload.choices?.[0]?.message?.content?.trim();
+    const finishReason = payload.choices?.[0]?.finish_reason;
+    if (finishReason === "length") {
+      console.warn(`[${label}] response was TRUNCATED (finish_reason=length) — increase max_tokens or split the work.`);
+    }
     if (!text) throw new Error(`[${label}] empty response`);
     const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     return JSON.parse(cleaned);
@@ -1848,9 +1901,68 @@ async function runMultiFloorBuilding(
     return { ok: false, error: "The drawings could not be analysed. Try clearer images with visible dimensions." };
   }
 
+  // ───────────── REFINEMENT PASS ─────────────
+  // Re-run each floor through a strict self-critique that re-reads the plan +
+  // every elevation against the first-pass JSON and returns a corrected
+  // version. This is the single biggest fidelity improvement: it catches
+  // missing walls, miscounted windows, wrong opening widths, dropped
+  // columns/fixtures — all the things one-shot extraction silently misses.
+  const refinedFloors: FloorOut[] = await Promise.all(
+    goodFloors.map(async (floor): Promise<FloorOut> => {
+      const source = floors.find((f) => f.index === floor.index);
+      if (!source) return floor;
+      const previousJson = JSON.stringify(
+        {
+          walls: floor.walls,
+          columns: floor.columns,
+          stairs: floor.stairs,
+          fixtures: floor.fixtures,
+          boundsHint: floor.boundsHint,
+        },
+        null,
+        2,
+      );
+      const parts: Array<Record<string, unknown>> = [
+        {
+          type: "text",
+          text: refineFloorInstruction(data.planUnits, floor.label, floor.heightMeters, previousJson),
+        },
+        { type: "text", text: `ORIGINAL FLOOR PLAN — ${floor.label} (primary)` },
+      ];
+      attachImg(parts, source.imageDataUrl, `floor_${floor.index}_a`);
+      if (source.imageDataUrl2) {
+        parts.push({ type: "text", text: `ORIGINAL FLOOR PLAN — ${floor.label} (secondary)` });
+        attachImg(parts, source.imageDataUrl2, `floor_${floor.index}_b`);
+      }
+      // Attach every elevation so the reviewer can cross-check facade opening counts.
+      for (const elev of building.elevations ?? []) {
+        const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
+        parts.push({ type: "text", text: `ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""}` });
+        attachImg(parts, elev.imageDataUrl, `elev_${facingName}`);
+      }
+      try {
+        const json = await callJson(parts, `floor-${floor.index}-refine`);
+        const parsed = floorExtractSchema.safeParse(json);
+        if (!parsed.success) {
+          console.warn(`floor ${floor.index} refinement invalid — keeping pass-1 result`);
+          return floor;
+        }
+        return {
+          ...parsed.data,
+          index: floor.index,
+          label: floor.label,
+          heightMeters: floor.heightMeters,
+        };
+      } catch (e) {
+        console.warn(`floor ${floor.index} refinement failed — keeping pass-1 result`, e);
+        return floor;
+      }
+    }),
+  );
+
   // Compute overall bounds from each floor's boundsHint or wall extents.
   let maxW = 0, maxL = 0;
-  for (const f of goodFloors) {
+  for (const f of refinedFloors) {
     if (f.boundsHint) {
       maxW = Math.max(maxW, f.boundsHint.width);
       maxL = Math.max(maxL, f.boundsHint.length);
@@ -1864,7 +1976,7 @@ async function runMultiFloorBuilding(
   if (maxL < 1) maxL = 30;
 
   // Apply roof-pass overrides for per-floor heights when available.
-  const floorsForPlan = goodFloors
+  const floorsForPlan = refinedFloors
     .sort((a, b) => a.index - b.index)
     .map((f) => ({
       index: f.index,
