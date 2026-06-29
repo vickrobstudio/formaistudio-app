@@ -1788,6 +1788,52 @@ ${sceneTreeXml}
 </COLLADA>`;
 }
 
+// ── Mesh geometry validation ───────────────────────────────────────────
+// Refuses to export any DAE / OBJ / FBX whose triangles parse to an empty
+// or degenerate mesh: zero vertices, zero triangles, no finite coordinates,
+// or a zero-volume bounding box. Catches cases where the wall/floor data
+// parsed but the builder produced nothing renderable, so the user never
+// downloads a blank file.
+type MeshValidation = { ok: true } | { ok: false; reason: string };
+function validateMeshGeometry(
+  groups: Array<{ positions: Float32Array | number[]; indices: Uint32Array | number[] }>,
+): MeshValidation {
+  if (!groups || groups.length === 0) return { ok: false, reason: "no mesh groups" };
+  let totalVerts = 0;
+  let totalTris = 0;
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (const g of groups) {
+    const pos = g.positions;
+    const idx = g.indices;
+    const vCount = pos.length / 3;
+    const tCount = idx.length / 3;
+    totalVerts += vCount;
+    totalTris += tCount;
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+        return { ok: false, reason: "mesh contains non-finite vertex coordinates" };
+      }
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
+  }
+  if (totalVerts === 0) return { ok: false, reason: "mesh has 0 vertices" };
+  if (totalTris === 0) return { ok: false, reason: "mesh has 0 triangles" };
+  const dx = maxX - minX, dy = maxY - minY, dz = maxZ - minZ;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || !Number.isFinite(dz)) {
+    return { ok: false, reason: "mesh bounding box is not finite" };
+  }
+  // Allow flat plates (one zero extent) but reject a fully zero-volume bbox.
+  const nonZero = (dx > 1e-6 ? 1 : 0) + (dy > 1e-6 ? 1 : 0) + (dz > 1e-6 ? 1 : 0);
+  if (nonZero < 2) {
+    return { ok: false, reason: `degenerate bounding box ${dx.toFixed(4)} x ${dy.toFixed(4)} x ${dz.toFixed(4)}` };
+  }
+  return { ok: true };
+}
+
 export const generateFloor3D = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => FloorTo3DInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
@@ -1900,6 +1946,11 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
     const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
     const groups = parseDaeToTriangles(dae);
+    const validation = validateMeshGeometry(groups);
+    if (!validation.ok) {
+      console.error(`[single] geometry validation failed: ${validation.reason}`);
+      return { ok: false, error: `Generated 3D geometry was empty or degenerate (${validation.reason}). Try a clearer cropped reference image.` } as GenerateFloor3DResult;
+    }
     const { obj } = trianglesToObj(groups);
     const fbx = trianglesToFbxAscii(groups);
     const objDataUrl = toDataUrl(obj, "model/obj");
@@ -2197,6 +2248,11 @@ async function runMultiFloorBuilding(
     const partGroups = parseDaeToTriangles(partDae);
     if (partGroups.length === 0) {
       console.error(`empty 3d output skipped for ${label}`);
+      return;
+    }
+    const validation = validateMeshGeometry(partGroups);
+    if (!validation.ok) {
+      console.error(`[${label}] geometry validation failed — skipping export: ${validation.reason}`);
       return;
     }
     const { obj: partObj } = trianglesToObj(partGroups);
