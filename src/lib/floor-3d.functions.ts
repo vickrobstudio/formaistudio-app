@@ -1891,6 +1891,29 @@ async function runMultiFloorBuilding(
       parts.push({ type: "text", text: `SECONDARY DRAWING — same floor (${lbl})` });
       attachImg(parts, floor.imageDataUrl2, `floor_${floor.index}_b`);
     }
+    // Site plan — context only for the exterior envelope.
+    if (building.site?.imageDataUrl) {
+      parts.push({ type: "text", text: `SITE PLAN — context only, use to verify the exterior envelope and orientation of ${lbl}` });
+      attachImg(parts, building.site.imageDataUrl, `site`);
+    }
+    // OTHER floor plans — context only, for vertical alignment (stairs, columns, chases).
+    for (const other of floors) {
+      if (other.index === floor.index) continue;
+      const otherLbl = other.label?.trim() || (other.index === 0 ? "Ground floor" : `Floor ${other.index}`);
+      parts.push({ type: "text", text: `OTHER FLOOR PLAN — ${otherLbl} (context only, do NOT extract — use for stair/column/chase alignment with ${lbl})` });
+      attachImg(parts, other.imageDataUrl, `floor_${other.index}_ref`);
+    }
+    // Roof plan(s) — context only.
+    for (const [i, roof] of (building.roof ?? []).entries()) {
+      parts.push({ type: "text", text: `ROOF PLAN ${i + 1}${roof.label ? ` — ${roof.label}` : ""} (context only, do NOT extract walls — use to verify the exterior envelope of ${lbl})` });
+      attachImg(parts, roof.imageDataUrl, `roof_${i}_ref`);
+    }
+    // Elevations — vertical ground truth for openings on EACH exterior facade.
+    for (const elev of building.elevations ?? []) {
+      const facingName = { N: "North", S: "South", E: "East", W: "West", other: "Other" }[elev.facing];
+      parts.push({ type: "text", text: `ELEVATION — ${facingName}${elev.label ? ` (${elev.label})` : ""} — verify the openings on the ${facingName.toLowerCase()} exterior wall of ${lbl} against this drawing` });
+      attachImg(parts, elev.imageDataUrl, `elev_${facingName}_ref`);
+    }
     try {
       const json = await callJson(parts, `floor-${floor.index}`, BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS);
       const parsed = floorExtractSchema.safeParse(json);
