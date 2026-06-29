@@ -63,7 +63,7 @@ export function FloorTo3D() {
   // Multi-image building flow — one image per floor, optional roof plan,
   // multiple elevations. When the user uses this flow we skip the master
   // prompt + approval render and build the 3D model straight from drawings.
-  type FloorEntry = { imageDataUrl: string; label: string; heightMeters: number; fileName: string };
+  type FloorEntry = { imageDataUrl: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string };
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
   const [roofPlan, setRoofPlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
@@ -104,6 +104,7 @@ export function FloorTo3D() {
         imageDataUrl: url,
         label: prev.length === 0 ? "Ground floor" : `Floor ${prev.length}`,
         heightMeters: 2.7,
+        heightUnit: prev[prev.length - 1]?.heightUnit ?? "m",
         fileName: file.name,
       }]);
     }
