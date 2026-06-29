@@ -1819,9 +1819,11 @@ async function runMultiFloorBuilding(
       headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
-        // Use the fast multimodal model for building extraction so the app
-        // returns before the server request timeout instead of spinning.
-        model: "google/gemini-3-flash-preview",
+        // Per-floor extraction is one image at a time, so we can afford the
+        // higher-fidelity model. This is the single biggest fidelity lever:
+        // 2.5-pro reads every printed dimension, every wall segment and
+        // every opening accurately; flash truncates and "simplifies".
+        model: "google/gemini-2.5-pro",
         messages: [{ role: "user", content }],
         max_tokens: 12000,
         response_format: { type: "json_object" },
