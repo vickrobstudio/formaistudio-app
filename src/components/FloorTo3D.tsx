@@ -59,6 +59,18 @@ const information: ToolInfoSection[] = [
 
 type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 
+const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 70_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
 export function FloorTo3D() {
   const fileRef = useRef<HTMLInputElement>(null);
   const referenceRef = useRef<HTMLInputElement>(null);
@@ -226,37 +238,42 @@ export function FloorTo3D() {
         const label = floor.label?.trim() || (isGround ? "Ground floor" : `Floor ${index}`);
         setReconStatus(`Analyzing ${label} (${index + 1}/${floors.length})…`);
 
-        const result = await generate({
-          data: {
-            wallHeightMeters: floor.heightMeters || 2.7,
-            planUnits,
-            outputUnits,
-            subject: "building",
-            building: {
-              floors: [{ imageDataUrl: floor.imageDataUrl, imageDataUrl2: floor.imageDataUrl2, label, heightMeters: floor.heightMeters }],
-              roof: isTop && roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
-              site: isGround && sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
-              elevations: isTop ? elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })) : [],
+        try {
+          const result = await withTimeout(generate({
+            data: {
+              wallHeightMeters: floor.heightMeters || 2.7,
+              planUnits,
+              outputUnits,
+              subject: "building",
+              building: {
+                floors: [{ imageDataUrl: floor.imageDataUrl, imageDataUrl2: floor.imageDataUrl2, label, heightMeters: floor.heightMeters }],
+                roof: isTop && roofPlans.length ? roofPlans.map((r) => ({ imageDataUrl: r.imageDataUrl })) : undefined,
+                site: isGround && sitePlan ? { imageDataUrl: sitePlan.imageDataUrl } : undefined,
+                elevations: isTop ? elevations.map((e) => ({ imageDataUrl: e.imageDataUrl, facing: e.facing, label: e.label || undefined })) : [],
+              },
             },
-          },
-        });
+          }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${label} analysis took too long. Try a clearer cropped floor-plan image first, then add roof/elevations after the floor works.`);
 
-        if (!result.ok) {
-          firstError ||= result.error;
+          if (!result.ok) {
+            firstError ||= result.error;
+            continue;
+          }
+
+          const part = result.floorParts?.[0] ?? {
+            index,
+            label,
+            daeDataUrl: result.daeDataUrl,
+            objDataUrl: result.objDataUrl,
+            fbxDataUrl: result.fbxDataUrl,
+          };
+          parts.push({ ...part, index, label });
+          totalElements += result.elementCount;
+          setFloorParts([...parts]);
+          setSummary({ count: totalElements, subject: "building", outputUnits });
+        } catch (cause) {
+          firstError ||= cause instanceof Error ? cause.message : `${label} analysis failed.`;
           continue;
         }
-
-        const part = result.floorParts?.[0] ?? {
-          index,
-          label,
-          daeDataUrl: result.daeDataUrl,
-          objDataUrl: result.objDataUrl,
-          fbxDataUrl: result.fbxDataUrl,
-        };
-        parts.push({ ...part, index, label });
-        totalElements += result.elementCount;
-        setFloorParts([...parts]);
-        setSummary({ count: totalElements, subject: "building", outputUnits });
       }
 
       if (parts.length === 0) { setError(firstError || "The drawings could not be analysed. Try clearer images with visible dimensions."); setStage("upload"); return; }
