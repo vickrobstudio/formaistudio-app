@@ -259,8 +259,8 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 // gateway: extended reasoning, multimodal, never simplifies. One image set
 // per call keeps total latency under the Worker budget while we still run
 // all floors in parallel.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 170_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 140_000;
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 115_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 100_000;
 const BUILDING_ANALYSIS_MODEL = "openai/gpt-5.5-pro";
 
 type GenerateFloor3DResult =
