@@ -769,6 +769,35 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
+/**
+ * Tight bounding box of the actual exterior walls of a floor. Used everywhere
+ * we need a slab / ceiling / roof footprint so the geometry follows the real
+ * building outline instead of the AI-reported plan bounds (which often
+ * include the title block, the site, or the yard).
+ */
+function exteriorBounds(
+  walls: z.infer<typeof WallSchema>[],
+  fallback: { width: number; length: number },
+): { x0: number; y0: number; x1: number; y1: number } | null {
+  const exterior = walls.filter((w) => w.layer === "exterior");
+  const source = exterior.length ? exterior : walls;
+  if (!source.length) {
+    if (fallback.width > 0 && fallback.length > 0) {
+      return { x0: 0, y0: 0, x1: fallback.width, y1: fallback.length };
+    }
+    return null;
+  }
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const w of source) {
+    x0 = Math.min(x0, w.x1, w.x2);
+    y0 = Math.min(y0, w.y1, w.y2);
+    x1 = Math.max(x1, w.x1, w.x2);
+    y1 = Math.max(y1, w.y1, w.y2);
+  }
+  if (!isFinite(x0) || !isFinite(y0) || x1 - x0 < 0.1 || y1 - y0 < 0.1) return null;
+  return { x0, y0, x1, y1 };
+}
+
 function parseHexColor(hex?: string): [number, number, number] | undefined {
   if (!hex) return undefined;
   const clean = hex.replace(/^#/, "").trim();
