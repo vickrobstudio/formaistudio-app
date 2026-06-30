@@ -6,7 +6,7 @@ import { LoaderCircle, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-const HIDDEN_ROUTES = ["/", "/auth"];
+const HIDDEN_ROUTES = ["/"];
 
 export function GlobalAssistant() {
   const { pathname } = useLocation();
