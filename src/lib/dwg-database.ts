@@ -243,7 +243,7 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
 }
 
 function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
-  const type = String(e.type ?? e.entityType ?? "UNKNOWN");
+  const type = normalizeEntityType(e.type ?? e.entityType);
   const layer = String(e.layer ?? "0");
   const colorIndex = typeof e.colorIndex === "number" ? (e.colorIndex as number) : undefined;
 
@@ -326,6 +326,51 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
   }
 
   return base;
+}
+
+function normalizeEntityType(value: unknown): string {
+  const raw = String(value ?? "UNKNOWN");
+  const upper = raw.toUpperCase().replace(/^TYPE_/, "").replace(/^DWG_TYPE_/, "").replace(/_R11$/, "");
+  if (upper !== raw.toUpperCase()) return upper;
+
+  // LibreDWG frequently exposes DWG entity types as numeric constants.
+  // Convert the common architectural entity codes to the names the preview
+  // renderer understands; otherwise the upload produced a blank white PNG.
+  const code = typeof value === "number" ? value : /^\d+$/.test(raw) ? Number(raw) : NaN;
+  const acDbMap: Record<number, string> = {
+    1: "TEXT",
+    2: "ATTRIB",
+    3: "ATTDEF",
+    7: "INSERT",
+    8: "INSERT",
+    15: "POLYLINE",
+    16: "POLYLINE",
+    17: "ARC",
+    18: "CIRCLE",
+    19: "LINE",
+    20: "DIMENSION",
+    21: "DIMENSION",
+    22: "DIMENSION",
+    23: "DIMENSION",
+    24: "DIMENSION",
+    25: "DIMENSION",
+    26: "DIMENSION",
+    27: "POINT",
+    28: "3DFACE",
+    31: "SOLID",
+    32: "SOLID",
+    34: "VIEWPORT",
+    35: "ELLIPSE",
+    36: "SPLINE",
+    40: "LINE",
+    41: "LINE",
+    44: "MTEXT",
+    45: "LEADER",
+    47: "MLINE",
+    77: "LWPOLYLINE",
+    78: "HATCH",
+  };
+  return acDbMap[code] ?? upper;
 }
 
 /** Quick summary used in toasts / debug panes. */
@@ -476,7 +521,7 @@ export function rasterizeDatabase(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = "#000000";
-  ctx.lineWidth = 1;
+  ctx.lineWidth = Math.max(2, Math.round(Math.min(W, H) / 900));
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
