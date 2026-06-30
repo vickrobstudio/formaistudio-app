@@ -39,7 +39,7 @@ export function CommunityFeed() {
     else { await navigator.clipboard.writeText(window.location.href); setMessage("Link copied"); }
   }
 
-  return <main className="min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Community" title="Discover what others create" description="Explore public interiors, renderings and original furniture from the FormAI community." />
+  return <main className="min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Community" title="Architects of the world" description="3D worlds, photorealistic renderings, interiors and original furniture shared by architects, interior and furniture designers — human and god creators." />
     {message && <p role="status" className="mx-5 mb-4 rounded-xl border border-border px-4 py-3 text-xs">{message}</p>}
     <section className="mx-auto max-w-2xl pb-[calc(6rem+env(safe-area-inset-bottom))]">
       {isLoading && <p className="px-5 py-12 text-center text-sm text-muted-foreground">Loading the community…</p>}
