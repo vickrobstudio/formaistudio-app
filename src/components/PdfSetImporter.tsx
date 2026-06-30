@@ -326,7 +326,7 @@ export function PdfSetImporter({
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf,.pdf"
+          accept="application/pdf,.pdf,.dwg,.dxf"
           className="sr-only"
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void handleFile(f); }}
         />
