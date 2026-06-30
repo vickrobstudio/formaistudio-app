@@ -319,6 +319,7 @@ export function DetectionEditor({
   const [activeIndex, setActiveIndex] = useState<number>(floors[0]?.index ?? 0);
   const [progressLog, setProgressLog] = useState<string[]>([]);
   const [paintCategory, setPaintCategory] = useState<DetectedCategory | null>(null);
+  const [zoom, setZoom] = useState<number>(1);
 
   // Per-floor cached working data: line mask + canvas refs + dimensions.
   const workingRef = useRef<Record<number, { width: number; height: number; mask: Uint8Array }>>({});
