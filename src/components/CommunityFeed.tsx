@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Bookmark, Heart, MessageCircle, Send, Share } from "lucide-react";
+import { Bookmark, Box, Heart, ImageIcon, MessageCircle, Send, Share } from "lucide-react";
 import { useState } from "react";
 import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { addCreationComment, getPublicFeed, toggleCreationFavorite, toggleCreationLike } from "@/lib/feed.functions";
 import { useCredits } from "@/hooks/use-credits";
+import { FeedModelViewer } from "@/components/FeedModelViewer";
 
 export function CommunityFeed() {
   const queryClient = useQueryClient();
@@ -19,6 +20,8 @@ export function CommunityFeed() {
   const [commentFor, setCommentFor] = useState<string | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [message, setMessage] = useState("");
+  const [viewing3D, setViewing3D] = useState<Set<string>>(new Set());
+  const toggle3D = (id: string) => setViewing3D((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const action = useMutation({
     mutationFn: async ({ type, creationId }: { type: "like" | "favorite"; creationId: string }) => type === "like" ? like({ data: { creationId } }) : favorite({ data: { creationId } }),
     onSuccess: (_result, variables) => { setMessage(variables.type === "like" ? "Like updated" : "Library updated"); void queryClient.invalidateQueries({ queryKey: ["public-feed"] }); },
@@ -42,8 +45,24 @@ export function CommunityFeed() {
       {isLoading && <p className="px-5 py-12 text-center text-sm text-muted-foreground">Loading the community…</p>}
       {!isLoading && creations.length === 0 && <div className="px-5 py-12 text-center"><p className="text-xl font-light">The feed is ready</p><p className="mt-2 text-sm text-muted-foreground">Public creations shared by members will appear here.</p><Button asChild className="mt-6"><Link to="/create">Create the first piece</Link></Button></div>}
       {creations.map((creation) => <article key={creation.id} className="border-b border-border pb-7 mb-7">
-        <div className="flex items-center gap-3 px-5 pb-3"><Avatar><AvatarImage src={creation.creatorAvatarUrl ?? undefined} alt={`${creation.creatorName} profile photo`} className="object-cover" /><AvatarFallback>{creation.creatorName.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar><div><p className="text-sm font-semibold">{creation.creatorName}</p><p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{creation.creationType} · {new Date(creation.createdAt).toLocaleDateString()}</p></div></div>
-        <img src={creation.imageUrl} alt={creation.title} loading="lazy" className="aspect-[4/5] w-full object-cover" />
+        <div className="flex items-center gap-3 px-5 pb-3">
+          <Avatar><AvatarImage src={creation.creatorAvatarUrl ?? undefined} alt={`${creation.creatorName} profile photo`} className="object-cover" /><AvatarFallback>{creation.creatorName.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{creation.creatorName}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{creation.creationType} · {new Date(creation.createdAt).toLocaleDateString()}</p>
+          </div>
+          {creation.modelGlbUrl && <span className="rounded-full bg-foreground px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-background">3D</span>}
+        </div>
+        {viewing3D.has(creation.id) && creation.modelGlbUrl
+          ? <FeedModelViewer url={creation.modelGlbUrl} />
+          : <img src={creation.imageUrl} alt={creation.title} loading="lazy" className="aspect-[4/5] w-full object-cover" />}
+        {creation.modelGlbUrl && (
+          <div className="px-5 pt-3">
+            <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => toggle3D(creation.id)}>
+              {viewing3D.has(creation.id) ? <><ImageIcon />Show photo</> : <><Box />View architectural 3D project</>}
+            </Button>
+          </div>
+        )}
         <div className="flex items-center px-3 pt-2">
           <Button type="button" variant="ghost" size="icon" aria-label={`Like ${creation.title}`} onClick={() => action.mutate({ type: "like", creationId: creation.id })}><Heart /></Button>
           <Button type="button" variant="ghost" size="icon" aria-label={`Comment on ${creation.title}`} onClick={() => setCommentFor(commentFor === creation.id ? null : creation.id)}><MessageCircle /></Button>
