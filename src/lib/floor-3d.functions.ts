@@ -259,9 +259,12 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 // can be temporarily unavailable or rejected by the chat endpoint, so the
 // drafter pipeline automatically falls back instead of returning "could not be
 // analysed" for the whole drawing set.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 75_000;
-const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 55_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 75_000;
+// Per user request: NO TIME LIMIT for 3D model creation. We still pass a very
+// large abort signal so a hung socket eventually frees the worker, but it is
+// long enough (30 minutes) that the model is allowed to fully complete.
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 1_800_000;
+const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 1_800_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 1_800_000;
 const BUILDING_ANALYSIS_MODELS = [
   "google/gemini-3.1-pro-preview",
   "google/gemini-2.5-pro",
