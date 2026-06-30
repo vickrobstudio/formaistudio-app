@@ -15,6 +15,7 @@ import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
 import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
+import { DetectionEditor, type FloorDetection } from "@/components/DetectionEditor";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
@@ -144,6 +145,7 @@ export function FloorTo3D() {
   const [sitePlan, setSitePlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
   const [buildingSpec, setBuildingSpec] = useState<BuildingSpec>({ floors: [] });
+  const [detections, setDetections] = useState<Record<number, FloorDetection>>({});
   const floorInputRef = useRef<HTMLInputElement>(null);
   const floorInputIndex = useRef<number>(-1);
   const floorInputSlot = useRef<1 | 2>(1);
