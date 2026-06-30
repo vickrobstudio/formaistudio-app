@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { GlobalAssistant } from "@/components/GlobalAssistant";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -149,6 +150,7 @@ function RootComponent() {
       <div className="mx-auto w-full md:max-w-[520px] md:min-h-screen md:border-x md:border-border md:bg-background">
         <Outlet />
       </div>
+      <GlobalAssistant />
     </QueryClientProvider>
   );
 }
