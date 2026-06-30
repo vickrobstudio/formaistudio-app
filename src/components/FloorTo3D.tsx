@@ -658,7 +658,7 @@ export function FloorTo3D() {
       {subject === "building" && <>
         <div className="rounded-2xl border border-dashed border-foreground/30 bg-secondary/30 p-5">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Complete drawings set</p>
-          <p className="mt-1 text-xs text-muted-foreground">Upload one multi-page PDF with every architectural sheet — floor plans, roof, site, elevations. The AI focuses ONLY on architectural plan views and automatically ignores M.E.P. (mechanical, electrical, plumbing) sheets to extract walls, openings and heights for the 3D volumes.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Upload one drawings set — a PDF or DWG with every architectural sheet (floor plans, roof, site, elevations). The AI focuses ONLY on architectural plan views and automatically ignores M.E.P. (mechanical, electrical, plumbing) sheets to extract walls, openings and heights for the 3D volumes.</p>
           <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
             <span>{floors.length === 0 ? "Import architectural PDF or DWG" : "Import another complete drawings set"}</span><Upload />
           </Button>
