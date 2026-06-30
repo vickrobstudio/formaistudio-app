@@ -310,6 +310,56 @@ function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: n
   return { pixels, bbox: [minX, minY, maxX, maxY], touchedEdge };
 }
 
+/**
+ * Walk every background pixel of the line mask once and return every
+ * enclosed region — i.e. every connected component of "empty" pixels that
+ * does NOT touch the image edge. Each region is reported as a normalized
+ * polygon (axis-aligned bounding box) plus its pixel list so callers can
+ * paint it back on the canvas. Tiny regions and the giant outside region
+ * are filtered out.
+ */
+function detectEnclosedRegions(
+  mask: Uint8Array,
+  w: number,
+  h: number,
+  opts: { minAreaPx?: number; maxRegions?: number } = {},
+): Array<{ pixels: number[]; bbox: [number, number, number, number] }> {
+  const minArea = opts.minAreaPx ?? Math.max(120, Math.round(w * h * 0.00015));
+  const maxRegions = opts.maxRegions ?? 400;
+  const visited = new Uint8Array(w * h);
+  const regions: Array<{ pixels: number[]; bbox: [number, number, number, number] }> = [];
+  for (let p = 0; p < mask.length; p++) {
+    if (visited[p] || mask[p] === 1) continue;
+    // Iterative 4-connected flood fill from this background pixel.
+    const stack = [p];
+    const pixels: number[] = [];
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    let touchedEdge = false;
+    while (stack.length) {
+      const q = stack.pop()!;
+      if (visited[q]) continue;
+      visited[q] = 1;
+      if (mask[q] === 1) continue;
+      pixels.push(q);
+      const x = q % w, y = (q - x) / w;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchedEdge = true;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (x > 0) stack.push(q - 1);
+      if (x < w - 1) stack.push(q + 1);
+      if (y > 0) stack.push(q - w);
+      if (y < h - 1) stack.push(q + w);
+    }
+    if (touchedEdge) continue;          // skip the outside / unsealed regions
+    if (pixels.length < minArea) continue; // skip noise specks
+    regions.push({ pixels, bbox: [minX, minY, maxX, maxY] });
+    if (regions.length >= maxRegions) break;
+  }
+  // Largest regions first — rooms tend to be the biggest enclosures.
+  regions.sort((a, b) => b.pixels.length - a.pixels.length);
+  return regions;
+}
+
 export function DetectionEditor({
   floors,
   detections,
@@ -387,6 +437,7 @@ export function DetectionEditor({
     setBusyIndex(floor.index);
     try {
       let cleanedUrl = detections[floor.index]?.replannedDataUrl ?? "";
+      let didFreshClean = false;
       if (!cleanedUrl) {
         // 1. Render the source (PDF vectors or raster image) at high DPI so
         //    no line work is lost — we keep the EXACT original vectors.
@@ -409,20 +460,67 @@ export function DetectionEditor({
         const { dataUrl, width, height, mask } = await whiteToTransparentFromSource(canvas);
         cleanedUrl = dataUrl;
         workingRef.current[floor.index] = { width, height, mask };
-        pushLog(`${floor.label}: ready to paint. Pick a legend color and tap inside any enclosed black-line shape.`);
+        didFreshClean = true;
       } else if (!workingRef.current[floor.index]) {
         // Rebuild mask from saved cleaned image (after a refresh / first mount).
         const { width, height, mask } = await whiteToTransparentFromSource(cleanedUrl);
         workingRef.current[floor.index] = { width, height, mask };
       }
+      // Auto-detect enclosed shapes from the line mask: every connected
+      // background region that does NOT touch the image edge becomes a
+      // shape candidate (default category "room"). We only run this when
+      // the page was freshly cleaned and the user has no shapes yet, so
+      // we never overwrite manual paint work.
+      const existing = detections[floor.index]?.elements ?? [];
+      let elements = existing;
+      let paintedDataUrl = detections[floor.index]?.paintedDataUrl;
+      const work = workingRef.current[floor.index];
+      if (didFreshClean && existing.length === 0 && work) {
+        const regions = detectEnclosedRegions(work.mask, work.width, work.height);
+        pushLog(`${floor.label}: detected ${regions.length} enclosed shape${regions.length === 1 ? "" : "s"} from the line work.`);
+        if (regions.length > 0) {
+          const paint = document.createElement("canvas");
+          paint.width = work.width; paint.height = work.height;
+          const pctx = paint.getContext("2d");
+          if (pctx) {
+            const id = pctx.createImageData(work.width, work.height);
+            const baseColor = DEFAULT_COLORS.room;
+            const [r, g, b] = hexToRgb(baseColor);
+            const newElements: DetectedElement[] = [];
+            regions.forEach((reg, idx) => {
+              for (const p of reg.pixels) {
+                const i = p * 4;
+                id.data[i] = r; id.data[i + 1] = g; id.data[i + 2] = b; id.data[i + 3] = 200;
+              }
+              const [minX, minY, maxX, maxY] = reg.bbox;
+              newElements.push({
+                id: `auto-${Date.now()}-${idx}`,
+                category: "room",
+                label: `Room ${idx + 1}`,
+                polygon: [
+                  [minX / work.width, minY / work.height],
+                  [maxX / work.width, minY / work.height],
+                  [maxX / work.width, maxY / work.height],
+                  [minX / work.width, maxY / work.height],
+                ],
+                confidence: 0.9,
+              });
+            });
+            pctx.putImageData(id, 0, 0);
+            paintedDataUrl = paint.toDataURL("image/png");
+            elements = newElements;
+          }
+        }
+        pushLog(`${floor.label}: ready. Tap any shape to recolor it or pick a different category.`);
+      }
       onDetectionsChange({
         ...detections,
         [floor.index]: {
-          elements: detections[floor.index]?.elements ?? [],
+          elements,
           hidden: detections[floor.index]?.hidden ?? {},
           colors: { ...DEFAULT_COLORS, ...(detections[floor.index]?.colors ?? {}) },
           replannedDataUrl: cleanedUrl,
-          paintedDataUrl: detections[floor.index]?.paintedDataUrl,
+          paintedDataUrl,
           planWidthMeters: detections[floor.index]?.planWidthMeters,
           calibration: detections[floor.index]?.calibration,
         },
