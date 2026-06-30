@@ -1,18 +1,19 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Check, Download, ImagePlus, LoaderCircle, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Check, Download, ImagePlus, LoaderCircle, MousePointer2, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
-import { generateFloor3D, extractFurnitureBounds } from "@/lib/floor-3d.functions";
+import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor } from "@/lib/floor-3d.functions";
 import { buildMasterPrompt } from "@/lib/floor-3d-prompt.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
+import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
