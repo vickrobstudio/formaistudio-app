@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Paintbrush, Redo2, Sparkles, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
-import { streamImage } from "@/lib/stream-image";
+
+// pdf.js + tesseract.js are loaded lazily inside prepare() so they don't
+// inflate the initial bundle and never run on the server.
 
 export type FloorPlanInput = {
   index: number;
