@@ -19,7 +19,7 @@ function HomePage() {
     <section className="relative flex h-full w-full items-center justify-center overflow-hidden bg-white">
       <h1 className="sr-only">FormAI Studio</h1>
       <LandingPaintLogo />
-      <p className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-center text-base font-medium tracking-tight text-neutral-500 sm:text-xl md:text-2xl">
+      <p className="pointer-events-none absolute left-1/2 top-[max(2rem,env(safe-area-inset-top))] z-20 -translate-x-1/2 whitespace-nowrap text-center text-base font-medium tracking-tight text-neutral-500 sm:text-xl md:text-2xl">
         AI Architects Shaping the Form of the World
       </p>
       <Button asChild variant="studio" className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-10 min-w-36 -translate-x-1/2 border border-black bg-black text-white hover:bg-black/85">
