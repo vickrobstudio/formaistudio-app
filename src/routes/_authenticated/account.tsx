@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteMyAccount, getMyProfile, setMyAvatarPath, updateMyProfile } from "@/lib/profile.functions";
+import { useAssistantPrefs } from "@/lib/assistant-prefs";
 
 export const Route = createFileRoute("/_authenticated/account")({ component: AccountPage });
 
@@ -27,6 +28,7 @@ function AccountPage() {
   const [message, setMessage] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const shownUsername = username || profile?.username || "";
+  const { lang: aiLang, units: aiUnits, setLang: setAiLang, setUnits: setAiUnits } = useAssistantPrefs();
 
   async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -71,6 +73,32 @@ function AccountPage() {
       <label className="block text-xs"><span className="font-bold uppercase tracking-[0.14em]">Username</span><Input value={shownUsername} disabled={isLoading || busy} minLength={3} maxLength={30} autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(event) => setUsername(event.target.value)} placeholder="your-name" className="mt-2 h-12" /><span className="mt-2 block text-muted-foreground">Letters, numbers, hyphens and periods only. This name appears on feed posts.</span></label>
       <Button type="button" className="w-full" disabled={busy || !/^[A-Za-z0-9][A-Za-z0-9.-]{1,28}[A-Za-z0-9]$/.test(shownUsername)} onClick={() => void submitProfile()}>{busy ? <LoaderCircle className="animate-spin" /> : <UserRound />}Save profile</Button>
       <div className="organic-divider py-5"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Email</p><p className="mt-2 text-sm">{user.email}</p></div>
+      <div className="organic-divider py-5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">AI Architect</p>
+        <p className="mt-2 text-xs text-muted-foreground">Choose the language and measurement units the AI Architect uses everywhere in the app.</p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em]">Language</p>
+            <div className="mt-2 flex gap-2">
+              {(["en", "es"] as const).map((l) => (
+                <Button key={l} type="button" variant={aiLang === l ? "default" : "outline"} className="flex-1" onClick={() => setAiLang(l)}>
+                  {l === "en" ? "English" : "Español"}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em]">Units</p>
+            <div className="mt-2 flex gap-2">
+              {(["m", "ft"] as const).map((u) => (
+                <Button key={u} type="button" variant={aiUnits === u ? "default" : "outline"} className="flex-1" onClick={() => setAiUnits(u)}>
+                  {u === "m" ? "Meters" : "Feet"}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
       {message && <p role="status" className="text-xs text-muted-foreground">{message}</p>}
     </section>
     <section className="border-t border-destructive/40 py-8"><h2 className="text-sm font-semibold text-destructive">Delete account forever</h2><p className="mt-2 text-xs leading-5 text-muted-foreground">Permanently removes your account, cloud files, projects, creations, comments, likes and saved items. This cannot be undone.</p><Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Type DELETE" className="mt-4 h-12" /><Button type="button" variant="destructive" className="mt-3 w-full" disabled={busy || confirmation !== "DELETE"} onClick={() => void permanentlyDelete()}><Trash2 />Delete account forever</Button></section>
