@@ -211,6 +211,7 @@ export function FloorTo3D() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!isPdfFile(file)) { setError("Floor plans must be PDF. Export your drawing as PDF so the AI can read the vector lines."); return; }
     if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
     const url = await readFileAsDataUrl(file);
     const idx = floorInputIndex.current;
@@ -234,6 +235,7 @@ export function FloorTo3D() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (!files.length) return;
+    if (files.some((file) => !isPdfFile(file))) { setError("Roof plans must be PDF."); return; }
     if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
     const added: Array<{ imageDataUrl: string; fileName: string }> = [];
     for (const file of files) {
@@ -247,6 +249,7 @@ export function FloorTo3D() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!isPdfFile(file)) { setError("Site plans must be PDF."); return; }
     if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
     const url = await readFileAsDataUrl(file);
     setSitePlan({ imageDataUrl: url, fileName: file.name });
@@ -256,6 +259,7 @@ export function FloorTo3D() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (!files.length) return;
+    if (files.some((file) => !isPdfFile(file))) { setError("Elevations must be PDF."); return; }
     if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
     const cycle: ElevationEntry["facing"][] = ["N", "E", "S", "W", "other"];
     const added: ElevationEntry[] = [];
