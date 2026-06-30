@@ -1,90 +1,81 @@
 
-# 2D→3D flow restructure
+# Full floor-plan pipeline
 
-Rework `/2d-to-3d` so the AI assistant only appears during 3D generation, and the new first step after upload is automatic element detection that the user can recolor or replan before building.
+Goal: turn an uploaded PDF/PNG plan into a clean stack of labeled room polygons, wall/door/window vectors, and per-room masks, then feed that data into the existing 3D build.
 
-## New flow
+The existing code already covers some steps (PDF clean in `PdfSetImporter.tsx`, flood-fill bounding boxes in `DetectionEditor.tsx`, AI element detection in `floor-detect.functions.ts`). This plan replaces the rough pieces with a single coherent pipeline.
+
+## Pipeline stages
 
 ```text
-1. Upload plans + elevations
-2. AI autodetect elements         ← NEW first step (no chat yet)
-   - walls, doors, windows, rooms, stairs per floor
-   - returns labeled regions + bounding outlines per uploaded plan
-3. Review & adjust                 ← NEW
-   a. Filter / toggle detected elements (hide false positives)
-   b. Recolor per area / room type (kitchen, bath, bedroom, circulation…)
-   c. Or tap "Replan with AI" → AI redraws a simpler cleaned floor plan
-      the user can accept as the working plan
-4. Build 3D model
-5. Live 3D viewer + AI chat side-by-side  ← chat ONLY opens here
-   - user asks questions, tweaks heights/roof while watching the model render
+PDF/PNG
+  ↓ 1. Clean        (PdfSetImporter — keep, tighten)
+  ↓ 2. Vector pass  (NEW: pixel→line segments, Hough-style)
+  ↓ 3. Wall network (NEW: segment merge + thickness classify)
+  ↓ 4. Openings     (NEW: door arc + window double-line detection)
+  ↓ 5. Gap closure  (extend existing morphological close)
+  ↓ 6. Flood fill   (already in DetectionEditor — keep)
+  ↓ 7. Polygonize   (NEW: marching-squares + Douglas-Peucker on each region,
+                     replacing today's bounding-box output)
+  ↓ 8. Semantic AI  (extend floor-detect.functions.ts: send polygons +
+                     cropped masks, get {category,label,confidence} per region)
+  ↓ 9. Masks        (NEW: per-room PNG mask layer, stored on Detection state)
+  ↓ 10. 3D feed     (mesh-recon.functions.ts already accepts detection meta —
+                     wire wall network + room polygons through)
 ```
 
-The pre-build `BuildAssistant` panel and its "Open chat / Auto-detect" buttons are removed from the upload step.
+## File changes
 
-## UI changes
+- `src/lib/floor-pipeline.ts` (NEW) — pure client module orchestrating steps 2–7 + 9 on a canvas. Exports `runPipeline(canvas) → { walls, doors, windows, rooms: [{polygon, mask, bbox}] }`. Marching-squares + RDP polygon simplification, Hough-lite line detector, door-arc heuristic (quarter-circle inside wall break), window heuristic (two parallel short segments inside a wall break).
+- `src/lib/floor-classify.functions.ts` (NEW) — server fn. Takes the polygon list + a low-res annotated thumbnail; calls `google/gemini-3-flash-preview` with a strict JSON schema returning `{ id, category, label, confidence }[]`. Cheaper and more accurate than the current full-image free-form detect because the AI only labels regions we already extracted.
+- `src/components/DetectionEditor.tsx` — replace current `detectEnclosedRegions` bounding-box pass with `runPipeline` + `classifyRegions`. Render real polygons (SVG path), keep existing recolor/toggle UI. Each region carries `mask` for downstream use.
+- `src/components/PdfSetImporter.tsx` — minor: ensure cleaned canvas exports a high-contrast binary suitable for the vector pass (already close).
+- `src/lib/mesh-recon.functions.ts` — accept new `pipeline` payload `{ walls, openings, rooms }` and prefer it over pixel guessing when present. Backwards compatible.
+- `src/components/FloorTo3D.tsx` — forward `detections[i].pipeline` into the build call.
 
-- `FloorTo3D.tsx`
-  - Remove the `<BuildAssistant>` block that renders after floor uploads.
-  - Add a new `Step: Detect elements` card shown once ≥1 floor plan exists.
-    - Button: "Auto-detect elements". Calls a new server fn per plan.
-    - Result: thumbnail of each plan with detected items overlaid (SVG outlines + colored fills by category).
-  - Add a `DetectionEditor` panel:
-    - Left: per-floor plan with overlay; tap an element to toggle / recolor / relabel.
-    - Right: legend with category colors (editable color swatches) + visibility toggles.
-    - Action: "Replan with AI" → generates a clean simplified plan (PNG) the user can accept; accepted plan replaces that floor's `imageDataUrl` going into the 3D build.
-  - "Build 3D model" button stays, but is disabled until detection has run at least once.
-  - When build starts, render a new split layout: live 3D viewer (existing) on the left, `BuildChat` docked panel on the right (or bottom on mobile). Chat is gone otherwise.
-
-- `BuildAssistant.tsx`
-  - Rename surface to `BuildChat`; drop the collapsed "Open chat" card and the standalone "Auto-detect" button (autodetect moved to the dedicated step).
-  - Always-open dock variant used only inside the build/viewer screen.
-  - Continue attaching plan images to messages so the model has full context for questions during the build.
-
-## New server work
-
-- `src/lib/floor-detect.functions.ts` — `detectElements({ imageDataUrl })`
-  - Calls `google/gemini-3-flash-preview` with the plan image + structured `Output.object` schema:
-    - `elements: [{ id, category: 'wall'|'door'|'window'|'stair'|'room'|'fixture', label, polygon: [[x,y]…], confidence }]`
-    - normalized 0–1 coordinates.
-  - Returns a small JSON the client overlays as SVG on the original plan.
-
-- `src/lib/floor-replan.functions.ts` — `replanFloor({ imageDataUrl, edits })`
-  - Uses the image model (`google/gemini-3-pro-image` or current default) to generate a cleaned top-down line-drawing version of the plan, honoring user color/category edits.
-  - Returns a new data URL the user can accept as the working plan.
-
-Both functions read `LOVABLE_API_KEY` inside the handler via the existing `@/lib/ai-gateway.server` helper.
-
-## State shape additions (FloorTo3D)
+## State additions
 
 ```ts
-type Detection = {
-  elements: Array<{
-    id: string;
-    category: "wall"|"door"|"window"|"stair"|"room"|"fixture";
-    label: string;
-    polygon: Array<[number, number]>; // 0..1
-    color?: string;       // user override
-    hidden?: boolean;     // user toggle
-  }>;
+// in DetectionEditor / FloorTo3D
+type Region = {
+  id: string;
+  polygon: [number, number][];   // 0..1
+  mask: string;                  // dataURL of the room's binary mask
+  bbox: [number, number, number, number];
+  category: "room"|"wall"|"door"|"window"|"stair"|"fixture";
+  label: string;                 // "Kitchen", "Bath 1"…
+  confidence: number;
+  color?: string;
+  hidden?: boolean;
 };
-const [detections, setDetections] = useState<Record<number, Detection>>({});
-const [replanned, setReplanned] = useState<Record<number, string>>({}); // floorIdx → new dataUrl
+type Pipeline = {
+  walls: { a:[number,number]; b:[number,number]; thickness:number }[];
+  doors: { center:[number,number]; width:number; angle:number }[];
+  windows: { a:[number,number]; b:[number,number] }[];
+  rooms: Region[];
+};
 ```
 
-`buildFromDrawings` picks `replanned[i] ?? floors[i].imageDataUrl` as the plan to lift into 3D, and forwards detection metadata to the existing recon server fn so wall/door/window placement uses the cleaned data instead of pure pixel guessing.
+`pipeline` lives next to today's `elements` so existing manual recolor/toggle keeps working.
 
-## Build-time chat
+## Out of scope (this pass)
 
-- New `<BuildChatDock>` rendered only when `stage === "modeling"` or `"ready"`.
-- Same `useChat` transport as today, but opens automatically, sits next to the 3D viewer, and carries the detection JSON in `context` so questions like "make all bedroom walls 2.6 m" can be acted on as proposal patches.
+- BIM-grade IFC export.
+- Dimension OCR / numeric scale extraction.
+- Hatch/material classification (will use a flat per-category color until step 10 is wired).
+- Furniture instance segmentation — kept as a single "fixture" category from the AI step.
 
-## Out of scope
+## Risks
 
-- No backend persistence of detections (kept in component state per session).
-- No multi-user collaboration on the editor.
-- No change to the furniture / single-object flow on the same page.
+- Hough-lite on cleaned binary is heuristic; CAD plans with light hatching may produce noisy segments. Mitigation: pipeline is layered — even if wall vectorization is weak, flood-fill rooms (step 6–7) still produce usable polygons, and the AI classification step (8) labels them.
+- Door/window heuristic is the weakest link. We fall back to "wall break wider than X = door, narrower = window" when the arc isn't detected.
+- `google/gemini-3-flash-preview` JSON-mode is reliable for short schemas; we cap at 80 regions.
 
-## Open question
+## Implementation order
 
-The "Replan with AI" simplified plan: should the AI-generated cleaner plan fully **replace** the user's uploaded plan as the source for the 3D build, or only be shown as a visual reference while the original plan is still used? Default in this plan: replace, with an "Undo / use original" toggle.
+1. `floor-pipeline.ts` — get polygon extraction working in isolation (replace bounding boxes in DetectionEditor first; visible win immediately).
+2. `floor-classify.functions.ts` + DetectionEditor integration — rooms get real labels.
+3. Wall/door/window vector pass added to the same pipeline.
+4. Wire `pipeline` payload through `FloorTo3D` → `mesh-recon`.
+
+Each step ships independently; the UI keeps working between steps.
