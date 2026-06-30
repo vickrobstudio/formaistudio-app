@@ -2571,3 +2571,256 @@ Rules:
     if (!result.success) return { ok: false, error: "Dimensions returned by the AI were not valid." };
     return { ok: true, ...result.data };
   });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK & LIFT — auto-detect 2D elements, let the user recolor on the canvas,
+// then extrude each colored polygon into its own SketchUp-ready 3D group.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const MARK_LIFT_TYPES = ["wall", "door", "window", "floor", "roof", "fixture"] as const;
+export type MarkLiftType = (typeof MARK_LIFT_TYPES)[number];
+
+type MarkLiftSpec = {
+  label: string;        // group name in the .dae
+  height: number;       // metres
+  baseZ: number;        // metres (Z of bottom of the prism)
+  color: [number, number, number]; // sRGB 0..1
+  hex: string;          // for UI
+  material: MaterialId;
+};
+
+export const MARK_LIFT_SPECS: Record<MarkLiftType, MarkLiftSpec> = {
+  wall:    { label: "Walls",    height: 2.7,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#C8C8C8", material: "concrete_smooth" },
+  door:    { label: "Doors",    height: 2.1,  baseZ: 0,    color: [0.627, 0.322, 0.176], hex: "#A0522D", material: "wood_oak" },
+  window:  { label: "Windows",  height: 1.2,  baseZ: 0.9,  color: [0.529, 0.808, 0.922], hex: "#87CEEB", material: "glass_clear" },
+  floor:   { label: "Floor",    height: 0.15, baseZ: -0.15, color: [0.545, 0.451, 0.333], hex: "#8B7355", material: "concrete_polished" },
+  roof:    { label: "Roof",     height: 0.20, baseZ: 2.7,  color: [0.396, 0.263, 0.129], hex: "#654321", material: "wood_dark" },
+  fixture: { label: "Fixtures", height: 0.9,  baseZ: 0,    color: [0.749, 0.639, 0.486], hex: "#BFA37C", material: "wood_oak" },
+};
+
+const DetectInput = z.object({
+  imageDataUrl: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/)
+    .max(50_000_000),
+  imageWidth: z.number().positive(),
+  imageHeight: z.number().positive(),
+});
+
+const DetectedPolygon = z.object({
+  type: z.enum(MARK_LIFT_TYPES),
+  // Points in NORMALISED image coordinates 0..1 (origin top-left, y-down).
+  points: z.array(z.tuple([z.number(), z.number()])).min(3).max(200),
+  confidence: z.number().min(0).max(1).optional(),
+});
+const DetectedSchema = z.object({ polygons: z.array(DetectedPolygon).max(400) });
+
+export type DetectedFloorPolygon = z.infer<typeof DetectedPolygon> & { id: string };
+
+export const detectFloorElements = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => DetectInput.parse(input))
+  .handler(async ({ data }): Promise<
+    | { ok: true; polygons: DetectedFloorPolygon[] }
+    | { ok: false; error: string }
+  > => {
+    const key = process.env.LOVABLE_API_KEY;
+    if (!key) return { ok: false, error: "The detection service is unavailable." };
+
+    const instruction = `You are a professional architectural drafter analysing a 2D floor plan image.
+Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...]}.
+
+Rules:
+- Coordinates are NORMALISED 0..1 in the image's own pixel grid (x = left→right, y = top→bottom).
+- Polygons must be SIMPLE (no self-intersections) and listed clockwise OR counter-clockwise.
+- "wall" — the filled body of a wall, traced as a thin strip following the wall's full thickness. One polygon per wall segment.
+- "door" — the door SWING/opening rectangle in plan.
+- "window" — the window opening rectangle in plan.
+- "floor" — the outline of the floor slab (usually one big polygon).
+- "roof" — the outline of the roof projection if visible (otherwise omit).
+- "fixture" — fixed furniture / fixtures (sink, toilet, counter, stairs body, columns) as their plan footprint.
+- Cover every readable element. Do NOT add empty arrays, comments, or any field beyond the schema.
+- Return ONLY the JSON object.`;
+
+    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(5 * 60 * 1000),
+      body: JSON.stringify({
+        model: "google/gemini-2.5-pro",
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: instruction },
+            { type: "image_url", image_url: { url: data.imageDataUrl } },
+          ],
+        }],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!upstream.ok) {
+      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
+      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
+      const text = await upstream.text().catch(() => "");
+      console.error("[mark-lift] detect failed", upstream.status, text.slice(0, 300));
+      return { ok: false, error: "Could not analyse the drawing." };
+    }
+    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const text = payload.choices?.[0]?.message?.content?.trim();
+    if (!text) return { ok: false, error: "The AI did not return any elements." };
+    let parsed: unknown;
+    try { parsed = parseJsonFromModelText(text); } catch { return { ok: false, error: "The AI response was not valid JSON." }; }
+    const result = DetectedSchema.safeParse(parsed);
+    if (!result.success) {
+      console.error("[mark-lift] detect schema invalid", result.error.issues.slice(0, 5));
+      return { ok: false, error: "Detection returned an invalid shape. Try a clearer image." };
+    }
+    const polygons: DetectedFloorPolygon[] = result.data.polygons.map((p, i) => ({ ...p, id: `det_${i}` }));
+    return { ok: true, polygons };
+  });
+
+// ── Lift annotated polygons into a per-type grouped 3D model ────────────────
+
+const LiftPolygon = z.object({
+  id: z.string().max(40),
+  type: z.enum(MARK_LIFT_TYPES),
+  // Normalised 0..1 image coordinates.
+  points: z.array(z.tuple([z.number(), z.number()])).min(3).max(400),
+});
+const LiftInput = z.object({
+  label: z.string().max(60).default("Floor"),
+  imageWidth: z.number().positive(),
+  imageHeight: z.number().positive(),
+  // Real-world width of the plan in METRES (longer image side maps to this).
+  planWidthMeters: z.number().min(1).max(500).default(12),
+  outputUnits: z.enum(["meters", "feet"]).default("meters"),
+  wallHeightMeters: z.number().min(0.3).max(15).default(2.7),
+  polygons: z.array(LiftPolygon).min(1).max(800),
+});
+
+// Triangulate a simple polygon in 2D (x,y) and build a vertical prism between
+// z0 and z1. Side faces wind so the prism is closed and watertight.
+function extrudePolygonIntoGroup(
+  group: { positions: number[]; indices: number[] },
+  poly: Array<[number, number]>,
+  z0: number,
+  z1: number,
+  scale: number,
+) {
+  if (poly.length < 3) return;
+  const flat: number[] = [];
+  for (const [x, y] of poly) flat.push(x, y);
+  const tris = earcut(flat);
+  if (tris.length === 0) return;
+  const baseIndex = group.positions.length / 3;
+  // Bottom ring
+  for (const [x, y] of poly) group.positions.push(x * scale, y * scale, z0 * scale);
+  // Top ring
+  for (const [x, y] of poly) group.positions.push(x * scale, y * scale, z1 * scale);
+  const n = poly.length;
+  // Bottom (reversed for outward normal)
+  for (let i = 0; i < tris.length; i += 3) {
+    group.indices.push(baseIndex + tris[i + 2], baseIndex + tris[i + 1], baseIndex + tris[i]);
+  }
+  // Top
+  for (let i = 0; i < tris.length; i += 3) {
+    group.indices.push(baseIndex + n + tris[i], baseIndex + n + tris[i + 1], baseIndex + n + tris[i + 2]);
+  }
+  // Sides
+  for (let i = 0; i < n; i += 1) {
+    const a = baseIndex + i;
+    const b = baseIndex + ((i + 1) % n);
+    const c = baseIndex + n + ((i + 1) % n);
+    const d = baseIndex + n + i;
+    group.indices.push(a, b, c, a, c, d);
+  }
+}
+
+export const liftAnnotatedFloor = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => LiftInput.parse(input))
+  .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
+    const outputScale = data.outputUnits === "feet" ? 1 / 0.3048 : 1;
+    // Image px → metres, longer side maps to planWidthMeters.
+    const longer = Math.max(data.imageWidth, data.imageHeight);
+    const mPerPx = data.planWidthMeters / longer;
+    // The annotator's Y axis is top-down (image coords). Flip Y so the model
+    // sits in Z-up world space with +Y "up the page" the way SketchUp expects.
+    const toWorld = (pts: Array<[number, number]>): Array<[number, number]> =>
+      pts.map(([px, py]) => [px * data.imageWidth * mPerPx, (data.imageHeight - py * data.imageHeight) * mPerPx]);
+
+    // Bucket by type → one group per type.
+    const buckets = new Map<MarkLiftType, ReturnType<typeof makeGroupBuilder>>();
+    for (const t of MARK_LIFT_TYPES) {
+      const spec = MARK_LIFT_SPECS[t];
+      buckets.set(t, makeGroupBuilder(`mark_${t}`, spec.label, outputScale, spec.material, spec.color));
+    }
+
+    // Wall height override applies to walls AND shifts roof baseZ.
+    const wallH = data.wallHeightMeters;
+
+    for (const poly of data.polygons) {
+      const spec = MARK_LIFT_SPECS[poly.type];
+      const world = toWorld(poly.points);
+      const height = poly.type === "wall" ? wallH : spec.height;
+      const baseZ = poly.type === "roof" ? wallH : spec.baseZ;
+      const bucket = buckets.get(poly.type)!;
+      extrudePolygonIntoGroup(bucket.group, world, baseZ, baseZ + height, 1);
+      // Note: scale=1 here because makeGroupBuilder closure scales — but we
+      // bypass addCorners and push directly with outputScale already applied.
+    }
+
+    const groups: Group[] = [];
+    for (const t of MARK_LIFT_TYPES) {
+      const b = buckets.get(t)!;
+      if (b.group.positions.length) {
+        b.group.parentPath = [data.label.trim() || "Floor"];
+        groups.push(b.group);
+      }
+    }
+
+    if (groups.length === 0) {
+      return { ok: false, error: "No polygons could be lifted into 3D." };
+    }
+
+    const dae = emitDaeFromGroups(groups, data.outputUnits);
+    const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
+    const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
+    const tris = parseDaeToTriangles(dae);
+    const validation = validateMeshGeometry(tris);
+    if (!validation.ok) {
+      return { ok: false, error: `Lift produced an empty mesh (${validation.reason}).` };
+    }
+    const { obj } = trianglesToObj(tris);
+    const fbx = trianglesToFbxAscii(tris);
+    const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
+    const objDataUrl = toDataUrl(obj, "model/obj");
+    const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
+    const elementCount = data.polygons.length;
+    const floorPart = {
+      index: 0,
+      label: data.label.trim() || "Floor",
+      daeDataUrl,
+      objDataUrl,
+      fbxDataUrl,
+    };
+    // Minimal "plan" payload so the existing client paths that read .plan
+    // do not crash; the rich plan model is not needed for mark-and-lift.
+    const fauxPlan = {
+      kind: "building" as const,
+      bounds: { width: data.imageWidth * mPerPx, length: data.imageHeight * mPerPx, height: wallH },
+      walls: [],
+      columns: [],
+      stairs: [],
+      fixtures: [],
+    } as unknown as BuildingPlan;
+    return {
+      ok: true,
+      daeDataUrl,
+      objDataUrl,
+      fbxDataUrl,
+      elementCount,
+      subject: "building",
+      outputUnits: data.outputUnits,
+      plan: fauxPlan,
+      floorParts: [floorPart],
+    };
+  });
