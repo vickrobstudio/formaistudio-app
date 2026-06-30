@@ -16,6 +16,7 @@ import { Building3DViewer } from "@/components/Building3DViewer";
 import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
 import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
 import { DetectionEditor, type FloorDetection } from "@/components/DetectionEditor";
+import { PdfSetImporter, type PdfSetImportResult } from "@/components/PdfSetImporter";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
@@ -152,6 +153,7 @@ export function FloorTo3D() {
   const [detections, setDetections] = useState<Record<number, FloorDetection>>({});
   const [detectorOpen, setDetectorOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [pdfSetOpen, setPdfSetOpen] = useState(false);
   const detectorAutoOpened = useRef(false);
   const assistantAutoOpened = useRef(false);
   const floorInputRef = useRef<HTMLInputElement>(null);
