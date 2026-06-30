@@ -309,19 +309,12 @@ function isNoiseType(t: string): DwgPrecheckIssue["category"] | null {
 }
 
 export function precheckDrawing(db: DwgDatabaseLite): DwgPrecheckIssue[] {
-  const counts = new Map<DwgPrecheckIssue["category"], number>();
-  const bump = (c: DwgPrecheckIssue["category"]) => counts.set(c, (counts.get(c) ?? 0) + 1);
-  const layerByName = new Map(db.layers.map((l) => [l.name, l] as const));
-  // Walk every layout (model + paper) so a "clean" model space can't hide
-  // a paper-space full of titleblock text.
-  const all = db.layouts?.length ? db.layouts.flatMap((l) => l.entities) : db.entities;
-  for (const e of all) {
-    const noise = isNoiseType(e.type);
-    if (noise) { bump(noise); continue; }
-    const layer = layerByName.get(e.layer);
-    if (layer?.lineType && DASHED_LT_RE.test(layer.lineType)) bump("dashed_line");
-  }
-  return Array.from(counts.entries()).map(([category, count]) => ({ category, count }));
+  // Text, numbers, dimensions, leaders/arrows, hatches, block inserts and
+  // dashed/hidden/centerlines are silently filtered by `rasterizeDatabase`
+  // — so we no longer reject a DWG/DXF for containing them. Returning an
+  // empty list keeps the precheck API intact for callers.
+  void db; void DASHED_LT_RE; void isNoiseType;
+  return [];
 }
 
 export function describePrecheckIssues(issues: DwgPrecheckIssue[]): string {
