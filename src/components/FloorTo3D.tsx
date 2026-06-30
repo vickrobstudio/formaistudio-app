@@ -14,6 +14,7 @@ import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-reco
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
+import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
@@ -142,6 +143,7 @@ export function FloorTo3D() {
   const [roofPlans, setRoofPlans] = useState<Array<{ imageDataUrl: string; fileName: string }>>([]);
   const [sitePlan, setSitePlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
+  const [buildingSpec, setBuildingSpec] = useState<BuildingSpec>({ floors: [] });
   const floorInputRef = useRef<HTMLInputElement>(null);
   const floorInputIndex = useRef<number>(-1);
   const floorInputSlot = useRef<1 | 2>(1);
@@ -857,6 +859,22 @@ export function FloorTo3D() {
       </div>
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
+
+      {subject === "building" && floors.length > 0 && <BuildAssistant
+        floors={floors.map((f, i) => ({ index: i, label: f.label || `Floor ${i}`, heightM: f.heightMeters, hasPlan: Boolean(f.imageDataUrl) }))}
+        hasRoofPlans={roofPlans.length > 0}
+        hasElevations={elevations.length > 0}
+        spec={buildingSpec}
+        onSpecChange={(next) => {
+          setBuildingSpec(next);
+          // Apply per-floor wall heights, then fall back to the global wallHeightM.
+          setFloors((prev) => prev.map((f, i) => {
+            const perFloor = next.floors.find((x) => x.index === i)?.heightM;
+            const h = perFloor ?? next.wallHeightM;
+            return typeof h === "number" && h > 0 ? { ...f, heightMeters: Math.min(15, Math.max(0.3, h)) } : f;
+          }));
+        }}
+      />}
 
       {subject === "building" && <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={busy !== "" || floors.length === 0 || stage === "modeling" || stage === "ready"} onClick={() => void buildFromDrawings()}>
         <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlans.length ? ` + ${roofPlans.length} roof${roofPlans.length === 1 ? "" : "s"}` : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
