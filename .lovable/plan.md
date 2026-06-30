@@ -1,65 +1,90 @@
-## Goal
 
-Add a new "Mark & Lift" annotation workflow to the 2D-to-3D tool: AI auto-detects building elements on each uploaded floor plan, paints them as colored overlays, the user re-colors / fixes any regions, then we lift those colored masks into 3D groups — one editable group per color, with fixed heights per type.
+# 2D→3D flow restructure
 
-## User flow
+Rework `/2d-to-3d` so the AI assistant only appears during 3D generation, and the new first step after upload is automatic element detection that the user can recolor or replan before building.
 
-1. User uploads a floor plan (existing upload step).
-2. New "Detect elements" button appears next to each floor.
-3. AI returns segmentation: arrays of polygons + a type label per region (`wall`, `door`, `window`, `floor_slab`, `roof_outline`, `fixture`).
-4. Annotation canvas opens (overlay on the original drawing):
-   - Color palette on the right with the 5 element types (each has a fixed color + fixed height default).
-   - Click a polygon to recolor / reassign type.
-   - "Brush fix" tool to repaint regions the AI missed.
-   - Add / delete polygons with simple click-to-draw.
-5. User taps "Lift to 3D". We send the annotated polygon set (in plan-units, with type per polygon) to the server; server extrudes each type with its fixed height, returns one DAE group per color.
-6. Result opens in the existing `Building3DViewer` — groups already named and colored per element type, ready to download as `.dae`.
+## New flow
 
-## Fixed defaults (height + color per type)
+```text
+1. Upload plans + elevations
+2. AI autodetect elements         ← NEW first step (no chat yet)
+   - walls, doors, windows, rooms, stairs per floor
+   - returns labeled regions + bounding outlines per uploaded plan
+3. Review & adjust                 ← NEW
+   a. Filter / toggle detected elements (hide false positives)
+   b. Recolor per area / room type (kitchen, bath, bedroom, circulation…)
+   c. Or tap "Replan with AI" → AI redraws a simpler cleaned floor plan
+      the user can accept as the working plan
+4. Build 3D model
+5. Live 3D viewer + AI chat side-by-side  ← chat ONLY opens here
+   - user asks questions, tweaks heights/roof while watching the model render
+```
 
-| Type       | Height | Color    | Notes                                          |
-|------------|--------|----------|------------------------------------------------|
-| Walls      | 2.70 m | #C8C8C8  | Solid extrusion, openings subtracted           |
-| Doors      | 2.10 m | #A0522D  | Cut opening in walls; door leaf as own group   |
-| Windows    | 1.20 m | #87CEEB  | Sill 0.90 m; cut opening, glass pane group     |
-| Floor slab | 0.15 m | #8B7355  | Below walls; from outline polygon              |
-| Roof       | 0.20 m | #654321  | Flat slab on top of topmost floor              |
-| Fixtures   | 0.90 m | #BFA37C  | Placeholder block per polygon                  |
+The pre-build `BuildAssistant` panel and its "Open chat / Auto-detect" buttons are removed from the upload step.
 
-## Technical details
+## UI changes
 
-**New server function** `src/lib/floor-3d-segment.functions.ts`
-- `detectFloorElements({ imageDataUrl, planUnits })` → `{ polygons: Array<{ id, type, points: [x,y][], confidence }> , imageWidth, imageHeight, scale }`
-- Calls Lovable AI Gateway with `google/gemini-2.5-flash-image` using the prompt:
-  *"Return JSON polygons for: walls (centerlines as thick polylines), doors, windows, floor outline, roof outline, fixtures. Coordinates normalized 0-1."*
-- Strict JSON via `Output.object` zod schema.
+- `FloorTo3D.tsx`
+  - Remove the `<BuildAssistant>` block that renders after floor uploads.
+  - Add a new `Step: Detect elements` card shown once ≥1 floor plan exists.
+    - Button: "Auto-detect elements". Calls a new server fn per plan.
+    - Result: thumbnail of each plan with detected items overlaid (SVG outlines + colored fills by category).
+  - Add a `DetectionEditor` panel:
+    - Left: per-floor plan with overlay; tap an element to toggle / recolor / relabel.
+    - Right: legend with category colors (editable color swatches) + visibility toggles.
+    - Action: "Replan with AI" → generates a clean simplified plan (PNG) the user can accept; accepted plan replaces that floor's `imageDataUrl` going into the 3D build.
+  - "Build 3D model" button stays, but is disabled until detection has run at least once.
+  - When build starts, render a new split layout: live 3D viewer (existing) on the left, `BuildChat` docked panel on the right (or bottom on mobile). Chat is gone otherwise.
 
-**New server function** `liftAnnotatedFloor({ floor, polygons, planScale })`
-- For each `wall` polygon: extrude prism (thickness 0.15 m, height per type), boolean-subtract door/window openings that fall inside.
-- For each `door`/`window`: extrude rectangular block at sill height.
-- For `floor_slab` / `roof`: extrude thin slab.
-- For `fixture`: extrude bbox block.
-- Group by type → produce one `<library_geometries>` + `<node>` per group, color set from the table above (writes `<color sid="diffuse">` in the effect).
-- Reuse existing DAE writer in `src/lib/mesh-export.server.ts` if possible; otherwise add a small helper that emits the per-group nodes.
+- `BuildAssistant.tsx`
+  - Rename surface to `BuildChat`; drop the collapsed "Open chat" card and the standalone "Auto-detect" button (autodetect moved to the dedicated step).
+  - Always-open dock variant used only inside the build/viewer screen.
+  - Continue attaching plan images to messages so the model has full context for questions during the build.
 
-**New component** `src/components/FloorAnnotator.tsx`
-- Renders the floor image in an SVG overlay (1:1 with image natural size, fit to container).
-- Polygons are SVG `<polygon>` with fill = type color, opacity 0.45.
-- Right panel: type palette (radio-style). Selecting a type then clicking a polygon recolors it.
-- Tools: `Select` (default), `Brush` (click-and-drag to draw new polygon), `Delete` (click polygon to remove).
-- State held locally; emits the final polygon list on "Lift to 3D".
+## New server work
 
-**FloorTo3D wiring** `src/components/FloorTo3D.tsx`
-- Per floor entry add `polygons?: Polygon[]` plus `detected: boolean`.
-- New row of buttons under each floor: `Detect elements` → calls `detectFloorElements`, opens `FloorAnnotator` modal.
-- After annotation save: store polygons on the floor.
-- In `buildFromDrawings`: if a floor has `polygons`, call new `liftAnnotatedFloor` server fn instead of the existing `generateFloor3D` for that step. Falls back to the existing pipeline if no annotation.
+- `src/lib/floor-detect.functions.ts` — `detectElements({ imageDataUrl })`
+  - Calls `google/gemini-3-flash-preview` with the plan image + structured `Output.object` schema:
+    - `elements: [{ id, category: 'wall'|'door'|'window'|'stair'|'room'|'fixture', label, polygon: [[x,y]…], confidence }]`
+    - normalized 0–1 coordinates.
+  - Returns a small JSON the client overlays as SVG on the original plan.
 
-**Viewer**
-- `Building3DViewer` already supports per-group color and visibility. No changes needed — the new DAE already carries the right group names (`Walls`, `Doors`, `Windows`, `Floor`, `Roof`, `Fixtures`) and diffuse colors.
+- `src/lib/floor-replan.functions.ts` — `replanFloor({ imageDataUrl, edits })`
+  - Uses the image model (`google/gemini-3-pro-image` or current default) to generate a cleaned top-down line-drawing version of the plan, honoring user color/category edits.
+  - Returns a new data URL the user can accept as the working plan.
 
-## Out of scope (this turn)
+Both functions read `LOVABLE_API_KEY` inside the handler via the existing `@/lib/ai-gateway.server` helper.
 
-- Door/window cutting via real CSG (we use additive blocks + an opening box subtracted only when straightforward; complex CSG can come later).
-- Multi-image fusion (only the first image per floor is annotated; secondary images remain reference for the AI-only path).
-- AI-inferred dimensions — we keep "Fixed defaults per type" as the user chose.
+## State shape additions (FloorTo3D)
+
+```ts
+type Detection = {
+  elements: Array<{
+    id: string;
+    category: "wall"|"door"|"window"|"stair"|"room"|"fixture";
+    label: string;
+    polygon: Array<[number, number]>; // 0..1
+    color?: string;       // user override
+    hidden?: boolean;     // user toggle
+  }>;
+};
+const [detections, setDetections] = useState<Record<number, Detection>>({});
+const [replanned, setReplanned] = useState<Record<number, string>>({}); // floorIdx → new dataUrl
+```
+
+`buildFromDrawings` picks `replanned[i] ?? floors[i].imageDataUrl` as the plan to lift into 3D, and forwards detection metadata to the existing recon server fn so wall/door/window placement uses the cleaned data instead of pure pixel guessing.
+
+## Build-time chat
+
+- New `<BuildChatDock>` rendered only when `stage === "modeling"` or `"ready"`.
+- Same `useChat` transport as today, but opens automatically, sits next to the 3D viewer, and carries the detection JSON in `context` so questions like "make all bedroom walls 2.6 m" can be acted on as proposal patches.
+
+## Out of scope
+
+- No backend persistence of detections (kept in component state per session).
+- No multi-user collaboration on the editor.
+- No change to the furniture / single-object flow on the same page.
+
+## Open question
+
+The "Replan with AI" simplified plan: should the AI-generated cleaner plan fully **replace** the user's uploaded plan as the source for the 3D build, or only be shown as a visual reference while the original plan is still used? Default in this plan: replace, with an "Undo / use original" toggle.
