@@ -23,6 +23,8 @@ export type FeedCreation = {
   creationType: string;
   createdAt: string;
   likeCount: number;
+  modelGlbUrl: string | null;
+  modelUsdzUrl: string | null;
   comments: Array<{ id: string; authorName: string; body: string; createdAt: string }>;
 };
 
@@ -30,7 +32,7 @@ export const getPublicFeed = createServerFn({ method: "GET" }).handler(async () 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: creations, error } = await supabaseAdmin
     .from("public_creations")
-    .select("id,user_id,creator_name,title,description,image_url,creation_type,created_at")
+    .select("id,user_id,creator_name,title,description,image_url,creation_type,created_at,model_glb_path,model_usdz_path")
     .eq("is_public", true)
     .order("created_at", { ascending: false })
     .limit(30);
@@ -52,6 +54,17 @@ export const getPublicFeed = createServerFn({ method: "GET" }).handler(async () 
     if (signed.data?.signedUrl) avatarUrls.set(profile.id, signed.data.signedUrl);
   }));
 
+  const modelUrls = new Map<string, { glb: string | null; usdz: string | null }>();
+  await Promise.all(creations.map(async (creation) => {
+    const glb = creation.model_glb_path
+      ? (await supabaseAdmin.storage.from("user-outputs").createSignedUrl(creation.model_glb_path, 3_600)).data?.signedUrl ?? null
+      : null;
+    const usdz = creation.model_usdz_path
+      ? (await supabaseAdmin.storage.from("user-outputs").createSignedUrl(creation.model_usdz_path, 3_600)).data?.signedUrl ?? null
+      : null;
+    modelUrls.set(creation.id, { glb, usdz });
+  }));
+
   return creations.map((creation) => ({
     id: creation.id,
     creatorName: profiles?.find((profile) => profile.id === creation.user_id)?.username ?? creation.creator_name,
@@ -62,6 +75,8 @@ export const getPublicFeed = createServerFn({ method: "GET" }).handler(async () 
     creationType: creation.creation_type,
     createdAt: creation.created_at,
     likeCount: likes?.filter((like) => like.creation_id === creation.id).length ?? 0,
+    modelGlbUrl: modelUrls.get(creation.id)?.glb ?? null,
+    modelUsdzUrl: modelUrls.get(creation.id)?.usdz ?? null,
     comments: (comments ?? []).filter((comment) => comment.creation_id === creation.id).slice(-3).map((comment) => ({ id: comment.id, authorName: comment.author_name, body: comment.body, createdAt: comment.created_at })),
   }));
 });
