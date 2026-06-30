@@ -928,10 +928,13 @@ export function FloorTo3D() {
             <span>{subject === "furniture" ? "Approve & reconstruct 3D mesh (.glb)" : "Approve & build 3D model"}</span>
             <Check />
           </Button>}
-          {subject !== "furniture" && renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
-            <span>Reconstruct real 3D mesh from rendering (.glb)</span>
-            <Sparkles />
-          </Button>}
+          {subject !== "furniture" && renderFinal && stage !== "modeling" && stage !== "ready" && <details className="mt-2">
+            <summary className="cursor-pointer select-none px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">More options</summary>
+            <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
+              <span>Reconstruct as textured mesh (.glb)</span>
+              <Sparkles />
+            </Button>
+          </details>}
         </>}
       </>}
 
