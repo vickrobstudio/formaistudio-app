@@ -89,13 +89,15 @@ export function PdfSetImporter({
         const thumb = await renderPage(pdf as never, i, 360);
         // eslint-disable-next-line no-await-in-loop
         const hiRes = await renderPage(pdf as never, i, 2200);
-        next.push({
-          pageIndex: i,
-          thumbDataUrl: thumb,
-          hiResDataUrl: hiRes,
-          role: { kind: "floor", order: floorCounter, label: floorCounter === 0 ? "Ground floor" : `Floor ${floorCounter}` },
-        });
-        floorCounter++;
+        // Pull the page's text layer to auto-classify the sheet. We focus
+        // ONLY on architectural plan views and ignore M.E.P. (mechanical,
+        // electrical, plumbing), structural-only and detail sheets.
+        // eslint-disable-next-line no-await-in-loop
+        const textContent = await (await pdf.getPage(i)).getTextContent();
+        const text = (textContent.items as Array<{ str?: string }>).map((it) => it.str ?? "").join(" ").toLowerCase();
+        const role = classifySheet(text, floorCounter);
+        if (role.kind === "floor") floorCounter++;
+        next.push({ pageIndex: i, thumbDataUrl: thumb, hiResDataUrl: hiRes, role });
         setProgress({ done: i, total: pdf.numPages });
       }
       setPages(next);
