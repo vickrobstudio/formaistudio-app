@@ -354,6 +354,19 @@ export function PdfSetImporter({
       </DialogHeader>
 
       {pages.length === 0 && <div>
+        <div className="mb-3 rounded-lg border border-foreground/20 bg-secondary/40 p-3 text-[11px] leading-relaxed">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">DWG / DXF preparation rules</p>
+          <p className="mt-1 text-muted-foreground">The file must be a clean line drawing. The importer runs a strict pre-check and rejects anything noisy.</p>
+          <ul className="mt-2 space-y-1 list-disc pl-4">
+            <li>One layout per floor — Model = ground floor, Layout1 = floor 1, Layout2 = floor 2…</li>
+            <li>Only simple solid wall lines (LINE / LWPOLYLINE / POLYLINE / ARC / CIRCLE).</li>
+            <li>No text, no numbers, no room labels, no titleblock — purge TEXT, MTEXT, ATTRIB.</li>
+            <li>No dimensions, leaders or callouts — purge DIMENSION, LEADER, MLEADER.</li>
+            <li>No hatches or solid fills — purge HATCH, SOLID.</li>
+            <li>No block inserts (furniture, doors, fixtures, north arrow) — explode + erase.</li>
+            <li>No dashed / hidden / centerlines — set every layer linetype to Continuous.</li>
+          </ul>
+        </div>
         <input
           ref={inputRef}
           type="file"
