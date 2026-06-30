@@ -980,7 +980,7 @@ export function FloorTo3D() {
           : floors.length === 0
             ? "Add at least one floor plan"
             : !hasDetections
-              ? "Auto-detect every floor before building"
+              ? "Paint at least one line on every floor before building"
               : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlans.length ? ` + ${roofPlans.length} roof${roofPlans.length === 1 ? "" : "s"}` : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`;
         return <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={disabled} onClick={() => void buildFromDrawings()}>
           <span>{label}</span>
