@@ -84,6 +84,10 @@ function isPdfFile(file: File): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 }
 
+function isDxfFile(file: File): boolean { return /\.dxf$/i.test(file.name); }
+function isDwgFile(file: File): boolean { return /\.dwg$/i.test(file.name); }
+function isIfcFile(file: File): boolean { return /\.ifc$/i.test(file.name); }
+
 function readRawDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -349,13 +353,13 @@ export function FloorTo3D() {
 
   // Buildings skip the live 3D viewer — the user downloads each floor model.
 
-  function upload(event: ChangeEvent<HTMLInputElement>) {
+  async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 2_000_000_000) { setError("Use a file smaller than 2 GB."); return; }
     setError("");
     setFileName(file.name);
-    setIsPdf(file.type === "application/pdf");
+    setIsPdf(isPdfFile(file));
     setStage("upload");
     setMasterPrompt("");
     setRenderUrl(null);
@@ -366,6 +370,34 @@ export function FloorTo3D() {
     setFbx(null);
     setPlan(null);
     setSummary(null);
+
+    // DWG — needs server-side conversion via CloudConvert. We don't ship
+    // a DWG parser; tell the user the path forward.
+    if (isDwgFile(file)) {
+      setError("DWG support needs a CloudConvert API key. Ask the assistant to add it, or upload the same drawing as DXF (File → Save As → AutoCAD DXF) for instant import.");
+      return;
+    }
+    // IFC — already 3D. The 2D→3D tool isn't the right surface; the
+    // viewer will accept IFC directly in a future update.
+    if (isIfcFile(file)) {
+      setError("IFC is already a 3D model — direct IFC viewing is coming soon. For now, export a 2D floor plan (DXF or PDF) from your IFC tool.");
+      return;
+    }
+    // DXF — parse vectors client-side and render as a clean PNG that
+    // skips the OCR/clean step entirely.
+    if (isDxfFile(file)) {
+      try {
+        const { rasterizeDxf, readFileAsText } = await import("@/lib/dxf-to-canvas");
+        const text = await readFileAsText(file);
+        const result = await rasterizeDxf(text);
+        setFileDataUrl(result.dataUrl);
+        setIsPdf(false);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not read DXF file.");
+      }
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => { if (typeof reader.result === "string") setFileDataUrl(reader.result); };
     reader.readAsDataURL(file);
