@@ -1,18 +1,25 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Download, LoaderCircle, Paintbrush, Plus, Sparkles, Upload, X } from "lucide-react";
+import { Download, Eye, LoaderCircle, Plus, ScanSearch, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
-import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor } from "@/lib/floor-3d.functions";
+import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
-import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
+
+type RecognizedPolygon = { id: string; type: MarkLiftType; points: Array<[number, number]> };
+type Recognition = {
+  imageWidth: number;
+  imageHeight: number;
+  planWidthMeters: number;
+  polygons: RecognizedPolygon[];
+};
 
 const information: ToolInfoSection[] = [
   {
@@ -124,7 +131,15 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
 }
 
 type Stage = "upload" | "modeling" | "ready";
-type Floor = { imageDataUrl: string; label: string; heightMeters: number; fileName: string; annotation?: AnnotatorResult };
+type Floor = {
+  imageDataUrl: string;
+  label: string;
+  heightMeters: number;
+  fileName: string;
+  recognition?: Recognition;
+  recognizing?: boolean;
+  recognizeError?: string;
+};
 type FloorPart = { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string };
 
 export function FloorTo3D() {
@@ -132,6 +147,7 @@ export function FloorTo3D() {
   const generate = useServerFn(generateFloor3D);
   const fetchBounds = useServerFn(extractFurnitureBounds);
   const lift = useServerFn(liftAnnotatedFloor);
+  const detect = useServerFn(detectFloorElements);
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
   const { credits, signedIn, vip, consume } = useCredits();
@@ -164,7 +180,7 @@ export function FloorTo3D() {
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
   const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae">("fbx");
   const previewRef = useRef<HTMLDivElement>(null);
-  const [paintIndex, setPaintIndex] = useState<number | null>(null);
+  const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
 
   function reset() {
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
