@@ -228,6 +228,7 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
   const colorIndex = typeof e.colorIndex === "number" ? (e.colorIndex as number) : undefined;
 
   const base: DwgEntityLite = { id: i, type, layer, colorIndex };
+  if (typeof e.lineType === "string") base.lineType = e.lineType as string;
 
   switch (type.toUpperCase()) {
     case "LINE":
