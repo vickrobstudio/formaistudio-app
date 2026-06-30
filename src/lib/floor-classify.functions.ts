@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { FORM_AI_2D_TO_3D_SYSTEM_PROMPT } from "./form-ai-system-prompt";
 
 // Given a thumbnail of the cleaned floor plan with each detected region
 // outlined and numbered, ask the AI to label each region with a category
@@ -33,7 +34,11 @@ type Result =
   | { ok: true; regions: ClassifiedRegion[] }
   | { ok: false; error: string };
 
-const SYSTEM = `You are an architectural drawing analyst. The user gives you ONE cleaned floor plan image where every enclosed region has been outlined in RED and labeled with a NUMBER (1, 2, 3...). You also receive the JSON list of those numbered regions with their bounding boxes (normalized 0..1) and area fractions.
+const SYSTEM = `${FORM_AI_2D_TO_3D_SYSTEM_PROMPT}
+
+--- TASK-SPECIFIC INSTRUCTIONS (Step 3 + Step 6: classify enclosed regions) ---
+
+You are now executing Steps 3 and 6 of the pipeline above. The user gives you ONE cleaned floor plan image where every enclosed region has been outlined in RED and labeled with a NUMBER (1, 2, 3...). You also receive the JSON list of those numbered regions with their bounding boxes (normalized 0..1) and area fractions.
 
 For EVERY numbered region, return a category and a short human label.
 
