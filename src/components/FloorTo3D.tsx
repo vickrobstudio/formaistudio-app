@@ -130,13 +130,15 @@ export function FloorTo3D() {
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
   const fetchFurnitureBounds = useServerFn(extractFurnitureBounds);
+  const lift = useServerFn(liftAnnotatedFloor);
 
   // Multi-image building flow — one image per floor, optional roof plan,
   // multiple elevations. When the user uses this flow we skip the master
   // prompt + approval render and build the 3D model straight from drawings.
-  type FloorEntry = { imageDataUrl: string; imageDataUrl2?: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string; fileName2?: string };
+  type FloorEntry = { imageDataUrl: string; imageDataUrl2?: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string; fileName2?: string; annotation?: AnnotatorResult };
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
+  const [annotatorFloorIndex, setAnnotatorFloorIndex] = useState<number | null>(null);
   const [roofPlans, setRoofPlans] = useState<Array<{ imageDataUrl: string; fileName: string }>>([]);
   const [sitePlan, setSitePlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
