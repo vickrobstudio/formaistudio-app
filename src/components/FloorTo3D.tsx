@@ -301,6 +301,7 @@ export function FloorTo3D() {
           // Mark & Lift fast path: if the user annotated this floor, extrude
           // the colored polygons directly — no AI re-analysis.
           const annotatedFloor = step.kind === "floor" ? floors[step.index].annotation : undefined;
+          const floorIdx = step.kind === "floor" ? step.index : 0;
           const result = annotatedFloor
             ? await withTimeout(lift({
                 data: {
@@ -309,7 +310,7 @@ export function FloorTo3D() {
                   imageHeight: annotatedFloor.imageHeight,
                   planWidthMeters: annotatedFloor.planWidthMeters,
                   outputUnits,
-                  wallHeightMeters: floors[step.index].heightMeters || 2.7,
+                  wallHeightMeters: floors[floorIdx].heightMeters || 2.7,
                   polygons: annotatedFloor.polygons.map((p) => ({ id: p.id, type: p.type, points: p.points })),
                 },
               }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${stepLabel} lift took too long.`)
