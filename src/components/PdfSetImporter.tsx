@@ -191,12 +191,42 @@ export function PdfSetImporter({
 
   async function handleFile(file: File) {
     setError("");
-    if (!(file.type === "application/pdf" || /\.pdf$/i.test(file.name))) {
-      setError("Only complete drawings sets are supported."); return;
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+    const isDwgDxf = /\.(dwg|dxf)$/i.test(file.name);
+    if (!isPdf && !isDwgDxf) {
+      setError("Upload a PDF, DWG or DXF drawings set."); return;
     }
     setFileName(file.name);
     setBusy("rendering");
     try {
+      if (isDwgDxf) {
+        // DWG / DXF imports as a SINGLE floor — the vector database is a
+        // single drawing, not a paged set. Parse, rasterize once, hand to
+        // the same cleaning + classification pipeline as a PDF page.
+        const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
+        const db = await parseDrawing(file);
+        const { dataUrl, width, height } = rasterizeDatabase(db, { maxDimension: 2600 });
+        // Build a thumbnail.
+        const thumbCanvas = document.createElement("canvas");
+        const thumbScale = 360 / Math.max(width, height);
+        thumbCanvas.width = Math.max(1, Math.round(width * thumbScale));
+        thumbCanvas.height = Math.max(1, Math.round(height * thumbScale));
+        const tctx = thumbCanvas.getContext("2d");
+        if (tctx) {
+          const img = new Image();
+          await new Promise<void>((res, rej) => {
+            img.onload = () => res();
+            img.onerror = () => rej(new Error("Could not render the DWG/DXF."));
+            img.src = dataUrl;
+          });
+          tctx.fillStyle = "#ffffff"; tctx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+          tctx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        }
+        const thumb = thumbCanvas.toDataURL("image/png");
+        setPages([{ pageIndex: 1, thumbDataUrl: thumb, hiResDataUrl: dataUrl, role: { kind: "floor", order: 0, label: "Ground floor" } }]);
+        setProgress({ done: 1, total: 1 });
+        return;
+      }
       const pdfjs = await import("pdfjs-dist");
       const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
       pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -260,7 +290,7 @@ export function PdfSetImporter({
 
   function commit() {
     const result: PdfSetImportResult = { floors: [], roofPlans: [], sitePlan: null, elevations: [] };
-    const base = fileName.replace(/\.pdf$/i, "");
+    const base = fileName.replace(/\.(pdf|dwg|dxf)$/i, "");
     for (const p of pages) {
       const fn = `${base} · page ${p.pageIndex}.png`;
       if (p.role.kind === "floor") {
@@ -296,7 +326,7 @@ export function PdfSetImporter({
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf,.pdf"
+          accept="application/pdf,.pdf,.dwg,.dxf"
           className="sr-only"
           onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void handleFile(f); }}
         />
