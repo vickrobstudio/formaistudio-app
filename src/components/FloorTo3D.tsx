@@ -97,8 +97,8 @@ export function FloorTo3D() {
   const [fileName, setFileName] = useState("");
   const [isPdf, setIsPdf] = useState(false);
   const [subject, setSubject] = useState<"building" | "furniture">("building");
-  const [planUnits, setPlanUnits] = useState<"meters" | "feet-inches">("meters");
-  const [outputUnits, setOutputUnits] = useState<"meters" | "feet">("meters");
+  const [planUnits, setPlanUnits] = useState<"meters" | "feet-inches">("feet-inches");
+  const [outputUnits, setOutputUnits] = useState<"meters" | "feet">("feet");
   const [heightMeters, setHeightMeters] = useState("2.7");
   const [heightFeet, setHeightFeet] = useState("9");
   const [heightInches, setHeightInches] = useState("0");
@@ -224,7 +224,7 @@ export function FloorTo3D() {
         imageDataUrl: url,
         label: prev.length === 0 ? "Ground floor" : `Floor ${prev.length}`,
         heightMeters: 2.7,
-        heightUnit: prev[prev.length - 1]?.heightUnit ?? "m",
+                heightUnit: prev[prev.length - 1]?.heightUnit ?? "ft",
         fileName: file.name,
       }]);
     }
