@@ -265,6 +265,26 @@ export function rasterizeDatabase(
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
 
+  // SIMPLIFICATION RULES (must match what the room-detector expects):
+  //  - Skip text / dimensions / leaders / hatches / blocks entirely.
+  //  - Skip entities on layers whose linetype is dashed / hidden / center /
+  //    phantom / dotted — those are construction or reference lines, not
+  //    enclosing walls, and they break flood-fill region detection by
+  //    creating tiny gap-noise.
+  //  - Skip entities on layers whose name screams annotation / dim / text /
+  //    grid / hatch / north / title / notes.
+  // The result is a clean solid-line wireframe of just the architecture.
+  const DASHED_LT = /(dash|hidden|center|phantom|dot|break|gap|divide)/i;
+  const NOISE_LAYER = /(text|dim|annot|note|tag|label|title|grid|hatch|north|symbol|legend|scale|reference|axis|center)/i;
+  const layerByName = new Map(db.layers.map((l) => [l.name, l] as const));
+  function shouldDraw(e: DwgEntityLite): boolean {
+    const layer = layerByName.get(e.layer);
+    if (layer?.frozen || layer?.on === false) return false;
+    if (layer?.lineType && DASHED_LT.test(layer.lineType)) return false;
+    if (NOISE_LAYER.test(e.layer)) return false;
+    return true;
+  }
+
   // Fall back to entity-bounding-box if extents are empty.
   let { min, max } = db.extents;
   if (max.x - min.x <= 0 || max.y - min.y <= 0) {
@@ -307,6 +327,12 @@ export function rasterizeDatabase(
 
   for (const e of db.entities) {
     const t = e.type.toUpperCase();
+    // Drop annotation/dimension/text/hatch/block-insert entirely.
+    if (t === "TEXT" || t === "MTEXT" || t === "ATTDEF" || t === "ATTRIB"
+        || t === "DIMENSION" || t.startsWith("DIM")
+        || t === "LEADER" || t === "MLEADER" || t === "MULTILEADER"
+        || t === "HATCH" || t === "SOLID" || t === "INSERT") continue;
+    if (!shouldDraw(e)) continue;
     if (t === "LINE" && e.start && e.end) {
       ctx.beginPath();
       ctx.moveTo(tx(e.start.x), ty(e.start.y));
