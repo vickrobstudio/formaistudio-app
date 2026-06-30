@@ -16,7 +16,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   touch-action: manipulation;
-  background-color: oklch(0.85 0 0);
+  background-color: #ffffff;
 }
 
 /* Lock the document so fixed headers/footers truly stay pinned in iOS
@@ -160,25 +160,25 @@ html.keyboard-open {
 
 :root {
   --radius: 0.25rem;
-  --background: oklch(0.85 0 0);
-  --foreground: oklch(1 0 0);
-  --card: oklch(0.85 0 0);
-  --card-foreground: oklch(1 0 0);
-  --popover: oklch(0.85 0 0);
-  --popover-foreground: oklch(1 0 0);
-  --primary: oklch(1 0 0);
-  --primary-foreground: oklch(0.65 0 0);
-  --secondary: oklch(0.65 0 0);
-  --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.65 0 0);
-  --muted-foreground: oklch(1 0 0);
-  --accent: oklch(0.65 0 0);
-  --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.65 0 0);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0 0);
+  --primary: oklch(0.2 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0 0);
+  --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.95 0 0);
+  --accent-foreground: oklch(0.2 0 0);
+  --destructive: oklch(0.55 0.22 25);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(1 0 0 / 25%);
-  --input: oklch(1 0 0 / 30%);
-  --ring: oklch(1 0 0);
+  --border: oklch(0 0 0 / 12%);
+  --input: oklch(0 0 0 / 18%);
+  --ring: oklch(0.2 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -192,10 +192,10 @@ html.keyboard-open {
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
   --sidebar-ring: oklch(0.704 0.04 256.788);
-  --dashboard-background: oklch(0.85 0 0);
-  --dashboard-foreground: oklch(1 0 0);
-  --dashboard-muted: oklch(1 0 0);
-  --dashboard-border: oklch(1 0 0 / 25%);
+  --dashboard-background: oklch(1 0 0);
+  --dashboard-foreground: oklch(0.2 0 0);
+  --dashboard-muted: oklch(0.45 0 0);
+  --dashboard-border: oklch(0 0 0 / 12%);
   --landing-button: oklch(0.06 0 0);
   --landing-paper: oklch(0.971 0.0196 87.5);
 }
