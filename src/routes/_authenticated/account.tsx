@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteMyAccount, getMyProfile, setMyAvatarPath, updateMyProfile } from "@/lib/profile.functions";
-import { useAssistantPrefs } from "@/lib/assistant-prefs";
+import { useAssistantPrefs, REGION_LABELS, type AssistantRegion } from "@/lib/assistant-prefs";
 
 export const Route = createFileRoute("/_authenticated/account")({ component: AccountPage });
 
@@ -28,7 +28,7 @@ function AccountPage() {
   const [message, setMessage] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const shownUsername = username || profile?.username || "";
-  const { lang: aiLang, units: aiUnits, setLang: setAiLang, setUnits: setAiUnits } = useAssistantPrefs();
+  const { lang: aiLang, units: aiUnits, region: aiRegion, setLang: setAiLang, setUnits: setAiUnits, setRegion: setAiRegion } = useAssistantPrefs();
 
   async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -75,8 +75,21 @@ function AccountPage() {
       <div className="organic-divider py-5"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Email</p><p className="mt-2 text-sm">{user.email}</p></div>
       <div className="organic-divider py-5">
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">AI Architect</p>
-        <p className="mt-2 text-xs text-muted-foreground">Choose the language and measurement units the AI Architect uses everywhere in the app.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Choose the language, units and country codes the AI Architect uses everywhere in the app. Switch any time.</p>
         <div className="mt-4 space-y-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em]">Country / Codes</p>
+            <select
+              value={aiRegion}
+              onChange={(event) => setAiRegion(event.target.value as AssistantRegion)}
+              className="mt-2 h-12 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {(Object.keys(REGION_LABELS) as AssistantRegion[]).map((r) => (
+                <option key={r} value={r}>{REGION_LABELS[r]}</option>
+              ))}
+            </select>
+            <p className="mt-2 text-[10px] text-muted-foreground">Sets which building codes the AI cites (e.g. IBC/ADA for the US, CTE for Spain). ADA stays mandatory on US projects.</p>
+          </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em]">Language</p>
             <div className="mt-2 flex gap-2">
