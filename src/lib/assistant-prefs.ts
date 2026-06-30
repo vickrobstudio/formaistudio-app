@@ -29,23 +29,23 @@ function read<T extends string>(key: string, allowed: readonly T[], fallback: T)
 
 export function useAssistantPrefs() {
   const [lang, setLangState] = useState<AssistantLang>("en");
-  const [units, setUnitsState] = useState<AssistantUnits>("m");
-  const [region, setRegionState] = useState<AssistantRegion>("auto");
+  const [units, setUnitsState] = useState<AssistantUnits>("ft");
+  const [region, setRegionState] = useState<AssistantRegion>("us");
 
   useEffect(() => {
     setLangState(read(LANG_KEY, ["en", "es"] as const, "en"));
-    setUnitsState(read(UNITS_KEY, ["m", "ft"] as const, "m"));
-    setRegionState(read(REGION_KEY, REGIONS, "auto"));
+    setUnitsState(read(UNITS_KEY, ["m", "ft"] as const, "ft"));
+    setRegionState(read(REGION_KEY, REGIONS, "us"));
     if (typeof window === "undefined") return;
     const onStorage = (e: StorageEvent) => {
       if (e.key === LANG_KEY) setLangState(read(LANG_KEY, ["en", "es"] as const, "en"));
-      if (e.key === UNITS_KEY) setUnitsState(read(UNITS_KEY, ["m", "ft"] as const, "m"));
-      if (e.key === REGION_KEY) setRegionState(read(REGION_KEY, REGIONS, "auto"));
+      if (e.key === UNITS_KEY) setUnitsState(read(UNITS_KEY, ["m", "ft"] as const, "ft"));
+      if (e.key === REGION_KEY) setRegionState(read(REGION_KEY, REGIONS, "us"));
     };
     const onLocal = () => {
       setLangState(read(LANG_KEY, ["en", "es"] as const, "en"));
-      setUnitsState(read(UNITS_KEY, ["m", "ft"] as const, "m"));
-      setRegionState(read(REGION_KEY, REGIONS, "auto"));
+      setUnitsState(read(UNITS_KEY, ["m", "ft"] as const, "ft"));
+      setRegionState(read(REGION_KEY, REGIONS, "us"));
     };
     window.addEventListener("storage", onStorage);
     window.addEventListener("formai:assistant-prefs", onLocal);
