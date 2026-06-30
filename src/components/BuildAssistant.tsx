@@ -21,6 +21,7 @@ export type BuildingSpec = {
 };
 
 type FloorCtx = { index: number; label: string; heightM: number; hasPlan: boolean };
+type AttachableImage = { url: string; label?: string };
 
 type ProposalPatch = Partial<Omit<BuildingSpec, "floors">> & {
   floors?: Array<{ index: number; heightM?: number; label?: string }>;
@@ -81,12 +82,18 @@ export function BuildAssistant({
   hasElevations,
   spec,
   onSpecChange,
+  floorImages,
+  roofImages,
+  elevationImages,
 }: {
   floors: FloorCtx[];
   hasRoofPlans: boolean;
   hasElevations: boolean;
   spec: BuildingSpec;
   onSpecChange: (next: BuildingSpec) => void;
+  floorImages: AttachableImage[];
+  roofImages: AttachableImage[];
+  elevationImages: AttachableImage[];
 }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -117,7 +124,22 @@ export function BuildAssistant({
 
   async function autoDetect() {
     if (!open) setOpen(true);
-    await send(`Please auto-detect everything you can from the ${floors.length} floor plan${floors.length === 1 ? "" : "s"}${hasRoofPlans ? ", roof plan(s)" : ""}${hasElevations ? ", and elevation(s)" : ""} I uploaded. Start with floor 0's wall height — propose a value and wait for my approval before moving on.`);
+    const text = `Please auto-detect everything you can from the ${floors.length} floor plan${floors.length === 1 ? "" : "s"}${hasRoofPlans ? ", roof plan(s)" : ""}${hasElevations ? ", and elevation(s)" : ""} I uploaded (attached below). Read the drawings — printed dimensions, room labels, stair runs, window/door openings, roof outline — and propose values inferred from them. Start with floor 0's wall height — propose a value and wait for my approval before moving on.`;
+    const attachments: AttachableImage[] = [
+      ...floorImages.map((img, i) => ({ url: img.url, label: img.label ?? `floor-${i}` })),
+      ...roofImages.map((img, i) => ({ url: img.url, label: img.label ?? `roof-${i}` })),
+      ...elevationImages.map((img, i) => ({ url: img.url, label: img.label ?? `elevation-${i}` })),
+    ].filter((a) => typeof a.url === "string" && a.url.startsWith("data:"));
+    const fileParts = attachments.map((a) => {
+      const mediaType = a.url.slice(5, a.url.indexOf(";")) || "image/png";
+      return { type: "file" as const, mediaType, url: a.url, filename: `${a.label}.${mediaType.split("/")[1] || "png"}` };
+    });
+    if (fileParts.length === 0) {
+      await send(text);
+      return;
+    }
+    const parts = [{ type: "text" as const, text }, ...fileParts];
+    await sendMessage({ parts } as Parameters<typeof sendMessage>[0], { body: { context: ctx } });
   }
 
   if (!open) {
