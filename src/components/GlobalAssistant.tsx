@@ -2,7 +2,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useLocation } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Send, Sparkles, X } from "lucide-react";
+import { Hammer, LoaderCircle, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -43,7 +43,7 @@ export function GlobalAssistant() {
       onClick={() => setOpen(true)}
       className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-105 active:scale-95"
     >
-      <Sparkles className="size-6" />
+      <Hammer className="size-6" />
     </button>}
 
     {open && <div className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-h-[78vh] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-foreground/30 bg-background shadow-2xl sm:right-5 sm:left-auto sm:inset-x-auto">
