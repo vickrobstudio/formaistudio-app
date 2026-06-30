@@ -45,7 +45,7 @@ const information: ToolInfoSection[] = [
   {
     title: "What to upload",
     items: [
-      "Building: one floor plan per level (PDF, JPG, PNG, WEBP). Optional site plan, roof plans and elevations.",
+      "Building: one floor plan per level — PDF ONLY (vector lines so the AI can trace walls, doors and windows accurately). Optional site plan, roof plans and elevations are also PDF only.",
       "Furniture: orthographic views (top + front + side) with printed dimensions, plus an optional reference photo or render.",
       "Each file up to 40 MB.",
     ],
@@ -77,6 +77,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   return Promise.race([promise, timeout]).finally(() => {
     if (timeoutId) clearTimeout(timeoutId);
   });
+}
+
+function isPdfFile(file: File): boolean {
+  return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 }
 
 function readRawDataUrl(file: File): Promise<string> {
@@ -211,6 +215,7 @@ export function FloorTo3D() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!isPdfFile(file)) { setError("Floor plans must be PDF. Export your drawing as PDF so the AI can read the vector lines."); return; }
     if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
     const url = await readFileAsDataUrl(file);
     const idx = floorInputIndex.current;
@@ -234,6 +239,7 @@ export function FloorTo3D() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (!files.length) return;
+    if (files.some((file) => !isPdfFile(file))) { setError("Roof plans must be PDF."); return; }
     if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
     const added: Array<{ imageDataUrl: string; fileName: string }> = [];
     for (const file of files) {
@@ -247,6 +253,7 @@ export function FloorTo3D() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!isPdfFile(file)) { setError("Site plans must be PDF."); return; }
     if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
     const url = await readFileAsDataUrl(file);
     setSitePlan({ imageDataUrl: url, fileName: file.name });
@@ -256,6 +263,7 @@ export function FloorTo3D() {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (!files.length) return;
+    if (files.some((file) => !isPdfFile(file))) { setError("Elevations must be PDF."); return; }
     if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
     const cycle: ElevationEntry["facing"][] = ["N", "E", "S", "W", "other"];
     const added: ElevationEntry[] = [];
@@ -696,10 +704,10 @@ export function FloorTo3D() {
         </div>
       </div>
       {subject === "building" && <>
-        <input ref={floorInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onFloorPicked} />
-        <input ref={roofInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onRoofPicked} />
-        <input ref={siteInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onSitePicked} />
-        <input ref={elevationInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onElevationsPicked} />
+        <input ref={floorInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onFloorPicked} />
+        <input ref={roofInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onRoofPicked} />
+        <input ref={siteInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onSitePicked} />
+        <input ref={elevationInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onElevationsPicked} />
 
         <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Site plan (optional)</p>
         <p className="mt-2 text-xs text-muted-foreground">A top-down view of the site — property lines, setbacks, driveway, landscaping. Used to place the building on the ground.</p>
