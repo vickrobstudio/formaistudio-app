@@ -901,6 +901,29 @@ export function FloorTo3D() {
         <Sparkles />
       </Button>}
 
+      {subject === "building" && <PdfSetImporter
+        open={pdfSetOpen}
+        onOpenChange={setPdfSetOpen}
+        onImport={(result: PdfSetImportResult) => {
+          setError("");
+          if (result.floors.length > 0) {
+            setFloors((prev) => [
+              ...prev,
+              ...result.floors.map((f) => ({
+                imageDataUrl: f.imageDataUrl,
+                label: f.label,
+                heightMeters: 2.7,
+                heightUnit: "ft" as const,
+                fileName: f.fileName,
+              })),
+            ]);
+          }
+          if (result.roofPlans.length > 0) setRoofPlans((prev) => [...prev, ...result.roofPlans].slice(0, 6));
+          if (result.sitePlan) setSitePlan(result.sitePlan);
+          if (result.elevations.length > 0) setElevations((prev) => [...prev, ...result.elevations].slice(0, 8));
+        }}
+      />}
+
       {subject === "building" && detectorOpen && <div className="fixed inset-0 z-50 flex flex-col bg-background">
         <div className="flex items-center justify-between border-b border-border px-5 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
           <div className="min-w-0">
