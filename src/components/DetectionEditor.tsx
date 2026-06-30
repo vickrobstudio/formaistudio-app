@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Paintbrush, Redo2, Sparkles, Trash2, Undo2 } from "lucide-react";
+import { LoaderCircle, Maximize2, Paintbrush, Redo2, Sparkles, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
 import { extractRoomRegions, buildClassifierThumbnail, closeOpenings } from "@/lib/floor-pipeline";
