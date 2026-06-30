@@ -205,6 +205,13 @@ export function DetectionEditor({
 
     {error && <p role="alert" className="mt-3 text-xs text-destructive">{error}</p>}
 
+    {progressLog.length > 0 && <div className="mt-3 max-h-32 overflow-y-auto rounded-xl border border-border bg-secondary/40 p-3 text-[11px] leading-relaxed">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">AI progress</p>
+      <ol className="mt-1.5 space-y-1">
+        {progressLog.map((line, i) => <li key={i} className="flex gap-2"><span className="text-muted-foreground">{i + 1}.</span><span>{line}</span></li>)}
+      </ol>
+    </div>}
+
     {activeFloor && <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_240px]">
       <div className="relative overflow-hidden rounded-xl border border-border bg-secondary/40">
         <div className="relative">
