@@ -74,9 +74,21 @@ export function DetectionEditor({
     setError("");
     setBusyIndex(floor.index);
     try {
-      pushLog(`${floor.label}: removing white background, isolating black line work…`);
+      // Step 1 — strip ALL text, dimensions and clutter; redraw as pure black
+      // outlines on white so detection only sees the geometry the user will paint.
+      let cleanedUrl = detections[floor.index]?.replannedDataUrl ?? "";
+      if (!cleanedUrl) {
+        pushLog(`${floor.label}: erasing every letter, number, dimension line and callout…`);
+        const cleanPrompt = `Redraw this floor plan as a CLEAN PURE-BLACK-OUTLINE-ON-WHITE technical drawing.\n\nABSOLUTE RULES — these are non-negotiable:\n- DELETE every letter, number, word, label, room name, dimension, measurement, leader line, arrow, tick mark, scale bar, north arrow, callout, legend, title block, stamp, signature, sheet number, hatching, shading, color and texture. There must be ZERO TEXT and ZERO NUMBERS anywhere in the output.\n- Keep ONLY the geometric line work: walls, door openings (with swing arcs), window openings, stair treads, and fixed fixtures (toilets, sinks, tubs, counters, stoves).\n- Render as pure 1-pixel-to-3-pixel black ink lines on a 100% pure white background. No greys, no fills, no gradients, no shadows.\n- Preserve the EXACT outline, proportions, room positions and opening positions of the source.\n- Top-down orthographic 2D view. No perspective. No 3D.\n\nThe output is a clean black-outline floor plan ready for an algorithm to paint each enclosed region.`;
+        await streamImage(cleanPrompt, floor.imageDataUrl, (src, isFinal) => {
+          if (isFinal) cleanedUrl = src;
+        });
+        if (!cleanedUrl) throw new Error("Could not strip text from the drawing.");
+        pushLog(`${floor.label}: text removed — only black outlines remain.`);
+      }
+      // Step 2 — detect closed shapes against the cleaned, text-free outline.
       pushLog(`${floor.label}: tracing every enclosed black shape as a selectable region.`);
-      const res = await detect({ data: { imageDataUrl: floor.imageDataUrl, label: floor.label } });
+      const res = await detect({ data: { imageDataUrl: cleanedUrl, label: floor.label } });
       if (!res.ok) { setError(res.error); return; }
       pushLog(`${floor.label}: ${res.elements.length} enclosed shape${res.elements.length === 1 ? "" : "s"} ready — tap any shape to paint it with a legend color.`);
       onDetectionsChange({
@@ -85,7 +97,7 @@ export function DetectionEditor({
           elements: res.elements,
           hidden: {},
           colors: { ...DEFAULT_COLORS, ...(detections[floor.index]?.colors ?? {}) },
-          replannedDataUrl: detections[floor.index]?.replannedDataUrl,
+          replannedDataUrl: cleanedUrl,
         },
       });
     } catch (cause) {
