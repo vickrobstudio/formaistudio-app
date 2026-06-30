@@ -298,7 +298,22 @@ export function FloorTo3D() {
         const scope: "site" | "floor" | "roof" = step.kind;
 
         try {
-          const result = await withTimeout(generate({
+          // Mark & Lift fast path: if the user annotated this floor, extrude
+          // the colored polygons directly — no AI re-analysis.
+          const annotatedFloor = step.kind === "floor" ? floors[step.index].annotation : undefined;
+          const result = annotatedFloor
+            ? await withTimeout(lift({
+                data: {
+                  label: stepLabel,
+                  imageWidth: annotatedFloor.imageWidth,
+                  imageHeight: annotatedFloor.imageHeight,
+                  planWidthMeters: annotatedFloor.planWidthMeters,
+                  outputUnits,
+                  wallHeightMeters: floors[step.index].heightMeters || 2.7,
+                  polygons: annotatedFloor.polygons.map((p) => ({ id: p.id, type: p.type, points: p.points })),
+                },
+              }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${stepLabel} lift took too long.`)
+            : await withTimeout(generate({
             data: {
               wallHeightMeters: floorForBounds.heightMeters || 2.7,
               planUnits,
