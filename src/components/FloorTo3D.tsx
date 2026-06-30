@@ -379,12 +379,15 @@ export function FloorTo3D() {
     // still has an image to work with.
     if (isDwgFile(file) || isDxfFile(file)) {
       try {
-        const { parseDrawing, rasterizeDatabase, summarize } = await import("@/lib/dwg-database");
+        const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
         const db = await parseDrawing(file);
         const { dataUrl } = rasterizeDatabase(db, { maxDimension: 2400 });
         setFileDataUrl(dataUrl);
         setIsPdf(false);
-        setSummary(summarize(db));
+        // db now carries layers/blocks/entities/units in vector form for the
+        // downstream BIM pipeline; stash on window for now so the next stage
+        // can read it without restructuring component state.
+        (window as unknown as { __formAiDwgDb?: unknown }).__formAiDwgDb = db;
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Could not read CAD file.");
       }
