@@ -17,6 +17,7 @@ import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotato
 import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
 import { DetectionEditor, type FloorDetection } from "@/components/DetectionEditor";
 import { PdfSetImporter, type PdfSetImportResult } from "@/components/PdfSetImporter";
+import { InputQualityBadges } from "@/components/InputQualityBadges";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
@@ -83,6 +84,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 function isPdfFile(file: File): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 }
+
+function isDxfFile(file: File): boolean { return /\.dxf$/i.test(file.name); }
+function isDwgFile(file: File): boolean { return /\.dwg$/i.test(file.name); }
+function isIfcFile(file: File): boolean { return /\.ifc$/i.test(file.name); }
 
 function readRawDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -349,13 +354,13 @@ export function FloorTo3D() {
 
   // Buildings skip the live 3D viewer — the user downloads each floor model.
 
-  function upload(event: ChangeEvent<HTMLInputElement>) {
+  async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 2_000_000_000) { setError("Use a file smaller than 2 GB."); return; }
     setError("");
     setFileName(file.name);
-    setIsPdf(file.type === "application/pdf");
+    setIsPdf(isPdfFile(file));
     setStage("upload");
     setMasterPrompt("");
     setRenderUrl(null);
@@ -366,6 +371,34 @@ export function FloorTo3D() {
     setFbx(null);
     setPlan(null);
     setSummary(null);
+
+    // DWG — needs server-side conversion via CloudConvert. We don't ship
+    // a DWG parser; tell the user the path forward.
+    if (isDwgFile(file)) {
+      setError("DWG support needs a CloudConvert API key. Ask the assistant to add it, or upload the same drawing as DXF (File → Save As → AutoCAD DXF) for instant import.");
+      return;
+    }
+    // IFC — already 3D. The 2D→3D tool isn't the right surface; the
+    // viewer will accept IFC directly in a future update.
+    if (isIfcFile(file)) {
+      setError("IFC is already a 3D model — direct IFC viewing is coming soon. For now, export a 2D floor plan (DXF or PDF) from your IFC tool.");
+      return;
+    }
+    // DXF — parse vectors client-side and render as a clean PNG that
+    // skips the OCR/clean step entirely.
+    if (isDxfFile(file)) {
+      try {
+        const { rasterizeDxf, readFileAsText } = await import("@/lib/dxf-to-canvas");
+        const text = await readFileAsText(file);
+        const result = await rasterizeDxf(text);
+        setFileDataUrl(result.dataUrl);
+        setIsPdf(false);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not read DXF file.");
+      }
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => { if (typeof reader.result === "string") setFileDataUrl(reader.result); };
     reader.readAsDataURL(file);
@@ -627,6 +660,7 @@ export function FloorTo3D() {
           <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
             <span>{floors.length === 0 ? "Import architectural PDF set" : "Import another PDF set"}</span><Upload />
           </Button>
+          <InputQualityBadges />
           {(floors.length > 0 || roofPlans.length > 0 || sitePlan || elevations.length > 0) && <div className="mt-4 space-y-2 text-[11px]">
             <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
               <span><span className="font-semibold">{floors.length}</span> floor plan{floors.length === 1 ? "" : "s"} · <span className="font-semibold">{roofPlans.length}</span> roof · <span className="font-semibold">{sitePlan ? 1 : 0}</span> site · <span className="font-semibold">{elevations.length}</span> elevation{elevations.length === 1 ? "" : "s"}</span>
@@ -666,17 +700,18 @@ export function FloorTo3D() {
       </>}
 
       {subject === "furniture" && <>
-      <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg" className="sr-only" onChange={upload} />
+      <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,.dxf,.dwg,.ifc" className="sr-only" onChange={(e) => void upload(e)} />
       <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
         {fileDataUrl && !isPdf
           ? <img src={fileDataUrl} alt={`Uploaded ${subject === "furniture" ? "furniture drawing" : "floor plan"}`} className="max-h-[70vh] w-full object-contain" />
           : <span className="px-6 text-center">
               <Upload className="mx-auto size-6" />
               <span className="mt-3 block text-sm font-bold">{fileName || (subject === "furniture" ? "Upload your furniture drawing" : "Upload your floor plan")}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">PDF, JPG or PNG · up to 2 GB</span>
+              <span className="mt-1 block text-xs text-muted-foreground">DXF · IFC · DWG · PDF · JPG · PNG · up to 2 GB</span>
             </span>}
       </Button>
       {fileName && <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={clearFile}><X />Remove file</Button>}
+      {subject === "furniture" && <InputQualityBadges />}
 
       {/* Optional reference photos — drive the master prompt's shape fidelity */}
       <div className="mt-6">
