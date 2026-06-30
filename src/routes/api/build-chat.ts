@@ -14,6 +14,7 @@ export const Route = createFileRoute("/api/build-chat")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("AI is unavailable.", { status: 500 });
         const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+        const { ARCH_DIMENSIONS_REFERENCE } = await import("@/lib/arch-dimensions");
 
         const ctx = (body.context ?? {}) as Record<string, unknown>;
         const ctxJson = JSON.stringify(ctx).slice(0, 6000);
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/api/build-chat")({
 RULES:
 • Ask ONE concise question at a time. Confirm BEFORE assuming any dimension.
 • Always work in metres. Use Apple-clean, friendly tone. Under 3 short sentences per turn.
+• You KNOW the standard architectural and interior dimensions listed below — quote and use them when proposing defaults. Never invent values that contradict them.
 • When you propose ANY dimension, roof shape, or per-floor change, emit a single fenced JSON block exactly like this so the UI can render an Accept / Reject card:
 \n\`\`\`proposal
 { "summary": "Short human label", "patch": { "wallHeightM"?: number, "ceilingHeightM"?: number, "parapetHeightM"?: number, "roofType"?: "flat"|"gable"|"hip"|"shed", "roofPitchDeg"?: number, "roofHeightM"?: number, "ridgeDirection"?: "NS"|"EW", "floors"?: [{ "index": number, "heightM"?: number, "label"?: string }] } }
@@ -31,6 +33,8 @@ RULES:
 • Auto-detect first: read attached floor plan / elevation / roof plan images and propose sensible values inferred from the drawings. If a drawing shows printed dimensions, use them. Otherwise use residential defaults (wall 2.70 m, ceiling = wall, gable pitch 30°, hip pitch 25°, shed pitch 10°, flat parapet 0.4 m).
 • Walk the user through: 1) per-floor wall heights, 2) ceiling height, 3) roof shape (flat / gable / hip / shed), 4) roof pitch or roof-height, 5) ridge direction for gable/shed, 6) parapet for flat. Skip any step the user already locked.
 • Never invent files. Only reference floors / roof plans / elevations actually attached.
+
+${ARCH_DIMENSIONS_REFERENCE}
 
 CURRENT PROJECT STATE (JSON):
 ${ctxJson}`;
