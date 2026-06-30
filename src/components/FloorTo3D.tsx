@@ -156,12 +156,6 @@ export function FloorTo3D() {
   const [pdfSetOpen, setPdfSetOpen] = useState(false);
   const detectorAutoOpened = useRef(false);
   const assistantAutoOpened = useRef(false);
-  const floorInputRef = useRef<HTMLInputElement>(null);
-  const floorInputIndex = useRef<number>(-1);
-  const floorInputSlot = useRef<1 | 2>(1);
-  const roofInputRef = useRef<HTMLInputElement>(null);
-  const siteInputRef = useRef<HTMLInputElement>(null);
-  const elevationInputRef = useRef<HTMLInputElement>(null);
 
   function readFileAsDataUrl(file: File): Promise<string> {
     if (!file.type.startsWith("image/")) return readRawDataUrl(file);
@@ -198,85 +192,6 @@ export function FloorTo3D() {
     });
   }
 
-  async function addFloor() {
-    floorInputIndex.current = -1;
-    floorInputSlot.current = 1;
-    floorInputRef.current?.click();
-  }
-  async function replaceFloor(index: number) {
-    floorInputIndex.current = index;
-    floorInputSlot.current = 1;
-    floorInputRef.current?.click();
-  }
-  async function pickFloorImage2(index: number) {
-    floorInputIndex.current = index;
-    floorInputSlot.current = 2;
-    floorInputRef.current?.click();
-  }
-  async function onFloorPicked(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!isPdfFile(file)) { setError("Floor plans must be PDF. Export your drawing as PDF so the AI can read the vector lines."); return; }
-    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
-    const url = await readFileAsDataUrl(file);
-    const idx = floorInputIndex.current;
-    const slot = floorInputSlot.current;
-    if (idx >= 0) {
-      setFloors((prev) => prev.map((f, i) => i === idx
-        ? (slot === 2 ? { ...f, imageDataUrl2: url, fileName2: file.name } : { ...f, imageDataUrl: url, fileName: file.name })
-        : f));
-    } else {
-      setFloors((prev) => [...prev, {
-        imageDataUrl: url,
-        label: prev.length === 0 ? "Ground floor" : `Floor ${prev.length}`,
-        heightMeters: 2.7,
-                heightUnit: prev[prev.length - 1]?.heightUnit ?? "ft",
-        fileName: file.name,
-      }]);
-    }
-    setError("");
-  }
-  async function onRoofPicked(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    if (files.some((file) => !isPdfFile(file))) { setError("Roof plans must be PDF."); return; }
-    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
-    const added: Array<{ imageDataUrl: string; fileName: string }> = [];
-    for (const file of files) {
-      const url = await readFileAsDataUrl(file);
-      added.push({ imageDataUrl: url, fileName: file.name });
-    }
-    setRoofPlans((prev) => [...prev, ...added].slice(0, 6));
-    setError("");
-  }
-  async function onSitePicked(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!isPdfFile(file)) { setError("Site plans must be PDF."); return; }
-    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
-    const url = await readFileAsDataUrl(file);
-    setSitePlan({ imageDataUrl: url, fileName: file.name });
-    setError("");
-  }
-  async function onElevationsPicked(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    if (files.some((file) => !isPdfFile(file))) { setError("Elevations must be PDF."); return; }
-    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
-    const cycle: ElevationEntry["facing"][] = ["N", "E", "S", "W", "other"];
-    const added: ElevationEntry[] = [];
-    for (const file of files) {
-      const url = await readFileAsDataUrl(file);
-      const facing = cycle[(elevations.length + added.length) % cycle.length];
-      added.push({ imageDataUrl: url, facing, label: "", fileName: file.name });
-    }
-    setElevations((prev) => [...prev, ...added].slice(0, 8));
-    setError("");
-  }
 
   async function buildFromDrawings() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
