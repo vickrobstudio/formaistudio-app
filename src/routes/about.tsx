@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { LegalPage, LegalSection } from "@/components/LegalPage";
 
 export const Route = createFileRoute("/about")({
-  head: () => ({ meta: [{ title: "About — FormAI STUDIO" }, { name: "description", content: "About FormAI STUDIO, the AI visualization and furniture design platform by VICK ROB INC." }, { property: "og:title", content: "About FormAI STUDIO" }, { property: "og:description", content: "Discover the AI visualization and furniture design platform by VICK ROB INC." }] }),
+  head: () => ({ meta: [
+    { title: "About — FormAI STUDIO · For the architects of the world" },
+    { name: "description", content: "FormAI STUDIO is the creative platform for architects, interior and furniture designers building 3D worlds and photorealistic renderings of their ideas. By VICK ROB INC." },
+    { property: "og:title", content: "About FormAI STUDIO — For the architects of the world" },
+    { property: "og:description", content: "The creative app for architects, interior and furniture designers — and every creator of 3D worlds. By VICK ROB INC." },
+  ] }),
   component: AboutPage,
 });
 
