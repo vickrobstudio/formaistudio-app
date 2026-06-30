@@ -7,12 +7,12 @@ import desktopWallpaper from "@/assets/formai-wallpaper-desktop.jpeg.asset.json"
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
-    { title: "FormAI STUDIO — AI Interior Design" },
-    { name: "description", content: "Create interior design proposals with AI and explore selected furniture in photorealistic spaces." },
+    { title: "FormAI STUDIO — For the architects of the world" },
+    { name: "description", content: "The creative app for architects, interior and furniture designers — build 3D worlds and photorealistic renderings to showcase your ideas. For human and god creators." },
     { name: "theme-color", content: "#fbf5e7" },
     { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
-    { property: "og:title", content: "FormAI STUDIO — AI Interior Design" },
-    { property: "og:description", content: "AI-powered interior visualization and furniture exploration." },
+    { property: "og:title", content: "FormAI STUDIO — For the architects of the world" },
+    { property: "og:description", content: "Build 3D worlds and photorealistic renderings. For architects, interior and furniture designers — and every creator." },
   ], links: [{ rel: "preload", as: "image", href: mobileWallpaper.url, fetchPriority: "high" }, { rel: "preload", as: "image", href: desktopWallpaper.url, fetchPriority: "high" }] }),
   component: HomePage,
 });
