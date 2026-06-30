@@ -31,10 +31,10 @@ function HomePage() {
       >
         Enter
       </Link>
-      <nav aria-label="Legal" className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center whitespace-nowrap font-sans text-[9px] tracking-[0.04em] text-black/70 sm:text-[11px]">
-        <Link to="/privacy" className="min-h-11 px-1.5 leading-[2.75rem]">Privacy Policy</Link><span aria-hidden="true">|</span>
-        <Link to="/terms" className="min-h-11 px-1.5 leading-[2.75rem]">Terms of Use</Link><span aria-hidden="true">|</span>
-        <Link to="/contact" className="min-h-11 px-1.5 leading-[2.75rem]">Contact</Link>
+      <nav aria-label="Legal" className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center whitespace-nowrap font-sans text-[9px] tracking-[0.04em] text-[oklch(0.65_0_0)] sm:text-[11px]">
+        <Link to="/privacy" className="min-h-11 px-1.5 leading-[2.75rem] transition-colors hover:text-white">Privacy Policy</Link><span aria-hidden="true">|</span>
+        <Link to="/terms" className="min-h-11 px-1.5 leading-[2.75rem] transition-colors hover:text-white">Terms of Use</Link><span aria-hidden="true">|</span>
+        <Link to="/contact" className="min-h-11 px-1.5 leading-[2.75rem] transition-colors hover:text-white">Contact</Link>
       </nav>
     </section>
   </main>;
