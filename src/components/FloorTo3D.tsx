@@ -16,6 +16,7 @@ import { Building3DViewer } from "@/components/Building3DViewer";
 import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
 import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
 import { DetectionEditor, type FloorDetection } from "@/components/DetectionEditor";
+import { PdfSetImporter, type PdfSetImportResult } from "@/components/PdfSetImporter";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
@@ -152,6 +153,7 @@ export function FloorTo3D() {
   const [detections, setDetections] = useState<Record<number, FloorDetection>>({});
   const [detectorOpen, setDetectorOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [pdfSetOpen, setPdfSetOpen] = useState(false);
   const detectorAutoOpened = useRef(false);
   const assistantAutoOpened = useRef(false);
   const floorInputRef = useRef<HTMLInputElement>(null);
@@ -709,6 +711,14 @@ export function FloorTo3D() {
         <input ref={siteInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onSitePicked} />
         <input ref={elevationInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onElevationsPicked} />
 
+        <div className="mb-5 rounded-2xl border border-dashed border-foreground/30 bg-secondary/30 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Have a full PDF set?</p>
+          <p className="mt-1 text-xs text-muted-foreground">Upload one multi-page PDF with every sheet. Walk page-by-page and label each as floor, roof, site or elevation — they will populate the slots below automatically.</p>
+          <Button type="button" variant="outline" className="mt-3 h-11 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
+            <span>Import a complete drawing set (PDF)</span><Upload />
+          </Button>
+        </div>
+
         <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Site plan (optional)</p>
         <p className="mt-2 text-xs text-muted-foreground">A top-down view of the site — property lines, setbacks, driveway, landscaping. Used to place the building on the ground.</p>
         {sitePlan ? <div className="mt-3 rounded-2xl border border-border p-3">
@@ -890,6 +900,29 @@ export function FloorTo3D() {
         <span>{Object.keys(detections).length === 0 ? "Detect & review elements" : "Re-open detect & review"}</span>
         <Sparkles />
       </Button>}
+
+      {subject === "building" && <PdfSetImporter
+        open={pdfSetOpen}
+        onOpenChange={setPdfSetOpen}
+        onImport={(result: PdfSetImportResult) => {
+          setError("");
+          if (result.floors.length > 0) {
+            setFloors((prev) => [
+              ...prev,
+              ...result.floors.map((f) => ({
+                imageDataUrl: f.imageDataUrl,
+                label: f.label,
+                heightMeters: 2.7,
+                heightUnit: "ft" as const,
+                fileName: f.fileName,
+              })),
+            ]);
+          }
+          if (result.roofPlans.length > 0) setRoofPlans((prev) => [...prev, ...result.roofPlans].slice(0, 6));
+          if (result.sitePlan) setSitePlan(result.sitePlan);
+          if (result.elevations.length > 0) setElevations((prev) => [...prev, ...result.elevations].slice(0, 8));
+        }}
+      />}
 
       {subject === "building" && detectorOpen && <div className="fixed inset-0 z-50 flex flex-col bg-background">
         <div className="flex items-center justify-between border-b border-border px-5 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
