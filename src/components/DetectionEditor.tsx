@@ -182,29 +182,44 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
   ctx.drawImage(srcCanvas, 0, 0, w, h);
   const id = ctx.getImageData(0, 0, w, h);
   const data = id.data;
-  // 1. Threshold — keep every solid black line. A generous luma cutoff
-  //    catches anti-aliased edges and faint linework so nothing is dropped.
+  // 1. Threshold — keep every solid black line, including hairlines. We
+  //    use a generous luma cutoff so anti-aliased single-pixel strokes
+  //    survive, then add any pixel that is darker than its local
+  //    background as a faint-line rescue pass.
   const raw = new Uint8Array(w * h);
+  const luma = new Float32Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    const luma = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    if (luma < 170) raw[p] = 1;
+    luma[p] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    if (luma[p] < 180) raw[p] = 1;
   }
-  // 2. Morphological closing (dilate → erode) to bridge tiny gaps in line
-  //    work so contours become fully enclosed shapes that flood-fill can
-  //    detect as interior regions.
-  const dilate = (src: Uint8Array, radius: number): Uint8Array => {
+  // Faint-line rescue: any pixel noticeably darker than its 4-neighbour
+  // average is treated as a thin stroke even if above the global cutoff.
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const p = y * w + x;
+      if (raw[p]) continue;
+      const avg = (luma[p - 1] + luma[p + 1] + luma[p - w] + luma[p + w]) * 0.25;
+      if (luma[p] < avg - 22 && luma[p] < 220) raw[p] = 1;
+    }
+  }
+  // 2. Build a "gap-bridging" mask via 8-connected morphological closing.
+  //    The closed mask is ONLY unioned with raw at the end, so original
+  //    thin lines are never thinned or broken by the erode step.
+  const dilate8 = (src: Uint8Array, radius: number): Uint8Array => {
     let cur = src;
     for (let r = 0; r < radius; r++) {
       const out = new Uint8Array(w * h);
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
           const p = y * w + x;
+          if (cur[p]) { out[p] = 1; continue; }
           if (
-            cur[p] ||
-            (x > 0 && cur[p - 1]) ||
-            (x < w - 1 && cur[p + 1]) ||
-            (y > 0 && cur[p - w]) ||
-            (y < h - 1 && cur[p + w])
+            (x > 0 && cur[p - 1]) || (x < w - 1 && cur[p + 1]) ||
+            (y > 0 && cur[p - w]) || (y < h - 1 && cur[p + w]) ||
+            (x > 0 && y > 0 && cur[p - w - 1]) ||
+            (x < w - 1 && y > 0 && cur[p - w + 1]) ||
+            (x > 0 && y < h - 1 && cur[p + w - 1]) ||
+            (x < w - 1 && y < h - 1 && cur[p + w + 1])
           ) out[p] = 1;
         }
       }
@@ -212,29 +227,29 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
     }
     return cur;
   };
-  const erode = (src: Uint8Array, radius: number): Uint8Array => {
+  const erode4 = (src: Uint8Array, radius: number): Uint8Array => {
     let cur = src;
     for (let r = 0; r < radius; r++) {
       const out = new Uint8Array(w * h);
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
           const p = y * w + x;
-          if (!cur[p]) continue;
-          if (x === 0 || y === 0 || x === w - 1 || y === h - 1) continue;
-          if (cur[p - 1] && cur[p + 1] && cur[p - w] && cur[p + w]) out[p] = 1;
+          if (cur[p] && cur[p - 1] && cur[p + 1] && cur[p - w] && cur[p + w]) out[p] = 1;
         }
       }
       cur = out;
     }
     return cur;
   };
-  // Closing radius scaled with image size so it bridges hairline gaps but
-  // doesn't fatten the lines visibly. ~0.15% of long side, min 1, max 3.
-  const closingRadius = Math.max(1, Math.min(3, Math.round(Math.max(w, h) * 0.0015)));
-  const dilated = dilate(raw, closingRadius);
-  const mask = erode(dilated, closingRadius);
-  // Union with raw so we never lose an original solid black pixel.
-  for (let p = 0; p < mask.length; p++) if (raw[p]) mask[p] = 1;
+  // Conservative radius: enough to bridge ~2px gaps, never enough to fill
+  // a real opening. Scales with image size, capped at 2.
+  const closingRadius = Math.max(1, Math.min(2, Math.round(Math.max(w, h) * 0.0012)));
+  const dilated = dilate8(raw, closingRadius);
+  const closed = erode4(dilated, closingRadius);
+  // Final mask = original thin lines ∪ closed bridging mask. Hairlines are
+  // preserved exactly; gaps in contours are filled by the closing pass.
+  const mask = new Uint8Array(w * h);
+  for (let p = 0; p < mask.length; p++) if (raw[p] || closed[p]) mask[p] = 1;
   // 3. Paint the final mask back into the canvas: opaque black where the
   //    closed line mask is set, transparent elsewhere.
   for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
