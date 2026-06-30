@@ -94,19 +94,16 @@ async function readDrawing(file: File): Promise<string> {
 }
 
 /**
- * AutoCAD drawings: skip Model space and export every paper-space layout
- * (floors, roof, site plan, etc.) as its own page. Layouts are classified
- * by tab name so we can label them "Ground floor", "Roof", "Site plan"…
- * Falls back to Model space only when the file has no paper-space layouts.
+ * AutoCAD drawings: ONLY export paper-space layouts (floors, roof, site plan,
+ * etc.) — never the Model space view. Layouts are classified by tab name so
+ * we can label them "Ground floor", "Roof", "Site plan"…
  */
 async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; label: string }>> {
   if (isDwg(file) || isDxf(file)) {
     const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
     const db = await parseDrawing(file);
-    const all = (db.layouts ?? []).filter((l) => l.entities.length > 0);
-    const paper = all.filter((l) => !l.isModelSpace);
-    const layouts = paper.length > 0 ? paper : all;
-    if (layouts.length === 0) throw new Error("This DWG/DXF has no drawable geometry.");
+    const layouts = (db.layouts ?? []).filter((l) => !l.isModelSpace && l.entities.length > 0);
+    if (layouts.length === 0) throw new Error("This DWG/DXF has no paper-space layouts to import. Open the file in CAD and publish each sheet to a layout tab first.");
     const out: Array<{ dataUrl: string; label: string }> = [];
     let floorOrder = 0;
     for (const layout of layouts) {
