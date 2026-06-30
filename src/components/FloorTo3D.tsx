@@ -14,6 +14,7 @@ import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-reco
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
+import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
