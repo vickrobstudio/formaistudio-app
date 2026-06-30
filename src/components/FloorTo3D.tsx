@@ -1,18 +1,19 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Check, Download, ImagePlus, LoaderCircle, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Check, Download, ImagePlus, LoaderCircle, MousePointer2, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
-import { generateFloor3D, extractFurnitureBounds } from "@/lib/floor-3d.functions";
+import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor } from "@/lib/floor-3d.functions";
 import { buildMasterPrompt } from "@/lib/floor-3d-prompt.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
+import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
@@ -129,13 +130,15 @@ export function FloorTo3D() {
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
   const fetchFurnitureBounds = useServerFn(extractFurnitureBounds);
+  const lift = useServerFn(liftAnnotatedFloor);
 
   // Multi-image building flow — one image per floor, optional roof plan,
   // multiple elevations. When the user uses this flow we skip the master
   // prompt + approval render and build the 3D model straight from drawings.
-  type FloorEntry = { imageDataUrl: string; imageDataUrl2?: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string; fileName2?: string };
+  type FloorEntry = { imageDataUrl: string; imageDataUrl2?: string; label: string; heightMeters: number; heightUnit: "m" | "ft"; fileName: string; fileName2?: string; annotation?: AnnotatorResult };
   type ElevationEntry = { imageDataUrl: string; facing: "N" | "S" | "E" | "W" | "other"; label: string; fileName: string };
   const [floors, setFloors] = useState<FloorEntry[]>([]);
+  const [annotatorFloorIndex, setAnnotatorFloorIndex] = useState<number | null>(null);
   const [roofPlans, setRoofPlans] = useState<Array<{ imageDataUrl: string; fileName: string }>>([]);
   const [sitePlan, setSitePlan] = useState<{ imageDataUrl: string; fileName: string } | null>(null);
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
@@ -295,7 +298,23 @@ export function FloorTo3D() {
         const scope: "site" | "floor" | "roof" = step.kind;
 
         try {
-          const result = await withTimeout(generate({
+          // Mark & Lift fast path: if the user annotated this floor, extrude
+          // the colored polygons directly — no AI re-analysis.
+          const annotatedFloor = step.kind === "floor" ? floors[step.index].annotation : undefined;
+          const floorIdx = step.kind === "floor" ? step.index : 0;
+          const result = annotatedFloor
+            ? await withTimeout(lift({
+                data: {
+                  label: stepLabel,
+                  imageWidth: annotatedFloor.imageWidth,
+                  imageHeight: annotatedFloor.imageHeight,
+                  planWidthMeters: annotatedFloor.planWidthMeters,
+                  outputUnits,
+                  wallHeightMeters: floors[floorIdx].heightMeters || 2.7,
+                  polygons: annotatedFloor.polygons.map((p) => ({ id: p.id, type: p.type, points: p.points })),
+                },
+              }), BUILDING_CLIENT_FLOOR_TIMEOUT_MS, `${stepLabel} lift took too long.`)
+            : await withTimeout(generate({
             data: {
               wallHeightMeters: floorForBounds.heightMeters || 2.7,
               planUnits,
@@ -698,6 +717,22 @@ export function FloorTo3D() {
                 <Input type="number" min={floor.heightUnit === "ft" ? 1 : 0.3} max={floor.heightUnit === "ft" ? 50 : 15} step={floor.heightUnit === "ft" ? 0.25 : 0.1} inputMode="decimal" value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters} onChange={(event) => { const raw = Number(event.target.value); const v = Number.isFinite(raw) && raw > 0 ? raw : 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; const clamped = Math.min(15, Math.max(0.3, meters || 2.7)); setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: clamped } : f)); }} className="mt-1 h-10" />
               </div>
             </div>
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-dashed border-foreground/40 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Mark &amp; lift</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {floor.annotation
+                    ? `${floor.annotation.polygons.length} element${floor.annotation.polygons.length === 1 ? "" : "s"} ready · ${floor.annotation.planWidthMeters} m scale`
+                    : "Auto-detect walls, doors, windows — recolor to fix, then extrude."}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                {floor.annotation && <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, annotation: undefined } : f))}><X className="size-3" />Clear</Button>}
+                <Button type="button" variant={floor.annotation ? "outline" : "default"} size="sm" onClick={() => setAnnotatorFloorIndex(index)}>
+                  <MousePointer2 className="size-3" />{floor.annotation ? "Edit" : "Mark & lift"}
+                </Button>
+              </div>
+            </div>
           </div>)}
           <Button type="button" variant="outline" className="h-12 w-full justify-between" onClick={() => void addFloor()} disabled={floors.length >= 10}>
             <span>{floors.length === 0 ? "Add ground floor plan" : `Add floor ${floors.length}`}</span><Plus />
@@ -909,5 +944,17 @@ export function FloorTo3D() {
       <ToolInformation sections={information} />
     </section>
     <ToolTabBar />
+    {annotatorFloorIndex !== null && floors[annotatorFloorIndex] && (
+      <FloorAnnotator
+        imageDataUrl={floors[annotatorFloorIndex].imageDataUrl}
+        initialResult={floors[annotatorFloorIndex].annotation}
+        onClose={() => setAnnotatorFloorIndex(null)}
+        onApply={(result) => {
+          const idx = annotatorFloorIndex;
+          setFloors((prev) => prev.map((f, i) => i === idx ? { ...f, annotation: result } : f));
+          setAnnotatorFloorIndex(null);
+        }}
+      />
+    )}
   </main>;
 }
