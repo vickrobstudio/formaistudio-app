@@ -55,6 +55,11 @@ export function DetectionEditor({
   const [busyReplan, setBusyReplan] = useState<number | null>(null);
   const [error, setError] = useState<string>("");
   const [activeIndex, setActiveIndex] = useState<number>(floors[0]?.index ?? 0);
+  const [progressLog, setProgressLog] = useState<string[]>([]);
+
+  function pushLog(line: string) {
+    setProgressLog((prev) => [...prev, line]);
+  }
 
   const activeFloor = floors.find((f) => f.index === activeIndex) ?? floors[0];
   const activeDetection = activeFloor ? detections[activeFloor.index] : undefined;
@@ -68,8 +73,14 @@ export function DetectionEditor({
     setError("");
     setBusyIndex(floor.index);
     try {
+      pushLog(`${floor.label}: small enclosed shapes → walls, narrow gaps in walls → doors & windows.`);
       const res = await detect({ data: { imageDataUrl: floor.imageDataUrl, label: floor.label } });
       if (!res.ok) { setError(res.error); return; }
+      const counts = res.elements.reduce<Record<string, number>>((acc, el) => {
+        acc[el.category] = (acc[el.category] ?? 0) + 1;
+        return acc;
+      }, {});
+      pushLog(`${floor.label}: open enclosed areas → rooms. Found ${Object.entries(counts).map(([k, v]) => `${v} ${k}${v === 1 ? "" : "s"}`).join(", ") || "no elements"}.`);
       onDetectionsChange({
         ...detections,
         [floor.index]: {
@@ -87,10 +98,15 @@ export function DetectionEditor({
   }
 
   async function runDetectAll() {
-    for (const f of floors) {
+    setProgressLog([]);
+    const ordered = [...floors].sort((a, b) => a.index - b.index);
+    for (const f of ordered) {
+      setActiveIndex(f.index);
+      pushLog(`Reading ${f.label}: tracing every closed black-line shape on the plan…`);
       // eslint-disable-next-line no-await-in-loop
       await runDetect(f);
     }
+    pushLog("All floors processed. Review, recolor or replan before building the 3D model.");
   }
 
   async function replan(floor: FloorPlanInput) {
