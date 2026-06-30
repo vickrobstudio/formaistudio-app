@@ -1,12 +1,17 @@
 import { useEffect, useRef } from "react";
 
-// Organic earth tones: greens, teals, light blues, browns, beiges
+// Plant greens, water tones and earth colors (no orange/red/yellow/blue primaries)
 const EARTH = [
-  "#3f6b3a", "#5a8a4e", "#86a96b", "#bcd29a",
-  "#2b6e6a", "#3c9a8f", "#7ec8c0",
-  "#a6c8e0", "#7fb3d5", "#cfe5f0",
-  "#6b4a2b", "#8a5a3b", "#b58860", "#e3c89b",
-  "#f1e3c4", "#ede0c8",
+  // Plant greens
+  "#1f3a1f", "#2e5a2a", "#3f6b3a", "#5a8a4e",
+  "#86a96b", "#a8c48a", "#c8dca4", "#4a7c3a",
+  "#6b8e23",
+  // Water tones
+  "#2b6e6a", "#3c9a8f", "#7ec8c0", "#bfe3df",
+  "#5a8aa0", "#9bbfd0",
+  // Earth tones
+  "#5a3a22", "#7a5230", "#a07248", "#c69b6d",
+  "#d8b48a", "#e8d2a8",
 ];
 
 export function LandingBackgroundPaint({ enabled }: { enabled: boolean }) {
