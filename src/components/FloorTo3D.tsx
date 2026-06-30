@@ -269,16 +269,16 @@ export function FloorTo3D() {
         const label = f.label?.trim() || (i === 0 ? "Ground floor" : `Floor ${i}`);
         setStatus(`Building ${label} (${i + 1}/${floors.length})…`);
         try {
-          const result = f.annotation
+          const result = f.recognition
             ? await withTimeout(lift({
                 data: {
                   label,
-                  imageWidth: f.annotation.imageWidth,
-                  imageHeight: f.annotation.imageHeight,
-                  planWidthMeters: f.annotation.planWidthMeters,
+                  imageWidth: f.recognition.imageWidth,
+                  imageHeight: f.recognition.imageHeight,
+                  planWidthMeters: f.recognition.planWidthMeters,
                   outputUnits,
                   wallHeightMeters: f.heightMeters || 2.7,
-                  polygons: f.annotation.polygons.map((p) => ({ id: p.id, type: p.type, points: p.points })),
+                  polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ id: p.id, type: p.type, points: p.points })),
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`)
             : await withTimeout(generate({
