@@ -49,7 +49,7 @@ const REFERENCE_SHORT_SIDE_METERS: Record<DetectedCategory, number | null> = {
   window: 1.2,      // ~4 ft typical window opening
   wall: 0.15,       // ~6 in interior partition thickness
   stair: 0.28,      // ~11 in typical tread depth
-  fixture: 0.6,     // ~2 ft typical fixture footprint
+  fixture: 0.6096, // 24 in standard kitchen base-cabinet depth
   room: null,       // rooms vary too much to calibrate from
 };
 
