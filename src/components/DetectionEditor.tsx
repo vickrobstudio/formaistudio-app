@@ -182,18 +182,66 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
   ctx.drawImage(srcCanvas, 0, 0, w, h);
   const id = ctx.getImageData(0, 0, w, h);
   const data = id.data;
-  const mask = new Uint8Array(w * h);
+  // 1. Threshold — keep every solid black line. A generous luma cutoff
+  //    catches anti-aliased edges and faint linework so nothing is dropped.
+  const raw = new Uint8Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    // Luma approximation
-    const luma = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
-    if (luma < 140) {
-      // line pixel — force pure black, fully opaque
+    const luma = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    if (luma < 170) raw[p] = 1;
+  }
+  // 2. Morphological closing (dilate → erode) to bridge tiny gaps in line
+  //    work so contours become fully enclosed shapes that flood-fill can
+  //    detect as interior regions.
+  const dilate = (src: Uint8Array, radius: number): Uint8Array => {
+    let cur = src;
+    for (let r = 0; r < radius; r++) {
+      const out = new Uint8Array(w * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const p = y * w + x;
+          if (
+            cur[p] ||
+            (x > 0 && cur[p - 1]) ||
+            (x < w - 1 && cur[p + 1]) ||
+            (y > 0 && cur[p - w]) ||
+            (y < h - 1 && cur[p + w])
+          ) out[p] = 1;
+        }
+      }
+      cur = out;
+    }
+    return cur;
+  };
+  const erode = (src: Uint8Array, radius: number): Uint8Array => {
+    let cur = src;
+    for (let r = 0; r < radius; r++) {
+      const out = new Uint8Array(w * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const p = y * w + x;
+          if (!cur[p]) continue;
+          if (x === 0 || y === 0 || x === w - 1 || y === h - 1) continue;
+          if (cur[p - 1] && cur[p + 1] && cur[p - w] && cur[p + w]) out[p] = 1;
+        }
+      }
+      cur = out;
+    }
+    return cur;
+  };
+  // Closing radius scaled with image size so it bridges hairline gaps but
+  // doesn't fatten the lines visibly. ~0.15% of long side, min 1, max 3.
+  const closingRadius = Math.max(1, Math.min(3, Math.round(Math.max(w, h) * 0.0015)));
+  const dilated = dilate(raw, closingRadius);
+  const mask = erode(dilated, closingRadius);
+  // Union with raw so we never lose an original solid black pixel.
+  for (let p = 0; p < mask.length; p++) if (raw[p]) mask[p] = 1;
+  // 3. Paint the final mask back into the canvas: opaque black where the
+  //    closed line mask is set, transparent elsewhere.
+  for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
+    if (mask[p]) {
       data[i] = 0; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 255;
-      mask[p] = 1;
     } else {
-      // background — fully transparent
       data[i + 3] = 0;
-      mask[p] = 0;
     }
   }
   ctx.putImageData(id, 0, 0);
