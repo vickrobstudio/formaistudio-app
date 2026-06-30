@@ -85,6 +85,7 @@ export function BuildAssistant({
   floorImages,
   roofImages,
   elevationImages,
+  dockMode = false,
 }: {
   floors: FloorCtx[];
   hasRoofPlans: boolean;
@@ -94,8 +95,9 @@ export function BuildAssistant({
   floorImages: AttachableImage[];
   roofImages: AttachableImage[];
   elevationImages: AttachableImage[];
+  dockMode?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(dockMode);
   const [input, setInput] = useState("");
   const [rejected, setRejected] = useState<Set<string>>(new Set());
   const [applied, setApplied] = useState<Set<string>>(new Set());
@@ -142,7 +144,7 @@ export function BuildAssistant({
     await sendMessage({ parts } as Parameters<typeof sendMessage>[0], { body: { context: ctx } });
   }
 
-  if (!open) {
+  if (!open && !dockMode) {
     return <div className="mt-6 rounded-2xl border border-dashed border-foreground/40 bg-secondary/30 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -160,20 +162,22 @@ export function BuildAssistant({
   return <div className="mt-6 overflow-hidden rounded-2xl border border-foreground/30 bg-background shadow-sm">
     <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-4 py-3">
       <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">AI Build Architect</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">{dockMode ? "AI Build Architect · Live build chat" : "AI Build Architect"}</p>
         <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{specLine(spec)}</p>
       </div>
       <div className="flex gap-1">
-        <Button type="button" size="sm" variant="outline" onClick={() => void autoDetect()} disabled={status === "submitted" || status === "streaming"}>
+        {!dockMode && <Button type="button" size="sm" variant="outline" onClick={() => void autoDetect()} disabled={status === "submitted" || status === "streaming"}>
           <Sparkles className="size-3" />Auto-detect
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}><X className="size-3" /></Button>
+        </Button>}
+        {!dockMode && <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}><X className="size-3" /></Button>}
       </div>
     </div>
 
     <div ref={scrollRef} className="max-h-[420px] min-h-[200px] space-y-3 overflow-y-auto px-4 py-3">
       {messages.length === 0 && <div className="text-xs text-muted-foreground">
-        Say hi, or tap <span className="font-semibold text-foreground">Auto-detect</span> to have the AI read your drawings and propose wall heights, ceiling, and roof shape one step at a time.
+        {dockMode
+          ? "Ask anything while your 3D model builds — tweak wall heights, roof shape, or ridge direction and the AI proposes patches you can accept on the fly."
+          : <>Say hi, or tap <span className="font-semibold text-foreground">Auto-detect</span> to have the AI read your drawings and propose wall heights, ceiling, and roof shape one step at a time.</>}
       </div>}
       {messages.map((msg) => <MessageBubble
         key={msg.id}
