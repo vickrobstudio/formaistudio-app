@@ -93,7 +93,7 @@ export function BuildAssistant({
   const [rejected, setRejected] = useState<Set<string>>(new Set());
   const [applied, setApplied] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { lang, units } = useAssistantPrefs();
+  const { lang, units, region } = useAssistantPrefs();
 
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/build-chat" }), []);
   const { messages, sendMessage, status } = useChat({
@@ -102,7 +102,7 @@ export function BuildAssistant({
     onError: (e) => console.error("build chat error", e),
   });
 
-  const ctx = useMemo(() => ({ floors, hasRoofPlans, hasElevations, spec, lang, units }), [floors, hasRoofPlans, hasElevations, spec, lang, units]);
+  const ctx = useMemo(() => ({ floors, hasRoofPlans, hasElevations, spec, lang, units, region }), [floors, hasRoofPlans, hasElevations, spec, lang, units, region]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
