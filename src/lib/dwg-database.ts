@@ -448,11 +448,11 @@ export function describePrecheckIssues(issues: DwgPrecheckIssue[]): string {
  */
 export function rasterizeDatabase(
   db: DwgDatabaseLite,
-  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[] } = {},
-): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"] } {
+  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[]; projectViewports?: boolean } = {},
+): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"]; drawableCount: number } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
-  let sourceEntities = expandRenderableEntities(db, opts.entities ?? db.entities);
+  const sourceEntities = expandRenderableEntities(db, opts.entities ?? db.entities, { projectViewports: opts.projectViewports });
 
   // SIMPLIFICATION RULES (must match what the room-detector expects):
   //  - Skip text / dimensions / leaders / hatches / blocks entirely.
@@ -495,22 +495,12 @@ export function rasterizeDatabase(
       || t === "LEADER" || t === "MLEADER" || t === "MULTILEADER"
       || t === "HATCH" || t === "SOLID" || t === "INSERT" || t === "VIEWPORT");
   }
-  let visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
-  let strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
+  const visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
+  const strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
   // If a CAD author put real plan linework on a badly named layer, keep the
   // preview from going blank. Entity types still remove text/dimensions/arrows,
   // and dashed/hidden/center linetypes still stay out.
-  let drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
-
-  // Some DWGs have paper-space layout tabs with VIEWPORT records that LibreDWG
-  // parses incompletely. If projection produces no wall lines, render the clean
-  // model-space linework instead of showing an empty white sheet.
-  if (drawableEntities.length === 0 && opts.entities) {
-    sourceEntities = expandRenderableEntities(db, db.entities);
-    visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
-    strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
-    drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
-  }
+  const drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
 
   // Fall back to entity-bounding-box if extents are empty.
   let { min, max } = db.extents;
@@ -600,13 +590,18 @@ export function rasterizeDatabase(
     }
   }
 
-  return { dataUrl: canvas.toDataURL("image/png"), width: W, height: H, bounds: { min, max } };
+  return { dataUrl: canvas.toDataURL("image/png"), width: W, height: H, bounds: { min, max }, drawableCount: drawableEntities.length };
 }
 
-function expandRenderableEntities(db: DwgDatabaseLite, entities: DwgEntityLite[]): DwgEntityLite[] {
+function expandRenderableEntities(
+  db: DwgDatabaseLite,
+  entities: DwgEntityLite[],
+  opts: { projectViewports?: boolean } = {},
+): DwgEntityLite[] {
   const blocks = new Map(db.blocks.map((b) => [b.name, b] as const));
   const out: DwgEntityLite[] = [];
   const model = db.entities;
+  const projectViewports = opts.projectViewports ?? true;
 
   const expandInsert = (insert: DwgEntityLite, depth: number): DwgEntityLite[] => {
     if (!insert.blockName || depth > 6) return [];
@@ -639,11 +634,11 @@ function expandRenderableEntities(db: DwgDatabaseLite, entities: DwgEntityLite[]
 
   for (const entity of entities) {
     const t = entity.type.toUpperCase();
-    if (t === "VIEWPORT") {
+    if (t === "VIEWPORT" && projectViewports) {
       out.push(...projectModelThroughViewport(renderableModel, entity));
     } else if (t === "INSERT") {
       out.push(...expandInsert(entity, 0));
-    } else {
+    } else if (t !== "VIEWPORT") {
       out.push(entity);
     }
   }
