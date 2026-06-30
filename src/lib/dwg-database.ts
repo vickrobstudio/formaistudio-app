@@ -164,6 +164,18 @@ function pt(p: unknown): { x: number; y: number; z?: number } | undefined {
   return z != null ? { x, y, z } : { x, y };
 }
 
+function valueOf(o: Record<string, unknown>, ...names: string[]): unknown {
+  for (const name of names) {
+    if (o[name] != null) return o[name];
+  }
+  return undefined;
+}
+
+function numberOf(o: Record<string, unknown>, ...names: string[]): number | undefined {
+  const value = valueOf(o, ...names);
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
   const header = (db.header ?? {}) as Record<string, unknown>;
   const insunits = typeof header.INSUNITS === "number" ? (header.INSUNITS as number) : 0;
@@ -253,8 +265,8 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
 
   switch (type.toUpperCase()) {
     case "LINE":
-      base.start = pt(e.startPoint) ?? pt(e.start);
-      base.end = pt(e.endPoint) ?? pt(e.end);
+      base.start = pt(valueOf(e, "startPoint", "start", "point"));
+      base.end = pt(valueOf(e, "endPoint", "end", "secondPoint"));
       break;
     case "CIRCLE":
       base.center = pt(e.center);
@@ -268,6 +280,8 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
       break;
     case "LWPOLYLINE":
     case "POLYLINE":
+    case "POLYLINE2D":
+    case "POLYLINE3D":
     case "SPLINE":
     case "MLINE": {
       const verts = Array.isArray(e.vertices) ? (e.vertices as unknown[]) : [];
@@ -283,7 +297,8 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
           bulge: typeof r.bulge === "number" ? (r.bulge as number) : undefined,
         };
       });
-      base.closed = Boolean(e.isClosed ?? e.closed ?? ((typeof e.flags === "number" ? e.flags : 0) & 2));
+      const flags = numberOf(e, "flags", "flag") ?? 0;
+      base.closed = Boolean(e.isClosed ?? e.closed ?? (flags & 1) || (flags & 2));
       break;
     }
     case "ELLIPSE":
@@ -301,24 +316,24 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
       break;
     case "INSERT":
       base.blockName = typeof e.name === "string" ? (e.name as string) : "";
-      base.insertionPoint = pt(e.insertionPoint);
-      base.rotation = typeof e.rotation === "number" ? (e.rotation as number) : undefined;
+      base.insertionPoint = pt(valueOf(e, "insertionPoint", "insertPoint", "basePoint"));
+      base.rotation = numberOf(e, "rotation", "angle");
       base.scale = pt(e.scale) ?? {
-        x: typeof e.xScale === "number" ? (e.xScale as number) : 1,
-        y: typeof e.yScale === "number" ? (e.yScale as number) : 1,
-        z: typeof e.zScale === "number" ? (e.zScale as number) : 1,
+        x: numberOf(e, "xScale", "scaleX") ?? 1,
+        y: numberOf(e, "yScale", "scaleY") ?? 1,
+        z: numberOf(e, "zScale", "scaleZ") ?? 1,
       };
       break;
     case "VIEWPORT":
-      base.viewportCenter = pt(e.viewportCenter);
-      base.displayCenter = pt(e.displayCenter);
-      base.targetPoint = pt(e.targetPoint);
-      base.width = typeof e.width === "number" ? (e.width as number) : undefined;
-      base.height = typeof e.height === "number" ? (e.height as number) : undefined;
-      base.viewHeight = typeof e.viewHeight === "number" ? (e.viewHeight as number) : undefined;
-      base.viewTwistAngle = typeof e.viewTwistAngle === "number" ? (e.viewTwistAngle as number) : undefined;
-      base.status = typeof e.status === "number" ? (e.status as number) : undefined;
-      base.statusBitFlags = typeof e.statusBitFlags === "number" ? (e.statusBitFlags as number) : undefined;
+      base.viewportCenter = pt(valueOf(e, "viewportCenter", "center", "centerPoint"));
+      base.displayCenter = pt(valueOf(e, "displayCenter", "viewCenter", "viewTarget"));
+      base.targetPoint = pt(valueOf(e, "targetPoint", "target"));
+      base.width = numberOf(e, "width", "viewportWidth");
+      base.height = numberOf(e, "height", "viewportHeight");
+      base.viewHeight = numberOf(e, "viewHeight", "viewSize");
+      base.viewTwistAngle = numberOf(e, "viewTwistAngle", "twistAngle");
+      base.status = numberOf(e, "status");
+      base.statusBitFlags = numberOf(e, "statusBitFlags", "flags", "flag");
       break;
     default:
       // Keep unknown entities in the list so consumers can decide what to do.
@@ -343,8 +358,8 @@ function normalizeEntityType(value: unknown): string {
     3: "ATTDEF",
     7: "INSERT",
     8: "INSERT",
-    15: "POLYLINE",
-    16: "POLYLINE",
+    15: "POLYLINE2D",
+    16: "POLYLINE3D",
     17: "ARC",
     18: "CIRCLE",
     19: "LINE",
