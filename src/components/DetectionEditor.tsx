@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Paintbrush, Redo2, Sparkles, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
-import { extractRoomRegions, buildClassifierThumbnail } from "@/lib/floor-pipeline";
+import { extractRoomRegions, buildClassifierThumbnail, closeOpenings } from "@/lib/floor-pipeline";
 import { classifyFloorRegions } from "@/lib/floor-classify.functions";
 
 // pdf.js + tesseract.js are loaded lazily inside prepare() so they don't
@@ -481,7 +481,13 @@ export function DetectionEditor({
         // Pipeline step 6+7: flood-fill every enclosed region, then trace
         // each one as a real polygon (not a bounding box) via Moore-
         // neighbor contour + Douglas-Peucker simplification.
-        const regions = extractRoomRegions(work.mask, work.width, work.height);
+        // Step 2 — virtually close door openings so flood-fill can't leak
+        // between rooms. Radius is proportional to the image size so the
+        // same setting works across small and large plans.
+        const closureRadius = Math.max(4, Math.round(Math.max(work.width, work.height) * 0.003));
+        const sealed = closeOpenings(work.mask, work.width, work.height, closureRadius);
+        pushLog(`${floor.label}: sealed door openings (radius ${closureRadius}px) before room detection.`);
+        const regions = extractRoomRegions(sealed, work.width, work.height);
         pushLog(`${floor.label}: traced ${regions.length} enclosed polygon${regions.length === 1 ? "" : "s"} from the line work.`);
         if (regions.length > 0) {
           const paint = document.createElement("canvas");
