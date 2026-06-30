@@ -147,6 +147,9 @@ export function FloorTo3D() {
   const [buildingSpec, setBuildingSpec] = useState<BuildingSpec>({ floors: [] });
   const [detections, setDetections] = useState<Record<number, FloorDetection>>({});
   const [detectorOpen, setDetectorOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const detectorAutoOpened = useRef(false);
+  const assistantAutoOpened = useRef(false);
   const floorInputRef = useRef<HTMLInputElement>(null);
   const floorInputIndex = useRef<number>(-1);
   const floorInputSlot = useRef<1 | 2>(1);
@@ -373,6 +376,29 @@ export function FloorTo3D() {
       previewRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [stage, dae]);
+
+  // Auto-open the detect screen as soon as the first floor plan is uploaded,
+  // so the user is taken straight into the "detect & paint" flow.
+  useEffect(() => {
+    if (subject !== "building") return;
+    if (floors.length > 0 && !detectorAutoOpened.current && Object.keys(detections).length === 0) {
+      detectorAutoOpened.current = true;
+      setDetectorOpen(true);
+    }
+  }, [floors.length, subject, detections]);
+
+  // Once every floor has a detection, auto-open the full-screen AI assistant
+  // so the user answers the build questions before the 3D model is generated.
+  useEffect(() => {
+    if (subject !== "building") return;
+    if (detectorOpen) return;
+    if (floors.length === 0) return;
+    const allDetected = floors.every((_, i) => detections[i] && detections[i].elements.length > 0);
+    if (allDetected && !assistantAutoOpened.current && stage !== "ready") {
+      assistantAutoOpened.current = true;
+      setAssistantOpen(true);
+    }
+  }, [detectorOpen, detections, floors, subject, stage]);
 
   // Time-based progress bar for 3D model creation. The server fn is a single
   // blocking call, so we ease toward 95% over ~45s while busy="model" and
