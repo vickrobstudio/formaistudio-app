@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import logoAsset from "@/assets/formai-logo-bubble-cut.png.asset.json";
 
-// Primary palette for the logo: red, yellow, blue (and close cousins)
+// Bauhaus primaries: red, yellow, blue
 const PALETTE = [
-  "#e60026", "#ff3b30", "#ff6a00",
-  "#ffcc00", "#ffd60a", "#f5b700",
-  "#0066ff", "#1e3a8a", "#00a3ff",
+  "#e1261c", "#d8261b", "#c81d1d",
+  "#ffd500", "#f5c400", "#ffdc1f",
+  "#1e4ea8", "#1438a0", "#2a5cc7",
 ];
 
 export function LandingPaintLogo({ onComplete }: { onComplete?: () => void }) {
