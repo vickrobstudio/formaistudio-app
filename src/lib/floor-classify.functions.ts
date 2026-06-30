@@ -19,7 +19,7 @@ const Input = z.object({
     .string()
     .regex(/^data:image\/(?:png|jpeg|webp);base64,/)
     .max(20_000_000),
-  regions: z.array(RegionInput).min(1).max(120),
+  regions: z.array(RegionInput).min(1).max(2000),
   hint: z.string().max(200).optional(),
 });
 
@@ -106,7 +106,7 @@ export const classifyFloorRegions = createServerFn({ method: "POST" })
         category: z.enum(["room", "wall", "door", "window", "stair", "fixture"]),
         label: z.string().max(60),
         confidence: z.number().min(0).max(1).optional(),
-      })).max(140),
+      })).max(2000),
     });
     const validated = Schema.safeParse(parsed);
     if (!validated.success) {
