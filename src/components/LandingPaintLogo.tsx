@@ -137,7 +137,7 @@ export function LandingPaintLogo({ onComplete, revealed }: { onComplete?: () => 
     <div
       ref={wrapRef}
       className="relative z-10 aspect-square select-none"
-      style={{ width: "50vmin", height: "50vmin" }}
+      style={{ width: "50vmin", height: "50vmin", filter: revealed ? "invert(1)" : undefined }}
     >
       <img
         src={logoAsset.url}
