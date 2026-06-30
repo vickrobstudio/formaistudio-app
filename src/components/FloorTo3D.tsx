@@ -611,25 +611,25 @@ export function FloorTo3D() {
   const showLivePreview = stage === "modeling" || stage === "ready" || Boolean(dae) || Boolean(glb) || hasFloorExports;
 
   return <main className="min-h-screen bg-background"><FormaHeader /><div className="px-5 pt-7"><BackLink /></div>
-    <PageIntro eyebrow="2D to 3D" title="2D plan to 3D model" description="Upload a fully dimensioned floor plan or furniture drawing. AI reads every printed dimension and exports an editable Collada .dae model in the units you choose.">
+    <PageIntro eyebrow="2D to 3D" title="Plan to 3D model" description="Upload a floor plan or furniture drawing. We read your dimensions and export an editable 3D file.">
       <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "VIP · Unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p>
     </PageIntro>
     <section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       {/* Step 1 — Upload */}
       {stepHeading(1, "Upload drawing", stage === "upload", stage !== "upload")}
       <div className="mb-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">What are you uploading?</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">What is it?</p>
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <Button type="button" variant={subject === "building" ? "default" : "outline"} onClick={() => setSubject("building")}>Building / floor plan</Button>
-          <Button type="button" variant={subject === "furniture" ? "default" : "outline"} onClick={() => setSubject("furniture")}>Furniture piece</Button>
+          <Button type="button" variant={subject === "building" ? "default" : "outline"} onClick={() => setSubject("building")}>Building</Button>
+          <Button type="button" variant={subject === "furniture" ? "default" : "outline"} onClick={() => setSubject("furniture")}>Furniture</Button>
         </div>
       </div>
       {subject === "building" && <>
         <div className="rounded-2xl border border-dashed border-foreground/30 bg-secondary/30 p-5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Complete drawings set</p>
-          <p className="mt-1 text-xs text-muted-foreground">Upload one drawings set — a PDF or DWG with every architectural sheet (floor plans, roof, site, elevations). The AI focuses ONLY on architectural plan views and automatically ignores M.E.P. (mechanical, electrical, plumbing) sheets to extract walls, openings and heights for the 3D volumes.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Drawings set</p>
+          <p className="mt-1 text-xs text-muted-foreground">One PDF, DWG or DXF with every sheet. We keep floor / roof / site / elevation pages and skip the rest.</p>
           <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
-            <span>{floors.length === 0 ? "Import architectural PDF or DWG" : "Import another complete drawings set"}</span><Upload />
+            <span>{floors.length === 0 ? "Upload drawings" : "Upload another set"}</span><Upload />
           </Button>
           <InputQualityBadges />
           {(floors.length > 0 || roofPlans.length > 0 || sitePlan || elevations.length > 0) && <div className="mt-4 space-y-2 text-[11px]">
@@ -719,38 +719,35 @@ export function FloorTo3D() {
       </div>
       </>}
 
-      <div className="organic-divider py-8">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Drawing units</p>
-            <p className="mt-2 text-xs text-muted-foreground">Units printed on your source drawing</p>
+      <details className="organic-divider py-6">
+        <summary className="flex cursor-pointer select-none items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em]">
+          <span>Advanced options</span>
+          <span className="text-muted-foreground">{planUnits === "meters" ? "m" : "ft/in"} · {outputUnits} · {quality} poly</span>
+        </summary>
+        <div className="mt-4 space-y-5">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted-foreground">Drawing units</p>
+            <div className="flex rounded-xl border border-foreground p-1">
+              <Button type="button" size="sm" variant={planUnits === "feet-inches" ? "default" : "ghost"} onClick={() => setPlanUnits("feet-inches")}>Feet</Button>
+              <Button type="button" size="sm" variant={planUnits === "meters" ? "default" : "ghost"} onClick={() => setPlanUnits("meters")}>Meters</Button>
+            </div>
           </div>
-          <div className="flex rounded-xl border border-foreground p-1">
-            <Button type="button" size="sm" variant={planUnits === "feet-inches" ? "default" : "ghost"} onClick={() => setPlanUnits("feet-inches")}>Feet & inches</Button>
-            <Button type="button" size="sm" variant={planUnits === "meters" ? "default" : "ghost"} onClick={() => setPlanUnits("meters")}>Meters</Button>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted-foreground">Export units</p>
+            <div className="flex rounded-xl border border-foreground p-1">
+              <Button type="button" size="sm" variant={outputUnits === "feet" ? "default" : "ghost"} onClick={() => setOutputUnits("feet")}>Feet</Button>
+              <Button type="button" size="sm" variant={outputUnits === "meters" ? "default" : "ghost"} onClick={() => setOutputUnits("meters")}>Meters</Button>
+            </div>
           </div>
-        </div>
-        <div className="mt-6 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">.dae output units</p>
-            <p className="mt-2 text-xs text-muted-foreground">Units the exported 3D file will use</p>
-          </div>
-          <div className="flex rounded-xl border border-foreground p-1">
-            <Button type="button" size="sm" variant={outputUnits === "feet" ? "default" : "ghost"} onClick={() => setOutputUnits("feet")}>Feet</Button>
-            <Button type="button" size="sm" variant={outputUnits === "meters" ? "default" : "ghost"} onClick={() => setOutputUnits("meters")}>Meters</Button>
-          </div>
-        </div>
-        <div className="mt-6 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Model detail</p>
-            <p className="mt-2 text-xs text-muted-foreground">High poly = fine geometric detail. Low poly = lighter mesh, fast loading, game-engine ready.</p>
-          </div>
-          <div className="flex rounded-xl border border-foreground p-1">
-            <Button type="button" size="sm" variant={quality === "low" ? "default" : "ghost"} onClick={() => setQuality("low")}>Low poly</Button>
-            <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High poly</Button>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted-foreground">Mesh detail</p>
+            <div className="flex rounded-xl border border-foreground p-1">
+              <Button type="button" size="sm" variant={quality === "low" ? "default" : "ghost"} onClick={() => setQuality("low")}>Low</Button>
+              <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High</Button>
+            </div>
           </div>
         </div>
-      </div>
+      </details>
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
@@ -931,10 +928,13 @@ export function FloorTo3D() {
             <span>{subject === "furniture" ? "Approve & reconstruct 3D mesh (.glb)" : "Approve & build 3D model"}</span>
             <Check />
           </Button>}
-          {subject !== "furniture" && renderFinal && stage !== "modeling" && stage !== "ready" && <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
-            <span>Reconstruct real 3D mesh from rendering (.glb)</span>
-            <Sparkles />
-          </Button>}
+          {subject !== "furniture" && renderFinal && stage !== "modeling" && stage !== "ready" && <details className="mt-2">
+            <summary className="cursor-pointer select-none px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">More options</summary>
+            <Button variant="outline" className="mt-2 h-12 w-full justify-between" disabled={busy !== ""} onClick={() => void reconstructMesh()}>
+              <span>Reconstruct as textured mesh (.glb)</span>
+              <Sparkles />
+            </Button>
+          </details>}
         </>}
       </>}
 
