@@ -206,6 +206,18 @@ export function PdfSetImporter({
         const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
         const db = await parseDrawing(file);
         const { dataUrl, width, height } = rasterizeDatabase(db, { maxDimension: 2600 });
+        // Auto-classify the drawing from its TEXT/MTEXT labels — exactly
+        // the same heuristics PDF sheets use. Title blocks like
+        // "FLOOR PLAN", "SITE PLAN", "ROOF PLAN", "NORTH ELEVATION"
+        // map to floor / site / roof / elevation roles automatically.
+        const allText = db.entities
+          .map((e) => (typeof e.text === "string" ? e.text : ""))
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        let role = classifySheet(allText, 0);
+        // For a single-sheet DWG, never silently ignore — fall back to floor.
+        if (role.kind === "ignore") role = { kind: "floor", order: 0, label: "Ground floor" };
         // Build a thumbnail.
         const thumbCanvas = document.createElement("canvas");
         const thumbScale = 360 / Math.max(width, height);
@@ -223,7 +235,7 @@ export function PdfSetImporter({
           tctx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
         }
         const thumb = thumbCanvas.toDataURL("image/png");
-        setPages([{ pageIndex: 1, thumbDataUrl: thumb, hiResDataUrl: dataUrl, role: { kind: "floor", order: 0, label: "Ground floor" } }]);
+        setPages([{ pageIndex: 1, thumbDataUrl: thumb, hiResDataUrl: dataUrl, role }]);
         setProgress({ done: 1, total: 1 });
         return;
       }

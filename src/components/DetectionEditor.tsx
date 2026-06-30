@@ -694,11 +694,13 @@ export function DetectionEditor({
   return <div className="mt-6 rounded-2xl border border-foreground/30 bg-background p-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Step · Clean &amp; paint each line</p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Step · Clean &amp; paint each boundary</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          AI strips every letter, number and dimension from your plan and makes the white background transparent.
-          Then YOU paint each black line — walls, doors, windows, stairs, rooms or fixtures — by picking a legend color
-          and tapping the line. No auto-detect.
+          AI cleans the drawing — the white paper goes transparent while every black line stays at full strength.
+          Then YOU paint each <strong>enclosed surface inside the black-line boundaries</strong>: pick a legend color
+          (wall, room, door, window, stair, fixture) and tap the empty area inside its contour. The paint floods
+          out from your click until it hits the surrounding black lines, so one tap colors a whole room, one tap
+          colors a whole wall poché — no tracing.
         </p>
         {totalPainted > 0 && <p className="mt-1 text-[11px] font-medium">{totalPainted} line{totalPainted === 1 ? "" : "s"} painted across {Object.keys(detections).length} floor{Object.keys(detections).length === 1 ? "" : "s"}.</p>}
       </div>
