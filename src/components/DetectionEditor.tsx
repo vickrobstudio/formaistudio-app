@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Paintbrush, Sparkles, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LoaderCircle, Paintbrush, Redo2, Sparkles, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
 import { streamImage } from "@/lib/stream-image";
@@ -155,6 +155,30 @@ export function DetectionEditor({
   const workingRef = useRef<Record<number, { width: number; height: number; mask: Uint8Array }>>({});
   const paintCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Per-floor undo/redo history of detection snapshots.
+  type Snap = Pick<FloorDetection, "elements" | "paintedDataUrl" | "planWidthMeters" | "calibration">;
+  const undoRef = useRef<Record<number, Snap[]>>({});
+  const redoRef = useRef<Record<number, Snap[]>>({});
+  const [historyTick, setHistoryTick] = useState(0);
+
+  function snapshotOf(det: FloorDetection): Snap {
+    return {
+      elements: det.elements,
+      paintedDataUrl: det.paintedDataUrl,
+      planWidthMeters: det.planWidthMeters,
+      calibration: det.calibration,
+    };
+  }
+
+  function pushUndo(floorIndex: number, snap: Snap) {
+    const stack = undoRef.current[floorIndex] ?? [];
+    stack.push(snap);
+    if (stack.length > 50) stack.shift();
+    undoRef.current[floorIndex] = stack;
+    redoRef.current[floorIndex] = []; // new action invalidates redo
+    setHistoryTick((t) => t + 1);
+  }
+
   function pushLog(line: string) { setProgressLog((p) => [...p, line]); }
 
   const activeFloor = floors.find((f) => f.index === activeIndex) ?? floors[0];
@@ -294,6 +318,7 @@ export function DetectionEditor({
       }
     }
     const paintedDataUrl = canvas.toDataURL("image/png");
+    pushUndo(activeFloor.index, snapshotOf(activeDetection));
     onDetectionsChange({
       ...detections,
       [activeFloor.index]: {
@@ -308,6 +333,9 @@ export function DetectionEditor({
 
   function clearPaint() {
     if (!activeFloor || !activeDetection) return;
+    if ((activeDetection.elements.length ?? 0) > 0 || activeDetection.paintedDataUrl) {
+      pushUndo(activeFloor.index, snapshotOf(activeDetection));
+    }
     const canvas = paintCanvasRef.current;
     if (canvas) {
       const ctx = canvas.getContext("2d");
@@ -324,6 +352,54 @@ export function DetectionEditor({
       },
     });
   }
+
+  const undo = useCallback(() => {
+    if (!activeFloor || !activeDetection) return;
+    const stack = undoRef.current[activeFloor.index] ?? [];
+    const prev = stack.pop();
+    if (!prev) return;
+    (redoRef.current[activeFloor.index] ??= []).push(snapshotOf(activeDetection));
+    undoRef.current[activeFloor.index] = stack;
+    setHistoryTick((t) => t + 1);
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: { ...activeDetection, ...prev },
+    });
+  }, [activeFloor, activeDetection, detections, onDetectionsChange]);
+
+  const redo = useCallback(() => {
+    if (!activeFloor || !activeDetection) return;
+    const stack = redoRef.current[activeFloor.index] ?? [];
+    const next = stack.pop();
+    if (!next) return;
+    (undoRef.current[activeFloor.index] ??= []).push(snapshotOf(activeDetection));
+    redoRef.current[activeFloor.index] = stack;
+    setHistoryTick((t) => t + 1);
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: { ...activeDetection, ...next },
+    });
+  }, [activeFloor, activeDetection, detections, onDetectionsChange]);
+
+  // Keyboard shortcuts: Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z (or Ctrl/Cmd+Y) for redo.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/i.test(target.tagName)) return;
+      const meta = e.ctrlKey || e.metaKey;
+      if (!meta) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
+  const canUndo = !!activeFloor && (undoRef.current[activeFloor.index]?.length ?? 0) > 0;
+  const canRedo = !!activeFloor && (redoRef.current[activeFloor.index]?.length ?? 0) > 0;
+  // historyTick is intentionally referenced to recompute the flags above.
+  void historyTick;
 
   function setCategoryColor(cat: DetectedCategory, color: string) {
     if (!activeFloor || !activeDetection) return;
@@ -439,8 +515,18 @@ export function DetectionEditor({
         </div>
 
         <div className="space-y-2 border-t border-border pt-3">
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)">
+              <Undo2 className="size-3" />
+              Undo
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={redo} disabled={!canRedo} title="Redo (Shift+Ctrl/Cmd+Z)">
+              <Redo2 className="size-3" />
+              Redo
+            </Button>
+          </div>
           <Button type="button" size="sm" variant="outline" className="w-full" onClick={clearPaint} disabled={!activeDetection?.replannedDataUrl || (activeDetection?.elements.length ?? 0) === 0}>
-            <Undo2 className="size-3" />
+            <Trash2 className="size-3" />
             Clear paint on this floor
           </Button>
         </div>
