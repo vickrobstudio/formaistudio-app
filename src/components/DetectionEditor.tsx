@@ -16,6 +16,10 @@ export type FloorDetection = {
   hidden: Record<string, boolean>;
   colors: Partial<Record<DetectedCategory, string>>;
   replannedDataUrl?: string;
+  /** Real-world width of the plan in meters, inferred from a painted reference shape. */
+  planWidthMeters?: number;
+  /** Which element id the scale was calibrated from + the category used. */
+  calibration?: { elementId: string; category: DetectedCategory; assumedMeters: number };
 };
 
 const DEFAULT_COLORS: Record<DetectedCategory, string> = {
@@ -36,6 +40,27 @@ const CATEGORY_LABEL: Record<DetectedCategory, string> = {
   room: "Rooms",
   fixture: "Fixtures",
 };
+
+// Standard real-world dimensions used to calibrate plan scale from a painted shape.
+// We pick the SHORT side of the shape's bounding box, because that matches the
+// architectural "width" of doors / windows / wall thickness / stair tread depth.
+const REFERENCE_SHORT_SIDE_METERS: Record<DetectedCategory, number | null> = {
+  door: 0.9,        // ~3 ft standard interior door leaf
+  window: 1.2,      // ~4 ft typical window opening
+  wall: 0.15,       // ~6 in interior partition thickness
+  stair: 0.28,      // ~11 in typical tread depth
+  fixture: 0.6,     // ~2 ft typical fixture footprint
+  room: null,       // rooms vary too much to calibrate from
+};
+
+function polygonShortSideNorm(poly: Array<[number, number]>): number {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of poly) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  return Math.min(maxX - minX, maxY - minY);
+}
 
 function polygonToPoints(poly: Array<[number, number]>, w: number, h: number): string {
   return poly.map(([x, y]) => `${(x * w).toFixed(1)},${(y * h).toFixed(1)}`).join(" ");
@@ -172,11 +197,30 @@ export function DetectionEditor({
 
   function paintElement(elementId: string) {
     if (!activeFloor || !activeDetection || !paintCategory) return;
+    const updatedElements = activeDetection.elements.map((el) => el.id === elementId ? { ...el, category: paintCategory } : el);
+    let planWidthMeters = activeDetection.planWidthMeters;
+    let calibration = activeDetection.calibration;
+    const referenceMeters = REFERENCE_SHORT_SIDE_METERS[paintCategory];
+    const painted = updatedElements.find((el) => el.id === elementId);
+    if (referenceMeters && painted) {
+      const shortSide = polygonShortSideNorm(painted.polygon);
+      if (shortSide > 0.001) {
+        // image normalized width = 1; plan real width (m) = referenceMeters / shortSide
+        const inferred = referenceMeters / shortSide;
+        // sanity clamp — most floor plans are 4 m – 60 m wide
+        const clamped = Math.min(120, Math.max(2, inferred));
+        planWidthMeters = clamped;
+        calibration = { elementId, category: paintCategory, assumedMeters: referenceMeters };
+        pushLog(`Calibrated from ${CATEGORY_LABEL[paintCategory].toLowerCase()} ≈ ${referenceMeters} m → plan is about ${clamped.toFixed(1)} m wide.`);
+      }
+    }
     onDetectionsChange({
       ...detections,
       [activeFloor.index]: {
         ...activeDetection,
-        elements: activeDetection.elements.map((el) => el.id === elementId ? { ...el, category: paintCategory } : el),
+        elements: updatedElements,
+        planWidthMeters,
+        calibration,
       },
     });
   }
@@ -275,6 +319,7 @@ export function DetectionEditor({
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend · tap to pick paint color</p>
           {paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Painting <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span> · tap a shape to apply. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
+          {activeDetection?.planWidthMeters && activeDetection?.calibration && <p className="mt-1 text-[10px] text-foreground/80">Scale locked: {CATEGORY_LABEL[activeDetection.calibration.category].toLowerCase()} ≈ {activeDetection.calibration.assumedMeters} m → plan ≈ <span className="font-semibold">{activeDetection.planWidthMeters.toFixed(1)} m</span> wide.</p>}
           <ul className="mt-2 space-y-1.5">
             {CATEGORY_ORDER.map((cat) => {
               const count = activeDetection?.elements.filter((e) => e.category === cat).length ?? 0;
