@@ -185,88 +185,29 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
   ctx.drawImage(srcCanvas, 0, 0, w, h);
   const id = ctx.getImageData(0, 0, w, h);
   const data = id.data;
-  // 1. Threshold — keep every solid black line, including hairlines. We
-  //    use a generous luma cutoff so anti-aliased single-pixel strokes
-  //    survive, then add any pixel that is darker than its local
-  //    background as a faint-line rescue pass.
-  const raw = new Uint8Array(w * h);
-  const luma = new Float32Array(w * h);
-  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
-    luma[p] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    // Generous global cutoff — most CAD prints fall below this.
-    if (luma[p] < 205) raw[p] = 1;
-  }
-  // Faint-line rescue (8-neighbour adaptive contrast): any pixel noticeably
-  // darker than the average of its surroundings is treated as a thin stroke,
-  // even at very light grey values. Catches hairlines and screened linework.
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const p = y * w + x;
-      if (raw[p]) continue;
-      const avg = (
-        luma[p - 1] + luma[p + 1] + luma[p - w] + luma[p + w] +
-        luma[p - w - 1] + luma[p - w + 1] + luma[p + w - 1] + luma[p + w + 1]
-      ) / 8;
-      if (luma[p] < avg - 12 && luma[p] < 235) raw[p] = 1;
-    }
-  }
-  // 2. Build a "gap-bridging" mask via 8-connected morphological closing.
-  //    The closed mask is ONLY unioned with raw at the end, so original
-  //    thin lines are never thinned or broken by the erode step.
-  const dilate8 = (src: Uint8Array, radius: number): Uint8Array => {
-    let cur = src;
-    for (let r = 0; r < radius; r++) {
-      const out = new Uint8Array(w * h);
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const p = y * w + x;
-          if (cur[p]) { out[p] = 1; continue; }
-          if (
-            (x > 0 && cur[p - 1]) || (x < w - 1 && cur[p + 1]) ||
-            (y > 0 && cur[p - w]) || (y < h - 1 && cur[p + w]) ||
-            (x > 0 && y > 0 && cur[p - w - 1]) ||
-            (x < w - 1 && y > 0 && cur[p - w + 1]) ||
-            (x > 0 && y < h - 1 && cur[p + w - 1]) ||
-            (x < w - 1 && y < h - 1 && cur[p + w + 1])
-          ) out[p] = 1;
-        }
-      }
-      cur = out;
-    }
-    return cur;
-  };
-  const erode4 = (src: Uint8Array, radius: number): Uint8Array => {
-    let cur = src;
-    for (let r = 0; r < radius; r++) {
-      const out = new Uint8Array(w * h);
-      for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-          const p = y * w + x;
-          if (cur[p] && cur[p - 1] && cur[p + 1] && cur[p - w] && cur[p + w]) out[p] = 1;
-        }
-      }
-      cur = out;
-    }
-    return cur;
-  };
-  // Closing radius: bridges small-to-medium gaps (hatching joints, broken
-  // door swings, sloppy corners) without filling a real opening. Scales
-  // with image size; capped at 4 px now that working resolution is higher.
-  const closingRadius = Math.max(2, Math.min(4, Math.round(Math.max(w, h) * 0.0022)));
-  const dilated = dilate8(raw, closingRadius);
-  const closed = erode4(dilated, closingRadius);
-  // Final mask = original thin lines ∪ closed bridging mask. Hairlines are
-  // preserved exactly; gaps in contours are filled by the closing pass.
+  // VECTOR-PRESERVING ALPHA KEY. The drawing is line art on a white page —
+  // we only want to make the WHITE transparent. We do NOT threshold,
+  // dilate, erode or otherwise rewrite the line work, because every one
+  // of those passes breaks thin walls and leaves rooms un-enclosed.
+  //
+  // For each pixel: alpha = how far it is from pure white (luma 255).
+  // The RGB stays exactly as drawn, so anti-aliased edges, hairlines,
+  // grey shading and coloured strokes all survive untouched. A small
+  // dead-zone near pure white kills paper texture / JPEG noise without
+  // touching anything that reads as a line.
   const mask = new Uint8Array(w * h);
-  for (let p = 0; p < mask.length; p++) if (raw[p] || closed[p]) mask[p] = 1;
-  // 3. Paint the final mask back into the canvas: opaque black where the
-  //    closed line mask is set, transparent elsewhere.
-  for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
-    if (mask[p]) {
-      data[i] = 0; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 255;
-    } else {
-      data[i + 3] = 0;
-    }
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const luma = r * 0.299 + g * 0.587 + b * 0.114;
+    // Map luma 245..255 → alpha 0 (transparent paper),
+    //     luma 0..210  → alpha 255 (full strength line),
+    // smooth ramp in between so anti-aliased edges keep their softness.
+    let alpha: number;
+    if (luma >= 245) alpha = 0;
+    else if (luma <= 210) alpha = 255;
+    else alpha = Math.round(((245 - luma) / (245 - 210)) * 255);
+    data[i + 3] = alpha;
+    if (alpha >= 96) mask[p] = 1; // mask used downstream for flood-fill / region detection
   }
   ctx.putImageData(id, 0, 0);
   return { dataUrl: canvas.toDataURL("image/png"), width: w, height: h, mask };
@@ -448,17 +389,11 @@ export function DetectionEditor({
         const { canvas } = isPdf
           ? await renderPdfToCanvas(floor.imageDataUrl)
           : await rasterImageToCanvas(floor.imageDataUrl);
-        // 2. OCR pass — erase every letter and number (AutoCAD labels,
-        //    dimensions, room names, sheet notes) by painting solid white
-        //    over each text bbox. Vector linework stays intact so only the
-        //    enclosed geometric areas remain for the AI to detect.
-        pushLog(`${floor.label}: removing text and numbers, keeping enclosed line work…`);
-        const erased = await eraseTextOnCanvas(canvas, (pct) => {
-          if (pct === 0 || pct === 1) pushLog(`${floor.label}: OCR ${(pct * 100).toFixed(0)}%`);
-        });
-        pushLog(`${floor.label}: erased ${erased} text region${erased === 1 ? "" : "s"} — enclosed contours preserved.`);
-        // 3. Convert the remaining white background to transparent so only
-        //    the black-line enclosed areas are left for detection / paint.
+        // Vector-preserving alpha key: keep every original line pixel
+        // exactly as drawn, only knock out the white paper background.
+        // No OCR erase, no thresholding, no morphology — those passes
+        // were breaking thin walls and leaving rooms un-enclosed.
+        pushLog(`${floor.label}: making paper transparent, preserving every line…`);
         const { dataUrl, width, height, mask } = await whiteToTransparentFromSource(canvas);
         cleanedUrl = dataUrl;
         workingRef.current[floor.index] = { width, height, mask };
