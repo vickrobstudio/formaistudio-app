@@ -952,14 +952,8 @@ export function FloorTo3D() {
                     <span>{f.heightMeters.toFixed(2)} m</span>
                   </div>
                   <div className="relative mt-2 w-full overflow-hidden rounded-lg border border-border bg-secondary" style={{ height: heightPx }}>
-                    <img src={f.imageDataUrl} alt={f.label} className="absolute inset-0 size-full object-contain opacity-30" />
-                    {det && <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" className="absolute inset-0 size-full">
-                      {det.elements.filter((el) => !det.hidden[el.id]).map((el) => {
-                        const fill = det.colors[el.category] ?? "#888";
-                        const isRoom = el.category === "room";
-                        return <polygon key={el.id} points={el.polygon.map(([x, y]) => `${(x * 1000).toFixed(1)},${(y * 1000).toFixed(1)}`).join(" ")} fill={fill} fillOpacity={isRoom ? 0.25 : 0.7} stroke={fill} strokeOpacity={0.9} strokeWidth={1.5} />;
-                      })}
-                    </svg>}
+                    <img src={det?.replannedDataUrl ?? f.imageDataUrl} alt={f.label} className="absolute inset-0 size-full object-contain opacity-50" />
+                    {det?.paintedDataUrl && <img src={det.paintedDataUrl} alt="" className="absolute inset-0 size-full object-contain" />}
                   </div>
                 </div>;
               })}
