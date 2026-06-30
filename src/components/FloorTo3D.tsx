@@ -107,7 +107,8 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
     const out: Array<{ dataUrl: string; label: string }> = [];
     let floorOrder = 0;
     for (const layout of layouts) {
-      const { dataUrl } = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: layout.entities });
+      const { dataUrl, drawableCount } = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: layout.entities, projectViewports: false });
+      if (drawableCount === 0) continue;
       const name = (layout.name || "").toLowerCase();
       let label: string;
       if (/\broof\b/.test(name)) label = "Roof";
@@ -121,6 +122,7 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
       }
       out.push({ dataUrl, label });
     }
+    if (out.length === 0) throw new Error("The CAD layouts only contain model-space viewports. Publish/plot the actual plan linework into paper-space layout sheets, then upload again.");
     return out;
   }
   const single = isPdf(file) ? await readRaw(file) : await readImageOptimized(file);
