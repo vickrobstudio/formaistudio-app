@@ -1,5 +1,5 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Grid2X2, House, Settings, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, Grid2X2, House, Sparkles, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
 import formaiLogo from "@/assets/formai-logo-mark.png.asset.json";
 import formaiLogoWhite from "@/assets/formai-logo-white.png.asset.json";
@@ -9,7 +9,6 @@ const tools = [
   { to: "/tools", label: "Tools", icon: Grid2X2 },
   { to: "/create", label: "Create", icon: Sparkles },
   { to: "/dashboard", label: "Profile", icon: UserRound },
-  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export function FormAILogo({ inverse = false, className = "w-16" }: { inverse?: boolean; className?: string }) {
@@ -44,13 +43,12 @@ export function ToolTabBar() {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const isActive = (label: string, to: string) => {
     if (label === "Tools") return ["/tools", "/studio", "/model-to-ai", "/2d-to-3d", "/ai-edits", "/photo-to-ai", "/ai-to-video"].includes(path);
-    if (label === "Profile") return ["/dashboard", "/account", "/cloud", "/history"].includes(path);
-    if (label === "Settings") return ["/settings", "/wallet", "/about", "/terms", "/privacy", "/contact"].includes(path);
+    if (label === "Profile") return ["/dashboard", "/account", "/cloud", "/history", "/settings", "/wallet", "/about", "/terms", "/privacy", "/contact"].includes(path);
     return path === to;
   };
   return (
     <nav aria-label="Creative tools" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-      <div className="mx-auto grid h-16 max-w-xl grid-cols-5">
+      <div className="mx-auto grid h-16 max-w-xl grid-cols-4">
         {tools.map(({ to, label, icon: Icon }) => (
           <Link
             key={to}
