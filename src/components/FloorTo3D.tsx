@@ -59,7 +59,9 @@ const information: ToolInfoSection[] = [
 
 type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
 
-const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 285_000;
+// Per user request: NO TIME LIMIT for 3D model creation. The client guard is
+// effectively disabled (30 minutes) so the server can take as long as needed.
+const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 1_800_000;
 const BUILDING_IMAGE_MAX_DIMENSION = 2400;
 const BUILDING_IMAGE_JPEG_QUALITY = 0.88;
 
