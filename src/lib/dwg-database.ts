@@ -107,7 +107,7 @@ export async function parseDrawing(file: File): Promise<DwgDatabaseLite> {
   const kind = detectKind(file);
   const libredwg = await getLibreDwg();
 
-  let dwgHandle: number | null = null;
+  let dwgHandle: number | null | undefined;
   let db: DwgDatabase;
 
   if (kind === "dxf") {
@@ -117,8 +117,8 @@ export async function parseDrawing(file: File): Promise<DwgDatabaseLite> {
     if (!dwgHandle) throw new Error("Could not parse DXF file.");
     db = libredwg.convert(dwgHandle);
   } else {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    dwgHandle = libredwg.dwg_read_data(bytes, Dwg_File_Type.DWG);
+    const buf = await file.arrayBuffer();
+    dwgHandle = libredwg.dwg_read_data(buf, Dwg_File_Type.DWG);
     if (!dwgHandle) throw new Error("Could not parse DWG file. The file may be corrupted or use an unsupported AutoCAD version.");
     db = libredwg.convert(dwgHandle);
   }
