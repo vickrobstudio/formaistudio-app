@@ -2626,19 +2626,23 @@ export const detectFloorElements = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { ok: false, error: "The detection service is unavailable." };
 
-    const instruction = `You are a professional architectural drafter analysing a 2D floor plan image.
+    const instruction = `You are a professional architectural drafter analysing ONLY the usable architectural plan sheet in a 2D CAD/export image.
 Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...]}.
 
 Rules:
 - Coordinates are NORMALISED 0..1 in the image's own pixel grid (x = left→right, y = top→bottom).
 - Polygons must be SIMPLE (no self-intersections) and listed clockwise OR counter-clockwise.
+- Analyse the plan drawing only: walls, floor/roof outlines, doors, windows, stairs/columns, and fixed plumbing/built-ins.
+- Ignore title blocks, sheet borders, CAD viewports, dimensions, text, room names, grid bubbles, north arrows, legends, hatch noise, furniture symbols, landscaping, elevations, sections, details, structural framing overlays, and random model-space line clusters.
+- If the image is not a readable paper-space architectural plan sheet, return {"polygons":[]} instead of guessing.
 - "wall" — the filled body of a wall, traced as a thin strip following the wall's full thickness. One polygon per wall segment.
 - "door" — the door SWING/opening rectangle in plan.
 - "window" — the window opening rectangle in plan.
 - "floor" — the outline of the floor slab (usually one big polygon).
 - "roof" — the outline of the roof projection if visible (otherwise omit).
 - "fixture" — fixed furniture / fixtures (sink, toilet, counter, stairs body, columns) as their plan footprint.
-- Cover every readable element. Do NOT add empty arrays, comments, or any field beyond the schema.
+- Do not trace every visible line. Only return elements that directly build the 3D architectural model.
+- Do NOT add comments or any field beyond the schema.
 - Return ONLY the JSON object.`;
 
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
