@@ -12,6 +12,7 @@ import { LibreDwg, Dwg_File_Type, type DwgDatabase } from "@mlightcad/libredwg-w
 
 export type DwgEntityLite = {
   id: number;
+  handle?: string;
   type: string;        // libredwg numeric type, kept as string for switch friendliness
   layer: string;
   colorIndex?: number;
@@ -32,6 +33,17 @@ export type DwgEntityLite = {
   rotation?: number;
   scale?: { x: number; y: number; z?: number };
   lineType?: string;
+  viewportCenter?: { x: number; y: number; z?: number };
+  majorAxisEndPoint?: { x: number; y: number; z?: number };
+  displayCenter?: { x: number; y: number; z?: number };
+  targetPoint?: { x: number; y: number; z?: number };
+  width?: number;
+  height?: number;
+  viewHeight?: number;
+  viewTwistAngle?: number;
+  status?: number;
+  statusBitFlags?: number;
+  axisRatio?: number;
 };
 
 export type DwgLayerLite = {
@@ -47,6 +59,7 @@ export type DwgBlockLite = {
   name: string;
   base: { x: number; y: number; z?: number };
   entityCount: number;
+  entities?: DwgEntityLite[];
 };
 
 export type DwgUnits =
@@ -165,9 +178,9 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
     return {
       name: String(r.name ?? ""),
       colorIndex: typeof r.colorIndex === "number" ? (r.colorIndex as number) : undefined,
-      frozen: Boolean(r.isFrozen),
-      locked: Boolean(r.isLocked),
-      on: r.isOff != null ? !r.isOff : true,
+      frozen: Boolean(r.isFrozen ?? r.frozen),
+      locked: Boolean(r.isLocked ?? r.locked),
+      on: r.isOff != null ? !r.isOff : r.off != null ? !r.off : true,
       lineType: typeof r.lineType === "string" ? (r.lineType as string) : undefined,
     };
   });
@@ -175,10 +188,14 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
   const blockEntries = db.tables?.BLOCK_RECORD?.entries ?? [];
   const blocks: DwgBlockLite[] = blockEntries.map((b) => {
     const r = b as unknown as Record<string, unknown>;
+    const blockEntities = Array.isArray(r.entities)
+      ? (r.entities as unknown[]).map((e, i) => normalizeEntity(e as Record<string, unknown>, i))
+      : [];
     return {
       name: String(r.name ?? ""),
       base: pt(r.basePoint) ?? { x: 0, y: 0 },
-      entityCount: Array.isArray(r.entities) ? (r.entities as unknown[]).length : 0,
+      entityCount: blockEntities.length,
+      entities: blockEntities,
     };
   });
 
@@ -189,10 +206,12 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
   // Extract per-layout entity buckets. Model space is `db.entities`;
   // every other layout lives inside a BLOCK_RECORD whose `layout` handle
   // links to a LAYOUT object (which carries the human "Layout1" name).
-  const layoutObjs = (db.objects?.LAYOUT ?? []) as Array<{ handle?: string; layoutName?: string }>;
+  const layoutObjs = (db.objects?.LAYOUT ?? []) as Array<{ handle?: string; layoutName?: string; paperSpaceTableId?: string }>;
   const layoutByHandle = new Map<string, string>();
+  const layoutByBlockHandle = new Map<string, string>();
   for (const lo of layoutObjs) {
     if (lo.handle && lo.layoutName) layoutByHandle.set(String(lo.handle), String(lo.layoutName));
+    if (lo.paperSpaceTableId && lo.layoutName) layoutByBlockHandle.set(String(lo.paperSpaceTableId), String(lo.layoutName));
   }
   const layouts: DwgLayoutLite[] = [];
   // Model space first, always.
@@ -203,7 +222,8 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
     if (!name || /^\*model[_ ]?space$/i.test(name)) continue;
     if (!/^\*paper[_ ]?space/i.test(name)) continue;
     const layoutHandle = typeof rec.layout === "string" ? rec.layout : "";
-    const human = (layoutHandle && layoutByHandle.get(layoutHandle)) || name.replace(/^\*/, "");
+    const blockHandle = typeof rec.handle === "string" ? rec.handle : "";
+    const human = (blockHandle && layoutByBlockHandle.get(blockHandle)) || (layoutHandle && layoutByHandle.get(layoutHandle)) || name.replace(/^\*/, "");
     const ents = Array.isArray(rec.entities) ? (rec.entities as unknown[]) : [];
     const lite = ents.map((e, i) => normalizeEntity(e as Record<string, unknown>, i));
     if (lite.length > 0) layouts.push({ name: human, isModelSpace: false, entities: lite });
@@ -228,6 +248,7 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
   const colorIndex = typeof e.colorIndex === "number" ? (e.colorIndex as number) : undefined;
 
   const base: DwgEntityLite = { id: i, type, layer, colorIndex };
+  if (typeof e.handle === "string") base.handle = e.handle;
   if (typeof e.lineType === "string") base.lineType = e.lineType as string;
 
   switch (type.toUpperCase()) {
@@ -246,19 +267,32 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
       base.endAngle = typeof e.endAngle === "number" ? (e.endAngle as number) : undefined;
       break;
     case "LWPOLYLINE":
-    case "POLYLINE": {
+    case "POLYLINE":
+    case "SPLINE":
+    case "MLINE": {
       const verts = Array.isArray(e.vertices) ? (e.vertices as unknown[]) : [];
-      base.vertices = verts.map((v) => {
+      const fitPoints = Array.isArray(e.fitPoints) ? (e.fitPoints as unknown[]) : [];
+      const controlPoints = Array.isArray(e.controlPoints) ? (e.controlPoints as unknown[]) : [];
+      const rawPoints = type.toUpperCase() === "SPLINE" ? (fitPoints.length > 0 ? fitPoints : controlPoints) : verts;
+      base.vertices = rawPoints.map((v) => {
         const r = (v ?? {}) as Record<string, unknown>;
+        const p = pt(r.vertex) ?? pt(r);
         return {
-          x: typeof r.x === "number" ? (r.x as number) : 0,
-          y: typeof r.y === "number" ? (r.y as number) : 0,
+          x: p?.x ?? 0,
+          y: p?.y ?? 0,
           bulge: typeof r.bulge === "number" ? (r.bulge as number) : undefined,
         };
       });
-      base.closed = Boolean(e.isClosed ?? e.closed);
+      base.closed = Boolean(e.isClosed ?? e.closed ?? ((typeof e.flags === "number" ? e.flags : 0) & 2));
       break;
     }
+    case "ELLIPSE":
+      base.center = pt(e.center);
+      base.majorAxisEndPoint = pt(e.majorAxisEndPoint);
+      base.axisRatio = typeof e.axisRatio === "number" ? (e.axisRatio as number) : undefined;
+      base.startAngle = typeof e.startAngle === "number" ? (e.startAngle as number) : undefined;
+      base.endAngle = typeof e.endAngle === "number" ? (e.endAngle as number) : undefined;
+      break;
     case "TEXT":
     case "MTEXT":
       base.text = typeof e.text === "string" ? (e.text as string) : "";
@@ -269,7 +303,22 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
       base.blockName = typeof e.name === "string" ? (e.name as string) : "";
       base.insertionPoint = pt(e.insertionPoint);
       base.rotation = typeof e.rotation === "number" ? (e.rotation as number) : undefined;
-      base.scale = pt(e.scale);
+      base.scale = pt(e.scale) ?? {
+        x: typeof e.xScale === "number" ? (e.xScale as number) : 1,
+        y: typeof e.yScale === "number" ? (e.yScale as number) : 1,
+        z: typeof e.zScale === "number" ? (e.zScale as number) : 1,
+      };
+      break;
+    case "VIEWPORT":
+      base.viewportCenter = pt(e.viewportCenter);
+      base.displayCenter = pt(e.displayCenter);
+      base.targetPoint = pt(e.targetPoint);
+      base.width = typeof e.width === "number" ? (e.width as number) : undefined;
+      base.height = typeof e.height === "number" ? (e.height as number) : undefined;
+      base.viewHeight = typeof e.viewHeight === "number" ? (e.viewHeight as number) : undefined;
+      base.viewTwistAngle = typeof e.viewTwistAngle === "number" ? (e.viewTwistAngle as number) : undefined;
+      base.status = typeof e.status === "number" ? (e.status as number) : undefined;
+      base.statusBitFlags = typeof e.statusBitFlags === "number" ? (e.statusBitFlags as number) : undefined;
       break;
     default:
       // Keep unknown entities in the list so consumers can decide what to do.
@@ -343,7 +392,7 @@ export function rasterizeDatabase(
 ): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"] } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
-  const sourceEntities = opts.entities ?? db.entities;
+  const sourceEntities = expandRenderableEntities(db, opts.entities ?? db.entities);
 
   // SIMPLIFICATION RULES (must match what the room-detector expects):
   //  - Skip text / dimensions / leaders / hatches / blocks entirely.
@@ -369,14 +418,29 @@ export function rasterizeDatabase(
     "i",
   );
   const layerByName = new Map(db.layers.map((l) => [l.name, l] as const));
-  function shouldDraw(e: DwgEntityLite): boolean {
+  function isNoiseLayer(e: DwgEntityLite): boolean {
+    return NOISE_LAYER.test(e.layer);
+  }
+  function isDashed(e: DwgEntityLite): boolean {
     const layer = layerByName.get(e.layer);
     if (layer?.frozen || layer?.on === false) return false;
     if (layer?.lineType && DASHED_LT.test(layer.lineType)) return false;
     if (e.lineType && DASHED_LT.test(e.lineType)) return false;
-    if (NOISE_LAYER.test(e.layer)) return false;
     return true;
   }
+  function isDrawableType(e: DwgEntityLite): boolean {
+    const t = e.type.toUpperCase();
+    return !(t === "TEXT" || t === "MTEXT" || t === "ATTDEF" || t === "ATTRIB"
+      || t === "DIMENSION" || t.startsWith("DIM")
+      || t === "LEADER" || t === "MLEADER" || t === "MULTILEADER"
+      || t === "HATCH" || t === "SOLID" || t === "INSERT" || t === "VIEWPORT");
+  }
+  const visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
+  const strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
+  // If a CAD author put real plan linework on a badly named layer, keep the
+  // preview from going blank. Entity types still remove text/dimensions/arrows,
+  // and dashed/hidden/center linetypes still stay out.
+  const drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
 
   // Fall back to entity-bounding-box if extents are empty.
   let { min, max } = db.extents;
@@ -384,7 +448,7 @@ export function rasterizeDatabase(
   // from those entities so the layout fills the page.
   if (opts.entities || max.x - min.x <= 0 || max.y - min.y <= 0) {
     let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
-    for (const e of sourceEntities) {
+    for (const e of drawableEntities) {
       for (const p of pointsOf(e)) {
         if (p.x < mnX) mnX = p.x; if (p.y < mnY) mnY = p.y;
         if (p.x > mxX) mxX = p.x; if (p.y > mxY) mxY = p.y;
@@ -397,8 +461,8 @@ export function rasterizeDatabase(
     max = { x: mxX, y: mxY };
   }
 
-  const w = max.x - min.x;
-  const h = max.y - min.y;
+  const w = Math.max(1, max.x - min.x);
+  const h = Math.max(1, max.y - min.y);
   const scale = Math.min((maxDim - 2 * padding) / w, (maxDim - 2 * padding) / h);
   const W = Math.round(w * scale + 2 * padding);
   const H = Math.round(h * scale + 2 * padding);
@@ -420,20 +484,14 @@ export function rasterizeDatabase(
   // Flip Y so drawings render right-side-up.
   const ty = (y: number) => H - (padding + (y - min.y) * scale);
 
-  for (const e of sourceEntities) {
+  for (const e of drawableEntities) {
     const t = e.type.toUpperCase();
-    // Drop annotation/dimension/text/hatch/block-insert entirely.
-    if (t === "TEXT" || t === "MTEXT" || t === "ATTDEF" || t === "ATTRIB"
-        || t === "DIMENSION" || t.startsWith("DIM")
-        || t === "LEADER" || t === "MLEADER" || t === "MULTILEADER"
-        || t === "HATCH" || t === "SOLID" || t === "INSERT") continue;
-    if (!shouldDraw(e)) continue;
     if (t === "LINE" && e.start && e.end) {
       ctx.beginPath();
       ctx.moveTo(tx(e.start.x), ty(e.start.y));
       ctx.lineTo(tx(e.end.x), ty(e.end.y));
       ctx.stroke();
-    } else if ((t === "LWPOLYLINE" || t === "POLYLINE") && e.vertices && e.vertices.length > 1) {
+    } else if ((t === "LWPOLYLINE" || t === "POLYLINE" || t === "SPLINE" || t === "MLINE") && e.vertices && e.vertices.length > 1) {
       ctx.beginPath();
       e.vertices.forEach((v, i) => {
         const X = tx(v.x), Y = ty(v.y);
@@ -456,10 +514,121 @@ export function rasterizeDatabase(
         false,
       );
       ctx.stroke();
+    } else if (t === "ELLIPSE" && e.center && e.majorAxisEndPoint) {
+      const major = Math.hypot(e.majorAxisEndPoint.x, e.majorAxisEndPoint.y) * scale;
+      const minor = major * (e.axisRatio ?? 1);
+      const rotation = -Math.atan2(e.majorAxisEndPoint.y, e.majorAxisEndPoint.x);
+      ctx.beginPath();
+      ctx.ellipse(
+        tx(e.center.x), ty(e.center.y),
+        major, minor,
+        rotation,
+        -(e.endAngle ?? Math.PI * 2), -(e.startAngle ?? 0),
+        false,
+      );
+      ctx.stroke();
     }
   }
 
   return { dataUrl: canvas.toDataURL("image/png"), width: W, height: H, bounds: { min, max } };
+}
+
+function expandRenderableEntities(db: DwgDatabaseLite, entities: DwgEntityLite[]): DwgEntityLite[] {
+  const blocks = new Map(db.blocks.map((b) => [b.name, b] as const));
+  const out: DwgEntityLite[] = [];
+  const model = db.entities;
+
+  const expandInsert = (insert: DwgEntityLite, depth: number): DwgEntityLite[] => {
+    if (!insert.blockName || depth > 6) return [];
+    if (isNoiseName(insert.blockName) || isNoiseName(insert.layer)) return [];
+    const block = blocks.get(insert.blockName);
+    if (!block?.entities?.length || !insert.insertionPoint) return [];
+    const sx = insert.scale?.x ?? 1;
+    const sy = insert.scale?.y ?? sx;
+    const rot = insert.rotation ?? 0;
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+    const mapPoint = (p: { x: number; y: number; z?: number }) => {
+      const x = (p.x - block.base.x) * sx;
+      const y = (p.y - block.base.y) * sy;
+      return {
+        x: insert.insertionPoint!.x + x * cos - y * sin,
+        y: insert.insertionPoint!.y + x * sin + y * cos,
+        z: p.z,
+      };
+    };
+    return block.entities.flatMap((child) => {
+      const entity = transformEntity(child, mapPoint, Math.max(Math.abs(sx), Math.abs(sy)) || 1);
+      if (child.layer === "0") entity.layer = insert.layer;
+      if (entity.type.toUpperCase() === "INSERT") return expandInsert(entity, depth + 1);
+      return [entity];
+    });
+  };
+
+  const renderableModel = model.flatMap((entity) => entity.type.toUpperCase() === "INSERT" ? expandInsert(entity, 0) : [entity]);
+
+  for (const entity of entities) {
+    const t = entity.type.toUpperCase();
+    if (t === "VIEWPORT") {
+      out.push(...projectModelThroughViewport(renderableModel, entity));
+    } else if (t === "INSERT") {
+      out.push(...expandInsert(entity, 0));
+    } else {
+      out.push(entity);
+    }
+  }
+  return out;
+}
+
+function projectModelThroughViewport(model: DwgEntityLite[], viewport: DwgEntityLite): DwgEntityLite[] {
+  if (viewport.status === 0 || ((viewport.statusBitFlags ?? 0) & 131072) !== 0) return [];
+  const center = viewport.viewportCenter;
+  const display = viewport.displayCenter ?? viewport.targetPoint;
+  const width = viewport.width ?? 0;
+  const height = viewport.height ?? 0;
+  const viewHeight = viewport.viewHeight ?? 0;
+  if (!center || !display || width <= 0 || height <= 0 || viewHeight <= 0) return [];
+
+  const viewWidth = viewHeight * (width / height);
+  const halfW = viewWidth / 2;
+  const halfH = viewHeight / 2;
+  const paperScale = height / viewHeight;
+  const twist = -(viewport.viewTwistAngle ?? 0);
+  const cos = Math.cos(twist);
+  const sin = Math.sin(twist);
+  const inView = (p: { x: number; y: number }) => p.x >= display.x - halfW && p.x <= display.x + halfW && p.y >= display.y - halfH && p.y <= display.y + halfH;
+  const mapPoint = (p: { x: number; y: number; z?: number }) => {
+    const dx = p.x - display.x;
+    const dy = p.y - display.y;
+    const rx = dx * cos - dy * sin;
+    const ry = dx * sin + dy * cos;
+    return { x: center.x + rx * paperScale, y: center.y + ry * paperScale, z: p.z };
+  };
+
+  return model
+    .filter((entity) => pointsOf(entity).some(inView))
+    .map((entity) => transformEntity(entity, mapPoint, paperScale));
+}
+
+function transformEntity(
+  entity: DwgEntityLite,
+  mapPoint: (p: { x: number; y: number; z?: number }) => { x: number; y: number; z?: number },
+  radiusScale: number,
+): DwgEntityLite {
+  return {
+    ...entity,
+    start: entity.start ? mapPoint(entity.start) : undefined,
+    end: entity.end ? mapPoint(entity.end) : undefined,
+    center: entity.center ? mapPoint(entity.center) : undefined,
+    majorAxisEndPoint: entity.majorAxisEndPoint,
+    insertionPoint: entity.insertionPoint ? mapPoint(entity.insertionPoint) : undefined,
+    vertices: entity.vertices?.map((v) => ({ ...mapPoint(v), bulge: v.bulge })),
+    radius: entity.radius != null ? entity.radius * radiusScale : undefined,
+  };
+}
+
+function isNoiseName(name: string): boolean {
+  return /(^|[\s\-_.])(text|txt|dim|dims|annot|annotation|note|notes|tag|tags|label|labels|title|titles|grid|grids|hatch|hatches|north|symbol|symbols|legend|legends|scale|arrow|arrows|leader|leaders|callout|callouts|number|numbers|stamp|stamps|furn|furniture|fixture|fixtures|equip|equipment|appliance|appliances)($|[\s\-_.])/i.test(name);
 }
 
 function pointsOf(e: DwgEntityLite): Array<{ x: number; y: number }> {
