@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Eye, EyeOff, LoaderCircle, Sparkles, Wand2 } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, Paintbrush, Sparkles, Wand2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { detectFloorElements, type DetectedCategory, type DetectedElement } from "@/lib/floor-detect.functions";
@@ -56,6 +56,7 @@ export function DetectionEditor({
   const [error, setError] = useState<string>("");
   const [activeIndex, setActiveIndex] = useState<number>(floors[0]?.index ?? 0);
   const [progressLog, setProgressLog] = useState<string[]>([]);
+  const [paintCategory, setPaintCategory] = useState<DetectedCategory | null>(null);
 
   function pushLog(line: string) {
     setProgressLog((prev) => [...prev, line]);
@@ -73,14 +74,11 @@ export function DetectionEditor({
     setError("");
     setBusyIndex(floor.index);
     try {
-      pushLog(`${floor.label}: small enclosed shapes → walls, narrow gaps in walls → doors & windows.`);
+      pushLog(`${floor.label}: removing white background, isolating black line work…`);
+      pushLog(`${floor.label}: tracing every enclosed black shape as a selectable region.`);
       const res = await detect({ data: { imageDataUrl: floor.imageDataUrl, label: floor.label } });
       if (!res.ok) { setError(res.error); return; }
-      const counts = res.elements.reduce<Record<string, number>>((acc, el) => {
-        acc[el.category] = (acc[el.category] ?? 0) + 1;
-        return acc;
-      }, {});
-      pushLog(`${floor.label}: open enclosed areas → rooms. Found ${Object.entries(counts).map(([k, v]) => `${v} ${k}${v === 1 ? "" : "s"}`).join(", ") || "no elements"}.`);
+      pushLog(`${floor.label}: ${res.elements.length} enclosed shape${res.elements.length === 1 ? "" : "s"} ready — tap any shape to paint it with a legend color.`);
       onDetectionsChange({
         ...detections,
         [floor.index]: {
@@ -102,11 +100,11 @@ export function DetectionEditor({
     const ordered = [...floors].sort((a, b) => a.index - b.index);
     for (const f of ordered) {
       setActiveIndex(f.index);
-      pushLog(`Reading ${f.label}: tracing every closed black-line shape on the plan…`);
+      pushLog(`Reading ${f.label}: ignoring all white space, keeping only black lines.`);
       // eslint-disable-next-line no-await-in-loop
       await runDetect(f);
     }
-    pushLog("All floors processed. Review, recolor or replan before building the 3D model.");
+    pushLog("All floors processed. Pick a legend color, then tap any shape to paint it.");
   }
 
   async function replan(floor: FloorPlanInput) {
@@ -157,6 +155,17 @@ export function DetectionEditor({
     onDetectionsChange({
       ...detections,
       [activeFloor.index]: { ...activeDetection, hidden: next },
+    });
+  }
+
+  function paintElement(elementId: string) {
+    if (!activeFloor || !activeDetection || !paintCategory) return;
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: {
+        ...activeDetection,
+        elements: activeDetection.elements.map((el) => el.id === elementId ? { ...el, category: paintCategory } : el),
+      },
     });
   }
 
@@ -219,7 +228,7 @@ export function DetectionEditor({
           {activeDetection && <svg
             viewBox="0 0 1000 1000"
             preserveAspectRatio="none"
-            className="pointer-events-none absolute inset-0 size-full"
+            className={`absolute inset-0 size-full ${paintCategory ? "" : "pointer-events-none"}`}
           >
             {activeDetection.elements.map((el) => {
               if (activeDetection.hidden[el.id]) return null;
@@ -233,6 +242,8 @@ export function DetectionEditor({
                 stroke={fill}
                 strokeOpacity={0.85}
                 strokeWidth={isRoom ? 1 : 1.6}
+                onClick={paintCategory ? () => paintElement(el.id) : undefined}
+                style={paintCategory ? { cursor: "pointer" } : undefined}
               />;
             })}
           </svg>}
@@ -250,22 +261,27 @@ export function DetectionEditor({
 
       <div className="space-y-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend · tap to pick paint color</p>
+          {paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Painting <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span> · tap a shape to apply. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
           <ul className="mt-2 space-y-1.5">
             {CATEGORY_ORDER.map((cat) => {
               const count = activeDetection?.elements.filter((e) => e.category === cat).length ?? 0;
               const visibleCount = activeDetection?.elements.filter((e) => e.category === cat && !activeDetection.hidden[e.id]).length ?? 0;
               const allHidden = count > 0 && visibleCount === 0;
-              return <li key={cat} className="flex items-center gap-2 text-[11px]">
+              const isPainting = paintCategory === cat;
+              return <li key={cat} className={`flex items-center gap-2 rounded-md px-1 py-0.5 text-[11px] ${isPainting ? "bg-foreground/5 ring-1 ring-foreground/30" : ""}`}>
                 <input
                   type="color"
                   value={colors[cat]}
                   onChange={(e) => setCategoryColor(cat, e.target.value)}
-                  disabled={count === 0}
                   className="size-4 cursor-pointer rounded border border-border bg-transparent disabled:cursor-not-allowed"
                   aria-label={`${CATEGORY_LABEL[cat]} color`}
                 />
-                <span className="flex-1">{CATEGORY_LABEL[cat]}</span>
+                <button
+                  type="button"
+                  className="flex-1 text-left hover:underline"
+                  onClick={() => setPaintCategory(isPainting ? null : cat)}
+                >{CATEGORY_LABEL[cat]}</button>
                 <span className="tabular-nums text-muted-foreground">{count}</span>
                 <button
                   type="button"
@@ -280,25 +296,6 @@ export function DetectionEditor({
             })}
           </ul>
         </div>
-
-        {activeDetection && activeDetection.elements.length > 0 && <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Elements</p>
-          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto pr-1">
-            {activeDetection.elements.map((el) => {
-              const hidden = activeDetection.hidden[el.id];
-              return <li key={el.id} className="flex items-center gap-2 text-[11px]">
-                <span className="size-2.5 shrink-0 rounded-full" style={{ background: colors[el.category] }} />
-                <span className={`flex-1 truncate ${hidden ? "line-through opacity-40" : ""}`}>{el.label}</span>
-                <button
-                  type="button"
-                  onClick={() => toggleHidden(el.id)}
-                  className="rounded p-1 text-muted-foreground hover:text-foreground"
-                  aria-label={hidden ? "Show element" : "Hide element"}
-                >{hidden ? <EyeOff className="size-3" /> : <Eye className="size-3" />}</button>
-              </li>;
-            })}
-          </ul>
-        </div>}
 
         <div className="space-y-2 border-t border-border pt-3">
           <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => void replan(activeFloor)} disabled={!activeDetection || busyReplan !== null}>

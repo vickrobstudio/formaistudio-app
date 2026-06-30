@@ -147,6 +147,9 @@ export function FloorTo3D() {
   const [buildingSpec, setBuildingSpec] = useState<BuildingSpec>({ floors: [] });
   const [detections, setDetections] = useState<Record<number, FloorDetection>>({});
   const [detectorOpen, setDetectorOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const detectorAutoOpened = useRef(false);
+  const assistantAutoOpened = useRef(false);
   const floorInputRef = useRef<HTMLInputElement>(null);
   const floorInputIndex = useRef<number>(-1);
   const floorInputSlot = useRef<1 | 2>(1);
@@ -373,6 +376,29 @@ export function FloorTo3D() {
       previewRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [stage, dae]);
+
+  // Auto-open the detect screen as soon as the first floor plan is uploaded,
+  // so the user is taken straight into the "detect & paint" flow.
+  useEffect(() => {
+    if (subject !== "building") return;
+    if (floors.length > 0 && !detectorAutoOpened.current && Object.keys(detections).length === 0) {
+      detectorAutoOpened.current = true;
+      setDetectorOpen(true);
+    }
+  }, [floors.length, subject, detections]);
+
+  // Once every floor has a detection, auto-open the full-screen AI assistant
+  // so the user answers the build questions before the 3D model is generated.
+  useEffect(() => {
+    if (subject !== "building") return;
+    if (detectorOpen) return;
+    if (floors.length === 0) return;
+    const allDetected = floors.every((_, i) => detections[i] && detections[i].elements.length > 0);
+    if (allDetected && !assistantAutoOpened.current && stage !== "ready") {
+      assistantAutoOpened.current = true;
+      setAssistantOpen(true);
+    }
+  }, [detectorOpen, detections, floors, subject, stage]);
 
   // Time-based progress bar for 3D model creation. The server fn is a single
   // blocking call, so we ease toward 95% over ~45s while busy="model" and
@@ -880,6 +906,69 @@ export function FloorTo3D() {
               }));
             }}
           />
+        </div>
+      </div>}
+
+      {subject === "building" && assistantOpen && <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">AI Build Architect</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground truncate">A few questions before we build your 3D model — live preview updates as you answer.</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setAssistantOpen(false)}><Check className="size-3" />Done</Button>
+        </div>
+        <div className="flex-1 overflow-hidden grid lg:grid-cols-[1fr_1fr]" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+          <div className="overflow-y-auto border-b border-border lg:border-b-0 lg:border-r px-5 py-5">
+            <BuildAssistant
+              dockMode
+              floors={floors.map((f, i) => ({ index: i, label: f.label || `Floor ${i}`, heightM: f.heightMeters, hasPlan: Boolean(f.imageDataUrl) }))}
+              hasRoofPlans={roofPlans.length > 0}
+              hasElevations={elevations.length > 0}
+              spec={buildingSpec}
+              floorImages={floors.filter((f) => f.imageDataUrl).map((f, i) => ({ url: f.imageDataUrl, label: f.label || `floor-${i}` }))}
+              roofImages={roofPlans.map((r, i) => ({ url: r.imageDataUrl, label: r.fileName || `roof-${i}` }))}
+              elevationImages={elevations.filter((e) => e.imageDataUrl).map((e, i) => ({ url: e.imageDataUrl, label: e.label || e.facing || `elevation-${i}` }))}
+              onSpecChange={(next) => {
+                setBuildingSpec(next);
+                setFloors((prev) => prev.map((f, i) => {
+                  const perFloor = next.floors.find((x) => x.index === i)?.heightM;
+                  const h = perFloor ?? next.wallHeightM;
+                  return typeof h === "number" && h > 0 ? { ...f, heightMeters: Math.min(15, Math.max(0.3, h)) } : f;
+                }));
+              }}
+            />
+          </div>
+          <div className="overflow-y-auto bg-secondary/30 px-5 py-5">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Live 3D preview</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">Stacked floors from your painted plans. Updates as the AI confirms heights and roof shape.</p>
+            <div className="mt-4 space-y-3">
+              {[...floors].map((f, i) => i).reverse().map((i) => {
+                const f = floors[i];
+                const det = detections[i];
+                const heightPx = Math.max(40, Math.min(140, (f.heightMeters || 2.7) * 30));
+                return <div key={i} className="rounded-2xl border border-border bg-background p-3 shadow-sm" style={{ transform: `perspective(900px) rotateX(38deg) translateY(${i * -4}px)` }}>
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                    <span>{f.label || (i === 0 ? "Ground floor" : `Floor ${i}`)}</span>
+                    <span>{f.heightMeters.toFixed(2)} m</span>
+                  </div>
+                  <div className="relative mt-2 w-full overflow-hidden rounded-lg border border-border bg-secondary" style={{ height: heightPx }}>
+                    <img src={f.imageDataUrl} alt={f.label} className="absolute inset-0 size-full object-contain opacity-30" />
+                    {det && <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" className="absolute inset-0 size-full">
+                      {det.elements.filter((el) => !det.hidden[el.id]).map((el) => {
+                        const fill = det.colors[el.category] ?? "#888";
+                        const isRoom = el.category === "room";
+                        return <polygon key={el.id} points={el.polygon.map(([x, y]) => `${(x * 1000).toFixed(1)},${(y * 1000).toFixed(1)}`).join(" ")} fill={fill} fillOpacity={isRoom ? 0.25 : 0.7} stroke={fill} strokeOpacity={0.9} strokeWidth={1.5} />;
+                      })}
+                    </svg>}
+                  </div>
+                </div>;
+              })}
+              {sitePlan && <div className="rounded-2xl border border-border bg-background p-3 shadow-sm" style={{ transform: "perspective(900px) rotateX(38deg)" }}>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Site</p>
+                <img src={sitePlan.imageDataUrl} alt="Site" className="mt-2 aspect-[4/3] w-full rounded-lg border border-border object-contain opacity-60" />
+              </div>}
+            </div>
+          </div>
         </div>
       </div>}
 
