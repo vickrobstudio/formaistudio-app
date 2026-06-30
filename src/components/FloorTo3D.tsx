@@ -902,32 +902,17 @@ export function FloorTo3D() {
           </p>
         </div>}
         {(dae || glb) && subject !== "building" && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
+        {subject === "building" && floorParts.length > 0 && summary && <div className="mt-3"><Building3DViewer parts={floorParts} outputUnits={summary.outputUnits} /></div>}
         {(dae || glb || obj || fbx || hasFloorExports) && summary && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
           <p className="mt-2 text-xs text-muted-foreground">{glb && dae ? `Reconstructed mesh of your approved rendering · ${quality === "high" ? "High poly" : "Low poly"} · ${summary.outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max` : subject === "building" && floorParts.length > 0 ? `${floorParts.length} part${floorParts.length === 1 ? "" : "s"} · ${summary.outputUnits} · built in order — site, each floor, then roof — as separate files at 100% fidelity from your drawings` : `${summary.count} ${summary.subject === "furniture" ? "parts" : "elements"} · ${summary.outputUnits} · grouped by material`}</p>
-          <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
+          {!(subject === "building" && floorParts.length > 0) && <><p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
           <div className="mt-2 flex rounded-xl border border-foreground p-1">
             <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx && !hasFloorExports} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
             <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" disabled={!obj && !hasFloorExports} onClick={() => setDownloadFormat("obj")}>.obj</Button>
             <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae && !hasFloorExports} onClick={() => setDownloadFormat("dae")}>.dae</Button>
-          </div>
-          {subject === "building" && floorParts.length > 0 ? <div className="mt-4 space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Download by part — built in order</p>
-            {floorParts.map((part, i) => {
-              const isTop = i === floorParts.length - 1;
-              let title: string;
-              if (part.index === -1) title = "Site";
-              else if (part.index === 9999) title = "Roof";
-              else {
-                const num = String(part.index + 1).padStart(2, "0");
-                title = `Floor ${num} — ${part.label?.trim() || `Floor ${num}`}`;
-              }
-              return <Button key={`${part.index}_${i}`} variant="default" className="h-11 w-full justify-between" onClick={() => downloadFloorPart(part, isTop)}>
-                <span>{title}</span>
-                <Download />
-              </Button>;
-            })}
-          </div> : <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>}
+          </div></>}
+          {!(subject === "building" && floorParts.length > 0) && <Button variant="default" className="mt-4 h-11 w-full justify-between" onClick={() => download(downloadFormat)}><span>Download .{downloadFormat}</span><Download /></Button>}
         </div>}
       </div>}
 
