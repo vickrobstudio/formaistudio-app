@@ -57,11 +57,11 @@ export function ToolTabBar() {
             to={to}
             activeOptions={{ exact: true }}
             aria-current={isActive(label, to) ? "page" : undefined}
-            className={`relative flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl transition-[color,transform] active:scale-[0.96] ${isActive(label, to) ? "font-bold text-foreground" : "font-normal text-muted-foreground"}`}
+            className={`relative flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl transition-[color,transform] active:scale-[0.96] ${isActive(label, to) ? "font-bold text-[oklch(0.65_0_0)]" : "font-normal text-muted-foreground"}`}
           >
-            <Icon className="size-[22px]" strokeWidth={isActive(label, to) ? 2.8 : 1.7} />
+            <Icon className="size-[22px]" strokeWidth={isActive(label, to) ? 2.4 : 1.7} />
             <span className={`text-[10px] leading-none ${isActive(label, to) ? "font-bold" : "font-normal"}`}>{label}</span>
-            {isActive(label, to) && <span aria-hidden="true" className="absolute bottom-0 h-0.5 w-5 rounded-full bg-foreground" />}
+            {isActive(label, to) && <span aria-hidden="true" className="absolute bottom-0 h-0.5 w-5 rounded-full bg-[oklch(0.65_0_0)]" />}
           </Link>
         ))}
       </div>

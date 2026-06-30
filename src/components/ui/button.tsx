@@ -9,8 +9,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-background text-foreground border border-foreground/30 shadow-none hover:bg-secondary",
-        destructive: "bg-background text-foreground border border-foreground/30 shadow-none hover:bg-secondary",
+        default: "bg-[oklch(0.85_0_0)] text-foreground border border-foreground/20 shadow-none hover:bg-[oklch(0.65_0_0)]",
+        destructive: "bg-[oklch(0.85_0_0)] text-foreground border border-foreground/20 shadow-none hover:bg-[oklch(0.65_0_0)]",
         outline: "border border-foreground bg-background text-foreground shadow-none hover:bg-secondary",
         secondary: "border border-foreground bg-background text-foreground shadow-none hover:bg-secondary",
         ghost: "text-foreground hover:bg-secondary",
