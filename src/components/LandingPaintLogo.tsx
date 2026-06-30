@@ -14,6 +14,7 @@ export function LandingPaintLogo() {
   const lastRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const hueRef = useRef(0);
   const turbRef = useRef<SVGFEDisplacementMapElement>(null);
+  const activeRef = useRef(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -82,25 +83,31 @@ export function LandingPaintLogo() {
       }
     };
 
-    const onMove = (e: PointerEvent) => paint(e.clientX, e.clientY);
-    const onLeave = () => { lastRef.current = null; };
+    const onMove = (e: PointerEvent) => { activeRef.current = true; paint(e.clientX, e.clientY); };
+    const onLeave = () => {
+      lastRef.current = null;
+      activeRef.current = false;
+      const turb = turbRef.current;
+      if (turb) turb.setAttribute("scale", "0");
+    };
 
     wrap.addEventListener("pointermove", onMove);
     wrap.addEventListener("pointerleave", onLeave);
 
-    // Slow water-flow drift even at rest
+    // Water-flow drift only while cursor is over the logo
     let raf = 0;
     let t = 0;
     const tick = () => {
-      t += 0.006;
-      const turb = turbRef.current;
-      if (turb) {
-        const seed = Math.sin(t) * 3 + 5;
-        const baseFreq = 0.012 + Math.sin(t * 0.7) * 0.004;
-        const parent = turb.parentElement;
-        const turbNode = parent?.querySelector("feTurbulence");
-        turbNode?.setAttribute("baseFrequency", String(baseFreq));
-        turbNode?.setAttribute("seed", String(Math.floor(seed * 100)));
+      if (activeRef.current) {
+        t += 0.012;
+        const turb = turbRef.current;
+        if (turb) {
+          const baseFreq = 0.012 + Math.sin(t * 0.7) * 0.004;
+          const parent = turb.parentElement;
+          const turbNode = parent?.querySelector("feTurbulence");
+          turbNode?.setAttribute("baseFrequency", String(baseFreq));
+          turbNode?.setAttribute("seed", String(Math.floor((Math.sin(t) * 3 + 5) * 100)));
+        }
       }
       raf = requestAnimationFrame(tick);
     };
@@ -135,7 +142,7 @@ export function LandingPaintLogo() {
         <defs>
           <filter id="landing-water" x="-10%" y="-10%" width="120%" height="120%">
             <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="2" result="noise" />
-            <feDisplacementMap ref={turbRef} in="SourceGraphic" in2="noise" scale="8" xChannelSelector="R" yChannelSelector="G" />
+            <feDisplacementMap ref={turbRef} in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R" yChannelSelector="G" />
           </filter>
         </defs>
       </svg>
