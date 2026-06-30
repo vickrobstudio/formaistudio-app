@@ -211,7 +211,10 @@ export function DetectionEditor({
         const clamped = Math.min(120, Math.max(2, inferred));
         planWidthMeters = clamped;
         calibration = { elementId, category: paintCategory, assumedMeters: referenceMeters };
-        pushLog(`Calibrated from ${CATEGORY_LABEL[paintCategory].toLowerCase()} ≈ ${referenceMeters} m → plan is about ${clamped.toFixed(1)} m wide.`);
+        const note = paintCategory === "fixture"
+          ? `kitchen cabinet depth ≈ 24 in (0.61 m)`
+          : `${CATEGORY_LABEL[paintCategory].toLowerCase()} ≈ ${referenceMeters} m`;
+        pushLog(`Calibrated from ${note} → plan is about ${clamped.toFixed(1)} m wide. Walls, rooms and openings now scale from this.`);
       }
     }
     onDetectionsChange({
