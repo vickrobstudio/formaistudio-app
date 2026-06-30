@@ -170,8 +170,9 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
   } else {
     srcCanvas = source;
   }
-  // Cap working resolution so flood fill stays responsive.
-  const MAX = 1800;
+  // Cap working resolution so flood fill stays responsive while keeping
+  // enough pixels for hairlines from CAD PDFs to survive.
+  const MAX = 2600;
   const scale = Math.min(1, MAX / Math.max(srcCanvas.width, srcCanvas.height));
   const w = Math.max(1, Math.round(srcCanvas.width * scale));
   const h = Math.max(1, Math.round(srcCanvas.height * scale));
@@ -190,16 +191,21 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
   const luma = new Float32Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
     luma[p] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    if (luma[p] < 180) raw[p] = 1;
+    // Generous global cutoff — most CAD prints fall below this.
+    if (luma[p] < 205) raw[p] = 1;
   }
-  // Faint-line rescue: any pixel noticeably darker than its 4-neighbour
-  // average is treated as a thin stroke even if above the global cutoff.
+  // Faint-line rescue (8-neighbour adaptive contrast): any pixel noticeably
+  // darker than the average of its surroundings is treated as a thin stroke,
+  // even at very light grey values. Catches hairlines and screened linework.
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const p = y * w + x;
       if (raw[p]) continue;
-      const avg = (luma[p - 1] + luma[p + 1] + luma[p - w] + luma[p + w]) * 0.25;
-      if (luma[p] < avg - 22 && luma[p] < 220) raw[p] = 1;
+      const avg = (
+        luma[p - 1] + luma[p + 1] + luma[p - w] + luma[p + w] +
+        luma[p - w - 1] + luma[p - w + 1] + luma[p + w - 1] + luma[p + w + 1]
+      ) / 8;
+      if (luma[p] < avg - 12 && luma[p] < 235) raw[p] = 1;
     }
   }
   // 2. Build a "gap-bridging" mask via 8-connected morphological closing.
@@ -241,9 +247,10 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
     }
     return cur;
   };
-  // Conservative radius: enough to bridge ~2px gaps, never enough to fill
-  // a real opening. Scales with image size, capped at 2.
-  const closingRadius = Math.max(1, Math.min(2, Math.round(Math.max(w, h) * 0.0012)));
+  // Closing radius: bridges small-to-medium gaps (hatching joints, broken
+  // door swings, sloppy corners) without filling a real opening. Scales
+  // with image size; capped at 4 px now that working resolution is higher.
+  const closingRadius = Math.max(2, Math.min(4, Math.round(Math.max(w, h) * 0.0022)));
   const dilated = dilate8(raw, closingRadius);
   const closed = erode4(dilated, closingRadius);
   // Final mask = original thin lines ∪ closed bridging mask. Hairlines are
