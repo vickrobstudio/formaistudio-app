@@ -310,6 +310,56 @@ function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: n
   return { pixels, bbox: [minX, minY, maxX, maxY], touchedEdge };
 }
 
+/**
+ * Walk every background pixel of the line mask once and return every
+ * enclosed region — i.e. every connected component of "empty" pixels that
+ * does NOT touch the image edge. Each region is reported as a normalized
+ * polygon (axis-aligned bounding box) plus its pixel list so callers can
+ * paint it back on the canvas. Tiny regions and the giant outside region
+ * are filtered out.
+ */
+function detectEnclosedRegions(
+  mask: Uint8Array,
+  w: number,
+  h: number,
+  opts: { minAreaPx?: number; maxRegions?: number } = {},
+): Array<{ pixels: number[]; bbox: [number, number, number, number] }> {
+  const minArea = opts.minAreaPx ?? Math.max(120, Math.round(w * h * 0.00015));
+  const maxRegions = opts.maxRegions ?? 400;
+  const visited = new Uint8Array(w * h);
+  const regions: Array<{ pixels: number[]; bbox: [number, number, number, number] }> = [];
+  for (let p = 0; p < mask.length; p++) {
+    if (visited[p] || mask[p] === 1) continue;
+    // Iterative 4-connected flood fill from this background pixel.
+    const stack = [p];
+    const pixels: number[] = [];
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    let touchedEdge = false;
+    while (stack.length) {
+      const q = stack.pop()!;
+      if (visited[q]) continue;
+      visited[q] = 1;
+      if (mask[q] === 1) continue;
+      pixels.push(q);
+      const x = q % w, y = (q - x) / w;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchedEdge = true;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (x > 0) stack.push(q - 1);
+      if (x < w - 1) stack.push(q + 1);
+      if (y > 0) stack.push(q - w);
+      if (y < h - 1) stack.push(q + w);
+    }
+    if (touchedEdge) continue;          // skip the outside / unsealed regions
+    if (pixels.length < minArea) continue; // skip noise specks
+    regions.push({ pixels, bbox: [minX, minY, maxX, maxY] });
+    if (regions.length >= maxRegions) break;
+  }
+  // Largest regions first — rooms tend to be the biggest enclosures.
+  regions.sort((a, b) => b.pixels.length - a.pixels.length);
+  return regions;
+}
+
 export function DetectionEditor({
   floors,
   detections,
