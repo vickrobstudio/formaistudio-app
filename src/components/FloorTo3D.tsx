@@ -847,22 +847,41 @@ export function FloorTo3D() {
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
-      {subject === "building" && floors.length > 0 && <DetectionEditor
-        floors={floors.map((f, i) => ({ index: i, label: f.label || `Floor ${i}`, imageDataUrl: f.imageDataUrl }))}
-        detections={detections}
-        onDetectionsChange={(next) => {
-          setDetections(next);
-          // If the user accepted a replanned (cleaned) drawing, swap it into the
-          // floor's imageDataUrl so the 3D builder uses the simpler plan.
-          setFloors((prev) => prev.map((f, i) => {
-            const det = next[i];
-            if (det?.replannedDataUrl && det.replannedDataUrl !== f.imageDataUrl) {
-              return { ...f, imageDataUrl: det.replannedDataUrl };
-            }
-            return f;
-          }));
-        }}
-      />}
+      {subject === "building" && floors.length > 0 && <Button
+        type="button"
+        variant={Object.keys(detections).length === 0 ? "default" : "outline"}
+        className="mt-6 h-12 w-full justify-between"
+        onClick={() => setDetectorOpen(true)}
+      >
+        <span>{Object.keys(detections).length === 0 ? "Detect & review elements" : "Re-open detect & review"}</span>
+        <Sparkles />
+      </Button>}
+
+      {subject === "building" && detectorOpen && <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Detect & review elements</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground truncate">Ground floor → top, one level at a time.</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setDetectorOpen(false)}><Check className="size-3" />Done</Button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+          <DetectionEditor
+            floors={floors.map((f, i) => ({ index: i, label: f.label || (i === 0 ? "Ground floor" : `Floor ${i}`), imageDataUrl: f.imageDataUrl }))}
+            detections={detections}
+            onDetectionsChange={(next) => {
+              setDetections(next);
+              setFloors((prev) => prev.map((f, i) => {
+                const det = next[i];
+                if (det?.replannedDataUrl && det.replannedDataUrl !== f.imageDataUrl) {
+                  return { ...f, imageDataUrl: det.replannedDataUrl };
+                }
+                return f;
+              }));
+            }}
+          />
+        </div>
+      </div>}
 
       {subject === "building" && (() => {
         const hasDetections = floors.length > 0 && floors.every((_, i) => detections[i] && detections[i].elements.length > 0);
