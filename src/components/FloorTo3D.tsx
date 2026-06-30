@@ -698,17 +698,18 @@ export function FloorTo3D() {
       </>}
 
       {subject === "furniture" && <>
-      <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg" className="sr-only" onChange={upload} />
+      <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,.dxf,.dwg,.ifc" className="sr-only" onChange={(e) => void upload(e)} />
       <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
         {fileDataUrl && !isPdf
           ? <img src={fileDataUrl} alt={`Uploaded ${subject === "furniture" ? "furniture drawing" : "floor plan"}`} className="max-h-[70vh] w-full object-contain" />
           : <span className="px-6 text-center">
               <Upload className="mx-auto size-6" />
               <span className="mt-3 block text-sm font-bold">{fileName || (subject === "furniture" ? "Upload your furniture drawing" : "Upload your floor plan")}</span>
-              <span className="mt-1 block text-xs text-muted-foreground">PDF, JPG or PNG · up to 2 GB</span>
+              <span className="mt-1 block text-xs text-muted-foreground">DXF · IFC · DWG · PDF · JPG · PNG · up to 2 GB</span>
             </span>}
       </Button>
       {fileName && <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={clearFile}><X />Remove file</Button>}
+      {subject === "furniture" && <InputQualityBadges />}
 
       {/* Optional reference photos — drive the master prompt's shape fidelity */}
       <div className="mt-6">
