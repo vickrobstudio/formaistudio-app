@@ -871,7 +871,18 @@ export function DetectionEditor({
 
     {activeFloor && <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_240px]">
       <div className="relative">
-        <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
+        {/* Tool + zoom strip */}
+        <div className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full border border-border bg-background/95 p-1 shadow-sm backdrop-blur">
+          <Button type="button" size="icon" variant={tool === "pick" ? "default" : "ghost"} className="size-7" onClick={() => setTool("pick")} aria-label="Select" title="Select (V)">
+            <MousePointer2 className="size-3.5" />
+          </Button>
+          <Button type="button" size="icon" variant={tool === "paint" ? "default" : "ghost"} className="size-7" onClick={() => setTool("paint")} aria-label="Paint" title="Paint (B)">
+            <Paintbrush className="size-3.5" />
+          </Button>
+          <Button type="button" size="icon" variant={tool === "move" ? "default" : "ghost"} className="size-7" onClick={() => setTool("move")} aria-label="Move" title="Move (M)">
+            <Move className="size-3.5" />
+          </Button>
+          <span className="mx-1 h-4 w-px bg-border" />
           <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))} disabled={zoom <= 0.25} aria-label="Zoom out">
             <ZoomOut className="size-3.5" />
           </Button>
@@ -883,35 +894,93 @@ export function DetectionEditor({
             <Maximize2 className="size-3.5" />
           </Button>
         </div>
-        <div
-          className="relative max-h-[75vh] overflow-auto rounded-xl border border-border"
-          style={{
-            // Subtle checker so transparent areas are obvious.
-            backgroundImage:
-              "linear-gradient(45deg, #e8e8e8 25%, transparent 25%), linear-gradient(-45deg, #e8e8e8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8e8 75%), linear-gradient(-45deg, transparent 75%, #e8e8e8 75%)",
-            backgroundSize: "16px 16px",
-            backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
-            backgroundColor: "#fafafa",
-          }}
-        >
-          <div className="relative" style={{ width: `${100 * zoom}%` }}>
-            {displayUrl && <img src={displayUrl} alt={activeFloor.label} className="block w-full select-none" draggable={false} />}
-            {activeDetection?.replannedDataUrl && <canvas
-              ref={paintCanvasRef}
-              onClick={paintCategory ? handlePaintClick : undefined}
-              className={`absolute inset-0 size-full ${paintCategory ? "cursor-crosshair" : "pointer-events-none"}`}
-            />}
+
+        <div className="relative max-h-[75vh] overflow-auto rounded-xl border border-border bg-white">
+          {/* The SVG IS the editor. White sheet, faint paper grid behind, the
+              cleaned plan as a faint vector reference, every detected
+              region as an interactive <polygon>. No raster paint, no
+              checker background. */}
+          <div
+            className="relative"
+            style={{
+              width: `${100 * zoom}%`,
+              backgroundImage:
+                "linear-gradient(to right, rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.04) 1px, transparent 1px)",
+              backgroundSize: "32px 32px",
+              backgroundColor: "#ffffff",
+            }}
+          >
+            <svg
+              ref={svgRef}
+              viewBox="0 0 1 1"
+              preserveAspectRatio="xMidYMid meet"
+              className="block w-full"
+              style={{ aspectRatio: "1 / 1", touchAction: "none" }}
+              onPointerMove={onSvgPointerMove}
+              onPointerUp={onSvgPointerUp}
+              onPointerLeave={onSvgPointerUp}
+              onClick={() => { if (tool === "pick") setSelectedId(null); }}
+            >
+              {/* Faint reference: cleaned line drawing under the vector layer. */}
+              {displayUrl && <image href={displayUrl} x={0} y={0} width={1} height={1} preserveAspectRatio="xMidYMid meet" opacity={0.22} style={{ pointerEvents: "none" }} />}
+
+              {/* Interactive shapes. */}
+              {activeDetection?.elements.map((el) => {
+                const isSelected = el.id === selectedId;
+                const isHover = el.id === hoverId;
+                const fill = activeDetection.fills?.[el.id] ?? colors[el.category];
+                const points = el.polygon.map(([x, y]) => `${x},${y}`).join(" ");
+                return <polygon
+                  key={el.id}
+                  points={points}
+                  fill={fill}
+                  fillOpacity={isSelected ? 0.7 : isHover ? 0.55 : 0.42}
+                  stroke={isSelected ? "#111" : isHover ? "#333" : fill}
+                  strokeWidth={isSelected ? 0.004 : 0.0015}
+                  vectorEffect="non-scaling-stroke"
+                  style={{
+                    cursor: tool === "move" ? "grab" : tool === "paint" ? "crosshair" : "pointer",
+                    transition: "fill-opacity 120ms ease",
+                  }}
+                  onPointerDown={(e) => onShapePointerDown(e, el)}
+                  onPointerEnter={() => setHoverId(el.id)}
+                  onPointerLeave={() => setHoverId((h) => (h === el.id ? null : h))}
+                />;
+              })}
+
+              {/* Selected element's vertex handles (visual marker; non-interactive for now). */}
+              {selectedId && activeDetection?.elements.find((e) => e.id === selectedId)?.polygon.map(([x, y], i) => (
+                <circle key={i} cx={x} cy={y} r={0.005} fill="#111" stroke="#fff" strokeWidth={0.002} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+              ))}
+            </svg>
           </div>
-        {!activeDetection?.replannedDataUrl && <div className="absolute inset-0 grid place-items-center bg-background/70 backdrop-blur-sm">
-          <Button type="button" size="sm" onClick={() => void prepare(activeFloor)} disabled={busyIndex !== null}>
-            {busyIndex === activeFloor.index ? <LoaderCircle className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-            Clean this plan
-          </Button>
-        </div>}
-        {busyIndex === activeFloor.index && <div className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-sm">
-          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em]"><LoaderCircle className="size-3 animate-spin" />Cleaning…</p>
-        </div>}
+
+          {!activeDetection?.replannedDataUrl && <div className="absolute inset-0 grid place-items-center bg-background/70 backdrop-blur-sm">
+            <Button type="button" size="sm" onClick={() => void prepare(activeFloor)} disabled={busyIndex !== null}>
+              {busyIndex === activeFloor.index ? <LoaderCircle className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+              Clean this plan
+            </Button>
+          </div>}
+          {busyIndex === activeFloor.index && <div className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-sm">
+            <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em]"><LoaderCircle className="size-3 animate-spin" />Cleaning…</p>
+          </div>}
         </div>
+
+        {/* Status / selected element info */}
+        {selectedId && activeDetection && (() => {
+          const el = activeDetection.elements.find((e) => e.id === selectedId);
+          if (!el) return null;
+          return <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-secondary/40 px-2 py-1 text-[11px]">
+            <span className="font-semibold">{el.label}</span>
+            <span className="text-muted-foreground">· {CATEGORY_LABEL[el.category]}</span>
+            <span className="ml-auto inline-flex items-center gap-1">
+              <input type="color" value={activeDetection.fills?.[el.id] ?? colors[el.category]} onChange={(e) => setElementFill(el.id, e.target.value)} className="size-4 cursor-pointer rounded border border-border bg-transparent" aria-label="Element color" />
+              <Button type="button" size="icon" variant="ghost" className="size-6" onClick={() => deleteElement(el.id)} aria-label="Delete element">
+                <Trash2 className="size-3" />
+              </Button>
+            </span>
+          </div>;
+        })()}
       </div>
 
       <div className="space-y-3">
