@@ -1,7 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Camera, LoaderCircle, Trash2, UserRound } from "lucide-react";
+import { Camera, CircleHelp, LoaderCircle, Trash2, UserRound } from "lucide-react";
 import { useRef, useState, type ChangeEvent } from "react";
 import { DashboardDetail } from "@/components/DashboardDetail";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -114,6 +114,11 @@ function AccountPage() {
       </div>
       {message && <p role="status" className="text-xs text-muted-foreground">{message}</p>}
     </section>
+    <Link to="/contact" className="organic-divider grid min-h-16 grid-cols-[2.75rem_1fr_auto] items-center gap-3 py-3">
+      <span className="grid size-11 place-items-center rounded-full border border-border"><CircleHelp className="size-5" /></span>
+      <span className="text-sm">Contact &amp; help</span>
+      <span className="text-[10px] text-muted-foreground">Get support</span>
+    </Link>
     <section className="border-t border-destructive/40 py-8"><h2 className="text-sm font-semibold text-destructive">Delete account forever</h2><p className="mt-2 text-xs leading-5 text-muted-foreground">Permanently removes your account, cloud files, projects, creations, comments, likes and saved items. This cannot be undone.</p><Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Type DELETE" className="mt-4 h-12" /><Button type="button" variant="destructive" className="mt-3 w-full" disabled={busy || confirmation !== "DELETE"} onClick={() => void permanentlyDelete()}><Trash2 />Delete account forever</Button></section>
   </DashboardDetail>;
 }
