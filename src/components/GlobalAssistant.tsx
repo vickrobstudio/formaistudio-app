@@ -4,12 +4,13 @@ import { useLocation } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Send, X } from "lucide-react";
 
-// Rock / stone — "Pedro / piedra", the first stone of a building.
-function StoneIcon({ className }: { className?: string }) {
+// Construction hard hat — the AI Architect on the jobsite.
+function HardHatIcon({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M5.2 13.4 8 7.8c.4-.8 1.2-1.3 2.1-1.3h4.6c.7 0 1.4.3 1.8.9l3.1 4.2c.6.8.7 1.9.3 2.8l-1.4 3.1c-.5 1.1-1.6 1.8-2.8 1.8H7.9c-1.1 0-2.2-.6-2.7-1.6l-.5-1c-.4-.9-.4-1.9.5-3.3Z" opacity=".95"/>
-      <path d="M9.2 9.6c.5-.3 1.2-.2 1.5.3.3.5.2 1.2-.3 1.5-.5.3-1.2.2-1.5-.3-.3-.5-.2-1.2.3-1.5Z" fill="currentColor" opacity=".35"/>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M3.5 17.5h17" />
+      <path d="M4 17.5v-1.2c0-3.6 2.7-6.6 6.2-7.1V6.2a1.8 1.8 0 0 1 3.6 0V9.2c3.5.5 6.2 3.5 6.2 7.1v1.2" fill="currentColor" fillOpacity="0.9" stroke="currentColor"/>
+      <path d="M8.5 9.5v6.5M15.5 9.5v6.5M12 8.5v7.5" stroke="currentColor" strokeOpacity="0.35" />
     </svg>
   );
 }
@@ -55,7 +56,7 @@ export function GlobalAssistant() {
       onClick={() => setOpen(true)}
       className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-105 active:scale-95"
     >
-      <StoneIcon className="size-7" />
+      <HardHatIcon className="size-7" />
     </button>}
 
     {open && <div className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-h-[78vh] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-foreground/30 bg-background shadow-2xl sm:right-5 sm:left-auto sm:inset-x-auto">
