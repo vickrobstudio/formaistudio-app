@@ -389,17 +389,11 @@ export function DetectionEditor({
         const { canvas } = isPdf
           ? await renderPdfToCanvas(floor.imageDataUrl)
           : await rasterImageToCanvas(floor.imageDataUrl);
-        // 2. OCR pass — erase every letter and number (AutoCAD labels,
-        //    dimensions, room names, sheet notes) by painting solid white
-        //    over each text bbox. Vector linework stays intact so only the
-        //    enclosed geometric areas remain for the AI to detect.
-        pushLog(`${floor.label}: removing text and numbers, keeping enclosed line work…`);
-        const erased = await eraseTextOnCanvas(canvas, (pct) => {
-          if (pct === 0 || pct === 1) pushLog(`${floor.label}: OCR ${(pct * 100).toFixed(0)}%`);
-        });
-        pushLog(`${floor.label}: erased ${erased} text region${erased === 1 ? "" : "s"} — enclosed contours preserved.`);
-        // 3. Convert the remaining white background to transparent so only
-        //    the black-line enclosed areas are left for detection / paint.
+        // Vector-preserving alpha key: keep every original line pixel
+        // exactly as drawn, only knock out the white paper background.
+        // No OCR erase, no thresholding, no morphology — those passes
+        // were breaking thin walls and leaving rooms un-enclosed.
+        pushLog(`${floor.label}: making paper transparent, preserving every line…`);
         const { dataUrl, width, height, mask } = await whiteToTransparentFromSource(canvas);
         cleanedUrl = dataUrl;
         workingRef.current[floor.index] = { width, height, mask };
