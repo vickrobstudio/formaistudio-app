@@ -1,42 +1,32 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Check, Download, ImagePlus, LoaderCircle, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Download, LoaderCircle, Plus, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
-import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor } from "@/lib/floor-3d.functions";
-import { buildMasterPrompt } from "@/lib/floor-3d-prompt.functions";
+import { generateFloor3D, extractFurnitureBounds } from "@/lib/floor-3d.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
-import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
-import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
-import { DetectionEditor, type FloorDetection } from "@/components/DetectionEditor";
-import { PdfSetImporter, type PdfSetImportResult } from "@/components/PdfSetImporter";
-import { InputQualityBadges } from "@/components/InputQualityBadges";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
-import { streamImage } from "@/lib/stream-image";
 
 const information: ToolInfoSection[] = [
   {
     title: "How it works",
-    description: "Upload a clean drawings set or a furniture sheet. We auto-classify pages, find the walls and download 3D files at real-world scale.",
+    description: "Upload a floor plan (one per floor) or a furniture drawing. Tap Build. Download the 3D file.",
     items: [
-      "Buildings: import one PDF or DWG with every sheet — floors are auto-kept, M.E.P. and schedules are skipped.",
-      "Furniture: upload top/front/side views with printed dimensions.",
-      "Output: Collada .dae, OBJ or FBX — Z-up, one group per floor, scaled 1:1.",
+      "Buildings: add one image per floor. Each floor becomes its own group at real-world scale.",
+      "Furniture: top / front / side views with printed dimensions work best.",
+      "Export: .fbx, .obj or .dae — opens in SketchUp, Blender, Rhino, Maya, 3ds Max.",
     ],
   },
 ];
 
-type Stage = "upload" | "prompted" | "rendered" | "modeling" | "ready";
+type Stage = "upload" | "modeling" | "ready";
 
-// Per user request: NO TIME LIMIT for 3D model creation. The client guard is
-// effectively disabled (30 minutes) so the server can take as long as needed.
 const BUILDING_CLIENT_FLOOR_TIMEOUT_MS = 1_800_000;
 const BUILDING_IMAGE_MAX_DIMENSION = 2400;
 const BUILDING_IMAGE_JPEG_QUALITY = 0.88;
@@ -57,7 +47,6 @@ function isPdfFile(file: File): boolean {
 
 function isDxfFile(file: File): boolean { return /\.dxf$/i.test(file.name); }
 function isDwgFile(file: File): boolean { return /\.dwg$/i.test(file.name); }
-function isIfcFile(file: File): boolean { return /\.ifc$/i.test(file.name); }
 
 function readRawDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
