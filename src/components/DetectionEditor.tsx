@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Maximize2, MousePointer2, Move, Paintbrush, Redo2, Sparkles, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, LoaderCircle, Maximize2, MousePointer2, Move, Paintbrush, Redo2, Sparkles, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
 import { extractRoomRegions, buildClassifierThumbnail, closeOpenings } from "@/lib/floor-pipeline";
@@ -1039,6 +1039,28 @@ export function DetectionEditor({
           <Button type="button" size="sm" variant="outline" className="w-full" onClick={clearPaint} disabled={!activeDetection?.replannedDataUrl || (activeDetection?.elements.length ?? 0) === 0}>
             <Trash2 className="size-3" />
             Clear paint on this floor
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="w-full"
+            onClick={() => exportShapesDrawing("svg")}
+            disabled={!activeDetection || (activeDetection.elements.length ?? 0) === 0}
+            title="Download every recognized shape painted in its legend color, with a color key"
+          >
+            <Download className="size-3" />
+            Export shapes drawing (SVG)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-full"
+            onClick={() => exportShapesDrawing("png")}
+            disabled={!activeDetection || (activeDetection.elements.length ?? 0) === 0}
+          >
+            <Download className="size-3" />
+            Export shapes drawing (PNG)
           </Button>
         </div>
       </div>
