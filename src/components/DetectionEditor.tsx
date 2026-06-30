@@ -929,7 +929,7 @@ export function DetectionEditor({
               onClick={() => { if (tool === "pick") setSelectedId(null); }}
             >
               {/* Faint reference: cleaned line drawing under the vector layer. */}
-              {displayUrl && <image href={displayUrl} x={0} y={0} width={1} height={1} preserveAspectRatio="xMidYMid meet" opacity={0.22} style={{ pointerEvents: "none" }} />}
+              {displayUrl && <image href={displayUrl} x={0} y={0} width={1} height={1} preserveAspectRatio="none" opacity={0.22} style={{ pointerEvents: "none" }} />}
 
               {/* Interactive shapes. */}
               {activeDetection?.elements.map((el) => {
