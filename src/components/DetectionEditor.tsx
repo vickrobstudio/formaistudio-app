@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Maximize2, Paintbrush, Redo2, Sparkles, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { LoaderCircle, Maximize2, MousePointer2, Move, Paintbrush, Redo2, Sparkles, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
 import { extractRoomRegions, buildClassifierThumbnail, closeOpenings } from "@/lib/floor-pipeline";
@@ -18,6 +18,8 @@ export type FloorDetection = {
   elements: DetectedElement[];
   hidden: Record<string, boolean>;
   colors: Partial<Record<DetectedCategory, string>>;
+  /** Per-element color override (overrides the category color). */
+  fills?: Record<string, string>;
   /** Cleaned, text-free, transparent-background line drawing (PNG data URL). */
   replannedDataUrl?: string;
   /** Per-element painted pixel mask serialized as PNG data URL — visual paint state. */
@@ -320,13 +322,20 @@ export function DetectionEditor({
   const [progressLog, setProgressLog] = useState<string[]>([]);
   const [paintCategory, setPaintCategory] = useState<DetectedCategory | null>(null);
   const [zoom, setZoom] = useState<number>(1);
+  // Editor tool: pick = hover/click to select an element;
+  // paint = clicking an element re-colors it; move = drag an element to translate it.
+  const [tool, setTool] = useState<"pick" | "paint" | "move">("pick");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragRef = useRef<{ id: string; startX: number; startY: number; orig: Array<[number, number]> } | null>(null);
 
   // Per-floor cached working data: line mask + canvas refs + dimensions.
   const workingRef = useRef<Record<number, { width: number; height: number; mask: Uint8Array }>>({});
   const paintCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Per-floor undo/redo history of detection snapshots.
-  type Snap = Pick<FloorDetection, "elements" | "paintedDataUrl" | "planWidthMeters" | "calibration">;
+  type Snap = Pick<FloorDetection, "elements" | "paintedDataUrl" | "planWidthMeters" | "calibration" | "fills">;
   const undoRef = useRef<Record<number, Snap[]>>({});
   const redoRef = useRef<Record<number, Snap[]>>({});
   const [historyTick, setHistoryTick] = useState(0);
@@ -337,6 +346,7 @@ export function DetectionEditor({
       paintedDataUrl: det.paintedDataUrl,
       planWidthMeters: det.planWidthMeters,
       calibration: det.calibration,
+      fills: det.fills,
     };
   }
 
@@ -688,6 +698,133 @@ export function DetectionEditor({
     });
   }
 
+  // ---- SVG vector editor helpers --------------------------------------
+
+  function updateElement(id: string, mutate: (el: DetectedElement) => DetectedElement) {
+    if (!activeFloor || !activeDetection) return;
+    pushUndo(activeFloor.index, snapshotOf(activeDetection));
+    const next = activeDetection.elements.map((e) => (e.id === id ? mutate(e) : e));
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: { ...activeDetection, elements: next },
+    });
+  }
+
+  function setElementFill(id: string, color: string) {
+    if (!activeFloor || !activeDetection) return;
+    pushUndo(activeFloor.index, snapshotOf(activeDetection));
+    const fills = { ...(activeDetection.fills ?? {}), [id]: color };
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: { ...activeDetection, fills },
+    });
+  }
+
+  function deleteElement(id: string) {
+    if (!activeFloor || !activeDetection) return;
+    pushUndo(activeFloor.index, snapshotOf(activeDetection));
+    const fills = { ...(activeDetection.fills ?? {}) };
+    delete fills[id];
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: {
+        ...activeDetection,
+        elements: activeDetection.elements.filter((e) => e.id !== id),
+        fills,
+      },
+    });
+    setSelectedId(null);
+  }
+
+  // Convert a pointer event into SVG-normalized (0..1) coordinates.
+  function svgPoint(evt: React.PointerEvent<SVGElement> | PointerEvent): { x: number; y: number } | null {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    return { x: (evt.clientX - rect.left) / rect.width, y: (evt.clientY - rect.top) / rect.height };
+  }
+
+  function onShapePointerDown(evt: React.PointerEvent<SVGPolygonElement>, el: DetectedElement) {
+    evt.stopPropagation();
+    setSelectedId(el.id);
+    if (tool === "paint" && paintCategory) {
+      const color = (activeDetection?.colors?.[paintCategory]) ?? DEFAULT_COLORS[paintCategory];
+      // Paint also re-categorises the element so legend counts stay accurate.
+      if (el.category !== paintCategory) {
+        updateElement(el.id, (e) => ({ ...e, category: paintCategory }));
+      }
+      setElementFill(el.id, color);
+      return;
+    }
+    if (tool === "move") {
+      const p = svgPoint(evt);
+      if (!p) return;
+      dragRef.current = { id: el.id, startX: p.x, startY: p.y, orig: el.polygon.map(([x, y]) => [x, y]) };
+      (evt.currentTarget as Element).setPointerCapture?.(evt.pointerId);
+    }
+  }
+
+  function onSvgPointerMove(evt: React.PointerEvent<SVGSVGElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const p = svgPoint(evt);
+    if (!p) return;
+    const dx = p.x - drag.startX;
+    const dy = p.y - drag.startY;
+    if (!activeFloor || !activeDetection) return;
+    const next = activeDetection.elements.map((e) =>
+      e.id === drag.id ? { ...e, polygon: drag.orig.map(([x, y]) => [Math.min(1, Math.max(0, x + dx)), Math.min(1, Math.max(0, y + dy))] as [number, number]) } : e,
+    );
+    onDetectionsChange({ ...detections, [activeFloor.index]: { ...activeDetection, elements: next } });
+  }
+
+  function onSvgPointerUp(evt: React.PointerEvent<SVGSVGElement>) {
+    if (dragRef.current) {
+      // Snapshot AFTER the drag so undo restores the pre-drag position.
+      // The first move already pushed an undo via updateElement? No — we
+      // mutated directly. Push one snapshot now of the moved state's
+      // PREVIOUS frame from history? Simpler: snapshot the un-dragged
+      // polygon as the undo target.
+      const drag = dragRef.current;
+      if (activeFloor && activeDetection) {
+        const stack = undoRef.current[activeFloor.index] ?? [];
+        const originalElements = activeDetection.elements.map((e) =>
+          e.id === drag.id ? { ...e, polygon: drag.orig } : e,
+        );
+        stack.push({
+          elements: originalElements,
+          paintedDataUrl: activeDetection.paintedDataUrl,
+          planWidthMeters: activeDetection.planWidthMeters,
+          calibration: activeDetection.calibration,
+          fills: activeDetection.fills,
+        });
+        if (stack.length > 50) stack.shift();
+        undoRef.current[activeFloor.index] = stack;
+        redoRef.current[activeFloor.index] = [];
+        setHistoryTick((t) => t + 1);
+      }
+      dragRef.current = null;
+      (evt.currentTarget as Element).releasePointerCapture?.(evt.pointerId);
+    }
+  }
+
+  // Delete-key shortcut for the SVG editor.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/i.test(target.tagName)) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+        e.preventDefault();
+        deleteElement(selectedId);
+      } else if (e.key === "Escape") {
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, activeFloor?.index]);
+
   const colors = { ...DEFAULT_COLORS, ...(activeDetection?.colors ?? {}) };
   const displayUrl = activeDetection?.replannedDataUrl ?? activeFloor?.imageDataUrl;
 
@@ -734,7 +871,18 @@ export function DetectionEditor({
 
     {activeFloor && <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_240px]">
       <div className="relative">
-        <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
+        {/* Tool + zoom strip */}
+        <div className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full border border-border bg-background/95 p-1 shadow-sm backdrop-blur">
+          <Button type="button" size="icon" variant={tool === "pick" ? "default" : "ghost"} className="size-7" onClick={() => setTool("pick")} aria-label="Select" title="Select (V)">
+            <MousePointer2 className="size-3.5" />
+          </Button>
+          <Button type="button" size="icon" variant={tool === "paint" ? "default" : "ghost"} className="size-7" onClick={() => setTool("paint")} aria-label="Paint" title="Paint (B)">
+            <Paintbrush className="size-3.5" />
+          </Button>
+          <Button type="button" size="icon" variant={tool === "move" ? "default" : "ghost"} className="size-7" onClick={() => setTool("move")} aria-label="Move" title="Move (M)">
+            <Move className="size-3.5" />
+          </Button>
+          <span className="mx-1 h-4 w-px bg-border" />
           <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))} disabled={zoom <= 0.25} aria-label="Zoom out">
             <ZoomOut className="size-3.5" />
           </Button>
@@ -746,41 +894,108 @@ export function DetectionEditor({
             <Maximize2 className="size-3.5" />
           </Button>
         </div>
-        <div
-          className="relative max-h-[75vh] overflow-auto rounded-xl border border-border"
-          style={{
-            // Subtle checker so transparent areas are obvious.
-            backgroundImage:
-              "linear-gradient(45deg, #e8e8e8 25%, transparent 25%), linear-gradient(-45deg, #e8e8e8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8e8 75%), linear-gradient(-45deg, transparent 75%, #e8e8e8 75%)",
-            backgroundSize: "16px 16px",
-            backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
-            backgroundColor: "#fafafa",
-          }}
-        >
-          <div className="relative" style={{ width: `${100 * zoom}%` }}>
-            {displayUrl && <img src={displayUrl} alt={activeFloor.label} className="block w-full select-none" draggable={false} />}
-            {activeDetection?.replannedDataUrl && <canvas
-              ref={paintCanvasRef}
-              onClick={paintCategory ? handlePaintClick : undefined}
-              className={`absolute inset-0 size-full ${paintCategory ? "cursor-crosshair" : "pointer-events-none"}`}
-            />}
+
+        <div className="relative max-h-[75vh] overflow-auto rounded-xl border border-border bg-white">
+          {/* The SVG IS the editor. White sheet, faint paper grid behind, the
+              cleaned plan as a faint vector reference, every detected
+              region as an interactive <polygon>. No raster paint, no
+              checker background. */}
+          <div
+            className="relative"
+            style={{
+              width: `${100 * zoom}%`,
+              backgroundImage:
+                "linear-gradient(to right, rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.04) 1px, transparent 1px)",
+              backgroundSize: "32px 32px",
+              backgroundColor: "#ffffff",
+            }}
+          >
+            <svg
+              ref={svgRef}
+              viewBox="0 0 1 1"
+              preserveAspectRatio="none"
+              className="block w-full"
+              style={{
+                aspectRatio: (() => {
+                  const w = workingRef.current[activeFloor.index]?.width;
+                  const h = workingRef.current[activeFloor.index]?.height;
+                  return w && h ? `${w} / ${h}` : "4 / 3";
+                })(),
+                touchAction: "none",
+              }}
+              onPointerMove={onSvgPointerMove}
+              onPointerUp={onSvgPointerUp}
+              onPointerLeave={onSvgPointerUp}
+              onClick={() => { if (tool === "pick") setSelectedId(null); }}
+            >
+              {/* Faint reference: cleaned line drawing under the vector layer. */}
+              {displayUrl && <image href={displayUrl} x={0} y={0} width={1} height={1} preserveAspectRatio="none" opacity={0.22} style={{ pointerEvents: "none" }} />}
+
+              {/* Interactive shapes. */}
+              {activeDetection?.elements.map((el) => {
+                const isSelected = el.id === selectedId;
+                const isHover = el.id === hoverId;
+                const fill = activeDetection.fills?.[el.id] ?? colors[el.category];
+                const points = el.polygon.map(([x, y]) => `${x},${y}`).join(" ");
+                return <polygon
+                  key={el.id}
+                  points={points}
+                  fill={fill}
+                  fillOpacity={isSelected ? 0.7 : isHover ? 0.55 : 0.42}
+                  stroke={isSelected ? "#111" : isHover ? "#333" : fill}
+                  strokeWidth={isSelected ? 0.004 : 0.0015}
+                  vectorEffect="non-scaling-stroke"
+                  style={{
+                    cursor: tool === "move" ? "grab" : tool === "paint" ? "crosshair" : "pointer",
+                    transition: "fill-opacity 120ms ease",
+                  }}
+                  onPointerDown={(e) => onShapePointerDown(e, el)}
+                  onPointerEnter={() => setHoverId(el.id)}
+                  onPointerLeave={() => setHoverId((h) => (h === el.id ? null : h))}
+                />;
+              })}
+
+              {/* Selected element's vertex handles (visual marker; non-interactive for now). */}
+              {selectedId && activeDetection?.elements.find((e) => e.id === selectedId)?.polygon.map(([x, y], i) => (
+                <circle key={i} cx={x} cy={y} r={0.005} fill="#111" stroke="#fff" strokeWidth={0.002} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+              ))}
+            </svg>
           </div>
-        {!activeDetection?.replannedDataUrl && <div className="absolute inset-0 grid place-items-center bg-background/70 backdrop-blur-sm">
-          <Button type="button" size="sm" onClick={() => void prepare(activeFloor)} disabled={busyIndex !== null}>
-            {busyIndex === activeFloor.index ? <LoaderCircle className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-            Clean this plan
-          </Button>
-        </div>}
-        {busyIndex === activeFloor.index && <div className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-sm">
-          <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em]"><LoaderCircle className="size-3 animate-spin" />Cleaning…</p>
-        </div>}
+
+          {!activeDetection?.replannedDataUrl && <div className="absolute inset-0 grid place-items-center bg-background/70 backdrop-blur-sm">
+            <Button type="button" size="sm" onClick={() => void prepare(activeFloor)} disabled={busyIndex !== null}>
+              {busyIndex === activeFloor.index ? <LoaderCircle className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+              Clean this plan
+            </Button>
+          </div>}
+          {busyIndex === activeFloor.index && <div className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-sm">
+            <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em]"><LoaderCircle className="size-3 animate-spin" />Cleaning…</p>
+          </div>}
         </div>
+
+        {/* Status / selected element info */}
+        {selectedId && activeDetection && (() => {
+          const el = activeDetection.elements.find((e) => e.id === selectedId);
+          if (!el) return null;
+          return <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-border bg-secondary/40 px-2 py-1 text-[11px]">
+            <span className="font-semibold">{el.label}</span>
+            <span className="text-muted-foreground">· {CATEGORY_LABEL[el.category]}</span>
+            <span className="ml-auto inline-flex items-center gap-1">
+              <input type="color" value={activeDetection.fills?.[el.id] ?? colors[el.category]} onChange={(e) => setElementFill(el.id, e.target.value)} className="size-4 cursor-pointer rounded border border-border bg-transparent" aria-label="Element color" />
+              <Button type="button" size="icon" variant="ghost" className="size-6" onClick={() => deleteElement(el.id)} aria-label="Delete element">
+                <Trash2 className="size-3" />
+              </Button>
+            </span>
+          </div>;
+        })()}
       </div>
 
       <div className="space-y-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend · tap to pick paint color</p>
-          {paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Painting <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span> · tap inside a black-line contour. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend · pick a category for paint mode</p>
+          {tool === "paint" && paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Paint mode · click any shape to colour it as <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span>. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
+          {tool === "move" && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Move className="size-3" />Move mode · drag any shape to reposition it.</p>}
+          {tool === "pick" && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><MousePointer2 className="size-3" />Select mode · click a shape to inspect, recolour or delete it.</p>}
           {activeDetection?.planWidthMeters && activeDetection?.calibration && <p className="mt-1 text-[10px] text-foreground/80">Scale locked: {CATEGORY_LABEL[activeDetection.calibration.category].toLowerCase()} ≈ {activeDetection.calibration.assumedMeters} m → plan ≈ <span className="font-semibold">{activeDetection.planWidthMeters.toFixed(1)} m</span> wide.</p>}
           <ul className="mt-2 space-y-1.5">
             {CATEGORY_ORDER.map((cat) => {
@@ -797,7 +1012,11 @@ export function DetectionEditor({
                 <button
                   type="button"
                   className="flex-1 text-left hover:underline"
-                  onClick={() => setPaintCategory(isPainting ? null : cat)}
+                  onClick={() => {
+                    if (isPainting && tool === "paint") { setPaintCategory(null); return; }
+                    setPaintCategory(cat);
+                    setTool("paint");
+                  }}
                   disabled={!activeDetection?.replannedDataUrl}
                 >{CATEGORY_LABEL[cat]}</button>
                 <span className="tabular-nums text-muted-foreground">{count}</span>
