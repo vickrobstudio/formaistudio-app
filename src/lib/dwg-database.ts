@@ -1,0 +1,253 @@
+// Vector DWG / DXF database reader.
+//
+// Loads the LibreDwg WASM module (compiled from the libredwg C library)
+// and parses a DWG or DXF file into a structured, in-memory database.
+// No rasterization. Vector precision is preserved end-to-end so the BIM
+// pipeline (wall network, room polygons, elevations) can reason on the
+// real coordinates that the drafter authored.
+//
+// The WASM binary is served from /wasm/libredwg-web.wasm (public/wasm/).
+
+import { LibreDwg, Dwg_File_Type, type DwgDatabase } from "@mlightcad/libredwg-web";
+
+export type DwgEntityLite = {
+  id: number;
+  type: string;        // libredwg numeric type, kept as string for switch friendliness
+  layer: string;
+  colorIndex?: number;
+  // A normalized vector payload. Only the fields relevant to the entity
+  // kind are populated; everything else is left undefined so consumers
+  // can pattern-match on `type`.
+  start?: { x: number; y: number; z?: number };
+  end?: { x: number; y: number; z?: number };
+  center?: { x: number; y: number; z?: number };
+  radius?: number;
+  startAngle?: number;
+  endAngle?: number;
+  vertices?: Array<{ x: number; y: number; bulge?: number }>;
+  closed?: boolean;
+  text?: string;
+  insertionPoint?: { x: number; y: number; z?: number };
+  blockName?: string;
+  rotation?: number;
+  scale?: { x: number; y: number; z?: number };
+};
+
+export type DwgLayerLite = {
+  name: string;
+  colorIndex?: number;
+  frozen?: boolean;
+  locked?: boolean;
+  on?: boolean;
+  lineType?: string;
+};
+
+export type DwgBlockLite = {
+  name: string;
+  base: { x: number; y: number; z?: number };
+  entityCount: number;
+};
+
+export type DwgUnits =
+  | "unitless" | "inches" | "feet" | "miles"
+  | "millimeters" | "centimeters" | "meters" | "kilometers"
+  | "microinches" | "mils" | "yards" | "angstroms"
+  | "nanometers" | "microns" | "decimeters" | "decameters"
+  | "hectometers" | "gigameters" | "astronomical" | "lightyears" | "parsecs";
+
+const UNIT_MAP: Record<number, DwgUnits> = {
+  0: "unitless", 1: "inches", 2: "feet", 3: "miles",
+  4: "millimeters", 5: "centimeters", 6: "meters", 7: "kilometers",
+  8: "microinches", 9: "mils", 10: "yards", 11: "angstroms",
+  12: "nanometers", 13: "microns", 14: "decimeters", 15: "decameters",
+  16: "hectometers", 17: "gigameters", 18: "astronomical", 19: "lightyears", 20: "parsecs",
+};
+
+export type DwgDatabaseLite = {
+  source: "dwg" | "dxf";
+  units: DwgUnits;
+  /** INSUNITS scale to meters (best-effort). */
+  unitToMeters: number;
+  /** Drawing extents in drawing units (model space). */
+  extents: { min: { x: number; y: number }; max: { x: number; y: number } };
+  layers: DwgLayerLite[];
+  blocks: DwgBlockLite[];
+  entities: DwgEntityLite[];
+  /** Original DwgDatabase for advanced consumers. */
+  raw: DwgDatabase;
+};
+
+const UNIT_TO_METERS: Record<DwgUnits, number> = {
+  unitless: 1, inches: 0.0254, feet: 0.3048, miles: 1609.344,
+  millimeters: 0.001, centimeters: 0.01, meters: 1, kilometers: 1000,
+  microinches: 2.54e-8, mils: 2.54e-5, yards: 0.9144, angstroms: 1e-10,
+  nanometers: 1e-9, microns: 1e-6, decimeters: 0.1, decameters: 10,
+  hectometers: 100, gigameters: 1e9, astronomical: 1.496e11,
+  lightyears: 9.461e15, parsecs: 3.086e16,
+};
+
+let libreDwgPromise: Promise<LibreDwg> | null = null;
+function getLibreDwg(): Promise<LibreDwg> {
+  if (!libreDwgPromise) {
+    // `/wasm` resolves to /public/wasm/libredwg-web.wasm at runtime.
+    libreDwgPromise = LibreDwg.create("/wasm");
+  }
+  return libreDwgPromise;
+}
+
+function detectKind(file: File): "dwg" | "dxf" {
+  return /\.dxf$/i.test(file.name) ? "dxf" : "dwg";
+}
+
+/**
+ * Parse a DWG or DXF file in the browser, with no rasterization.
+ * Returns a normalized database plus the raw libredwg DwgDatabase.
+ */
+export async function parseDrawing(file: File): Promise<DwgDatabaseLite> {
+  const kind = detectKind(file);
+  const libredwg = await getLibreDwg();
+
+  let dwgHandle: number | null = null;
+  let db: DwgDatabase;
+
+  if (kind === "dxf") {
+    // DXF is ASCII; libredwg accepts the text payload.
+    const text = await file.text();
+    dwgHandle = libredwg.dwg_read_data(text, Dwg_File_Type.DXF);
+    if (!dwgHandle) throw new Error("Could not parse DXF file.");
+    db = libredwg.convert(dwgHandle);
+  } else {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    dwgHandle = libredwg.dwg_read_data(bytes, Dwg_File_Type.DWG);
+    if (!dwgHandle) throw new Error("Could not parse DWG file. The file may be corrupted or use an unsupported AutoCAD version.");
+    db = libredwg.convert(dwgHandle);
+  }
+
+  try {
+    return normalize(db, kind);
+  } finally {
+    if (dwgHandle != null) {
+      try { libredwg.dwg_free(dwgHandle); } catch { /* noop */ }
+    }
+  }
+}
+
+function pt(p: unknown): { x: number; y: number; z?: number } | undefined {
+  if (!p || typeof p !== "object") return undefined;
+  const o = p as Record<string, unknown>;
+  const x = typeof o.x === "number" ? o.x : undefined;
+  const y = typeof o.y === "number" ? o.y : undefined;
+  const z = typeof o.z === "number" ? o.z : undefined;
+  if (x == null || y == null) return undefined;
+  return z != null ? { x, y, z } : { x, y };
+}
+
+function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
+  const header = (db.header ?? {}) as Record<string, unknown>;
+  const insunits = typeof header.INSUNITS === "number" ? (header.INSUNITS as number) : 0;
+  const units = UNIT_MAP[insunits] ?? "unitless";
+
+  const extmin = pt(header.EXTMIN) ?? { x: 0, y: 0 };
+  const extmax = pt(header.EXTMAX) ?? { x: 0, y: 0 };
+
+  const layerEntries = db.tables?.LAYER?.entries ?? [];
+  const layers: DwgLayerLite[] = layerEntries.map((l) => {
+    const r = l as unknown as Record<string, unknown>;
+    return {
+      name: String(r.name ?? ""),
+      colorIndex: typeof r.colorIndex === "number" ? (r.colorIndex as number) : undefined,
+      frozen: Boolean(r.isFrozen),
+      locked: Boolean(r.isLocked),
+      on: r.isOff != null ? !r.isOff : true,
+      lineType: typeof r.lineType === "string" ? (r.lineType as string) : undefined,
+    };
+  });
+
+  const blockEntries = db.tables?.BLOCK_RECORD?.entries ?? [];
+  const blocks: DwgBlockLite[] = blockEntries.map((b) => {
+    const r = b as unknown as Record<string, unknown>;
+    return {
+      name: String(r.name ?? ""),
+      base: pt(r.basePoint) ?? { x: 0, y: 0 },
+      entityCount: Array.isArray(r.entities) ? (r.entities as unknown[]).length : 0,
+    };
+  });
+
+  const entities: DwgEntityLite[] = (db.entities ?? []).map((e, i) =>
+    normalizeEntity(e as unknown as Record<string, unknown>, i),
+  );
+
+  return {
+    source,
+    units,
+    unitToMeters: UNIT_TO_METERS[units] ?? 1,
+    extents: { min: { x: extmin.x, y: extmin.y }, max: { x: extmax.x, y: extmax.y } },
+    layers,
+    blocks,
+    entities,
+    raw: db,
+  };
+}
+
+function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
+  const type = String(e.type ?? e.entityType ?? "UNKNOWN");
+  const layer = String(e.layer ?? "0");
+  const colorIndex = typeof e.colorIndex === "number" ? (e.colorIndex as number) : undefined;
+
+  const base: DwgEntityLite = { id: i, type, layer, colorIndex };
+
+  switch (type.toUpperCase()) {
+    case "LINE":
+      base.start = pt(e.startPoint) ?? pt(e.start);
+      base.end = pt(e.endPoint) ?? pt(e.end);
+      break;
+    case "CIRCLE":
+      base.center = pt(e.center);
+      base.radius = typeof e.radius === "number" ? (e.radius as number) : undefined;
+      break;
+    case "ARC":
+      base.center = pt(e.center);
+      base.radius = typeof e.radius === "number" ? (e.radius as number) : undefined;
+      base.startAngle = typeof e.startAngle === "number" ? (e.startAngle as number) : undefined;
+      base.endAngle = typeof e.endAngle === "number" ? (e.endAngle as number) : undefined;
+      break;
+    case "LWPOLYLINE":
+    case "POLYLINE": {
+      const verts = Array.isArray(e.vertices) ? (e.vertices as unknown[]) : [];
+      base.vertices = verts.map((v) => {
+        const r = (v ?? {}) as Record<string, unknown>;
+        return {
+          x: typeof r.x === "number" ? (r.x as number) : 0,
+          y: typeof r.y === "number" ? (r.y as number) : 0,
+          bulge: typeof r.bulge === "number" ? (r.bulge as number) : undefined,
+        };
+      });
+      base.closed = Boolean(e.isClosed ?? e.closed);
+      break;
+    }
+    case "TEXT":
+    case "MTEXT":
+      base.text = typeof e.text === "string" ? (e.text as string) : "";
+      base.insertionPoint = pt(e.insertionPoint) ?? pt(e.startPoint);
+      base.rotation = typeof e.rotation === "number" ? (e.rotation as number) : undefined;
+      break;
+    case "INSERT":
+      base.blockName = typeof e.name === "string" ? (e.name as string) : "";
+      base.insertionPoint = pt(e.insertionPoint);
+      base.rotation = typeof e.rotation === "number" ? (e.rotation as number) : undefined;
+      base.scale = pt(e.scale);
+      break;
+    default:
+      // Keep unknown entities in the list so consumers can decide what to do.
+      break;
+  }
+
+  return base;
+}
+
+/** Quick summary used in toasts / debug panes. */
+export function summarize(db: DwgDatabaseLite): string {
+  const w = Math.max(0, db.extents.max.x - db.extents.min.x);
+  const h = Math.max(0, db.extents.max.y - db.extents.min.y);
+  return `${db.source.toUpperCase()} · ${db.entities.length} entities · ${db.layers.length} layers · ${db.blocks.length} blocks · ${w.toFixed(1)}×${h.toFixed(1)} ${db.units}`;
+}
