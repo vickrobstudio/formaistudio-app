@@ -20,8 +20,10 @@ function HomePage() {
       <LandingBackgroundPaint enabled={true} />
       <h1 className="sr-only">FormAI Studio</h1>
       <LandingPaintLogo />
-      <p className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4rem))] z-20 -translate-x-1/2 whitespace-nowrap text-center text-base font-medium tracking-tight text-white sm:text-xl md:text-2xl [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
-        AI Architects Shaping the Form of the World
+      <p className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4rem))] z-20 -translate-x-1/2 text-center text-base font-medium leading-tight tracking-tight text-white sm:text-xl md:text-2xl [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
+        AI Architects
+        <br />
+        Shaping the Form of the World
       </p>
       <Link
         to="/dashboard"
