@@ -85,6 +85,7 @@ export function BuildAssistant({
   floorImages,
   roofImages,
   elevationImages,
+  dockMode = false,
 }: {
   floors: FloorCtx[];
   hasRoofPlans: boolean;
@@ -94,8 +95,9 @@ export function BuildAssistant({
   floorImages: AttachableImage[];
   roofImages: AttachableImage[];
   elevationImages: AttachableImage[];
+  dockMode?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(dockMode);
   const [input, setInput] = useState("");
   const [rejected, setRejected] = useState<Set<string>>(new Set());
   const [applied, setApplied] = useState<Set<string>>(new Set());
@@ -142,7 +144,7 @@ export function BuildAssistant({
     await sendMessage({ parts } as Parameters<typeof sendMessage>[0], { body: { context: ctx } });
   }
 
-  if (!open) {
+  if (!open && !dockMode) {
     return <div className="mt-6 rounded-2xl border border-dashed border-foreground/40 bg-secondary/30 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
