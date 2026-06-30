@@ -19,6 +19,8 @@ export const Route = createFileRoute("/api/build-chat")({
         const ctx = (body.context ?? {}) as Record<string, unknown>;
         const lang = (ctx as { lang?: string }).lang === "es" ? "es" : "en";
         const units = (ctx as { units?: string }).units === "ft" ? "ft" : "m";
+        const regionRaw = (ctx as { region?: string }).region ?? "auto";
+        const region = (["auto","us","es","fr","de","uk","it","eu"].includes(regionRaw) ? regionRaw : "auto") as "auto"|"us"|"es"|"fr"|"de"|"uk"|"it"|"eu";
         const ctxJson = JSON.stringify(ctx).slice(0, 6000);
 
         const langLine = lang === "es"
@@ -28,10 +30,23 @@ export const Route = createFileRoute("/api/build-chat")({
           ? "USE IMPERIAL UNITS for every dimension you quote (feet & inches, e.g. 9' 0\", 8\" risers). Convert metric references silently. The proposal JSON patch values MUST still be in METRES (we convert internally) — only the human-readable text and summary are in feet/inches."
           : "USE METRIC UNITS for every dimension you quote (metres / centimetres). Proposal JSON patch values are in metres.";
 
+        const regionMap: Record<typeof region, string> = {
+          auto: "REGION: not set by user — politely ASK once which country/code set to apply before quoting code-sensitive values (stairs, egress, accessibility, energy).",
+          us:   "REGION LOCKED: UNITED STATES. Apply IBC, IRC, ADA 2010 + ICC A117.1, NFPA 101, ASHRAE 90.1, OSHA 1910. ADA is mandatory. Cite IBC/IRC/ADA sections. Do NOT default to Eurocodes/CTE.",
+          es:   "REGION LOCKED: SPAIN. Apply CTE (DB-SE, DB-HE, DB-SI, DB-SUA, DB-HS, DB-HR), RITE, and Eurocodes. Cite CTE DB sections. Do NOT default to IBC/IRC.",
+          fr:   "REGION LOCKED: FRANCE. Apply NF DTU, RE 2020, accessibility Arrêté 2007 + ISO 21542, and Eurocodes. Cite NF / RE 2020 sections. Do NOT default to IBC/IRC.",
+          de:   "REGION LOCKED: GERMANY. Apply DIN 18065 (stairs), DIN 18040 (accessibility), GEG (energy), MBO/LBO, and Eurocodes. Cite DIN sections. Do NOT default to IBC/IRC.",
+          uk:   "REGION LOCKED: UNITED KINGDOM. Apply Approved Documents A–R (Part B fire, Part K stairs, Part M accessibility, Part L energy) and Eurocodes. Cite Approved Doc sections. Do NOT default to IBC/IRC.",
+          it:   "REGION LOCKED: ITALY. Apply DM 236/89 (accessibility), DM 14/01/2008 NTC structural, DM 26/06/2015 energy, and Eurocodes. Cite DM sections. Do NOT default to IBC/IRC.",
+          eu:   "REGION LOCKED: EUROPE (generic). Apply Eurocodes EN 1990–1999, EN 12464 (lighting), EN 13779 (ventilation), EPBD, ISO 21542 (accessibility). Cite EN/ISO sections. Do NOT default to IBC/IRC.",
+        };
+        const regionLine = regionMap[region];
+
         const system = `You are the FormAI Build Architect — an interactive assistant that co-designs a 3D building model with the user from their uploaded 2D plans. You are a CONSTRUCTION BIBLE — fluent in US and European architectural codes and use them to back every recommendation.
 
 ${langLine}
 ${unitsLine}
+${regionLine}
 
 RULES:
 • Ask ONE concise question at a time. Confirm BEFORE assuming any dimension.
