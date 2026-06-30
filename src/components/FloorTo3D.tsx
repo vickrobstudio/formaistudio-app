@@ -865,6 +865,9 @@ export function FloorTo3D() {
         hasRoofPlans={roofPlans.length > 0}
         hasElevations={elevations.length > 0}
         spec={buildingSpec}
+        floorImages={floors.filter((f) => f.imageDataUrl).map((f, i) => ({ url: f.imageDataUrl, label: f.label || `floor-${i}` }))}
+        roofImages={roofPlans.map((r, i) => ({ url: r.imageDataUrl, label: r.fileName || `roof-${i}` }))}
+        elevationImages={elevations.filter((e) => e.imageDataUrl).map((e, i) => ({ url: e.imageDataUrl, label: e.label || e.facing || `elevation-${i}` }))}
         onSpecChange={(next) => {
           setBuildingSpec(next);
           // Apply per-floor wall heights, then fall back to the global wallHeightM.
