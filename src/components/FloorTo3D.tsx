@@ -442,10 +442,12 @@ export function FloorTo3D() {
                     <span className="text-[10px] font-bold uppercase text-muted-foreground">ft</span>
                   </div>
                   {f.imageDataUrl.startsWith("data:image/") && (
-                    <Button type="button" variant={f.annotation ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
-                      onClick={() => setPaintIndex(i)} title="Paint walls, doors, windows for the AI">
-                      <Paintbrush className="size-3" />
-                      <span className="text-[10px] font-bold uppercase">{f.annotation ? `${f.annotation.polygons.length}` : "Paint"}</span>
+                    <Button type="button" variant={f.recognition ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
+                      disabled={f.recognizing}
+                      onClick={() => f.recognition ? setRecognitionPreview(i) : void runRecognition(i)}
+                      title="AI recognises walls, doors, windows for the 3D build">
+                      {f.recognizing ? <LoaderCircle className="size-3 animate-spin" /> : f.recognition ? <Eye className="size-3" /> : <ScanSearch className="size-3" />}
+                      <span className="text-[10px] font-bold uppercase">{f.recognizing ? "…" : f.recognition ? `${f.recognition.polygons.length}` : "Recognise"}</span>
                     </Button>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
