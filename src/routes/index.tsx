@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Button } from "@/components/ui/button";
 import { LandingPaintLogo } from "@/components/LandingPaintLogo";
 import { LandingBackgroundPaint } from "@/components/LandingBackgroundPaint";
 import { useState } from "react";
