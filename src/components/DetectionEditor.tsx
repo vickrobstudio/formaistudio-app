@@ -913,9 +913,16 @@ export function DetectionEditor({
             <svg
               ref={svgRef}
               viewBox="0 0 1 1"
-              preserveAspectRatio="xMidYMid meet"
+              preserveAspectRatio="none"
               className="block w-full"
-              style={{ aspectRatio: "1 / 1", touchAction: "none" }}
+              style={{
+                aspectRatio: (() => {
+                  const w = workingRef.current[activeFloor.index]?.width;
+                  const h = workingRef.current[activeFloor.index]?.height;
+                  return w && h ? `${w} / ${h}` : "4 / 3";
+                })(),
+                touchAction: "none",
+              }}
               onPointerMove={onSvgPointerMove}
               onPointerUp={onSvgPointerUp}
               onPointerLeave={onSvgPointerUp}
