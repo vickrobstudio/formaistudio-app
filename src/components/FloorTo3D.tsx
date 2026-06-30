@@ -47,7 +47,7 @@ const information: ToolInfoSection[] = [
   {
     title: "What to upload",
     items: [
-      "Building: upload ONE complete architectural PDF set. The AI walks the pages, keeps only architectural plan views (floors, roof, site, elevations), and automatically skips M.E.P., structural notes and schedules so the 3D model is built from architecture only.",
+      "Building: upload ONE complete drawings set. The AI walks the pages, keeps only architectural plan views (floors, roof, site, elevations), and automatically skips M.E.P., structural notes and schedules so the 3D model is built from architecture only.",
       "Furniture: orthographic views (top + front + side) with printed dimensions, plus an optional reference photo or render.",
       "Each file up to 40 MB.",
     ],
@@ -656,7 +656,7 @@ export function FloorTo3D() {
       </div>
       {subject === "building" && <>
         <div className="rounded-2xl border border-dashed border-foreground/30 bg-secondary/30 p-5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Complete PDF set</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Complete drawings set</p>
           <p className="mt-1 text-xs text-muted-foreground">Upload one multi-page PDF with every architectural sheet — floor plans, roof, site, elevations. The AI focuses ONLY on architectural plan views and automatically ignores M.E.P. (mechanical, electrical, plumbing) sheets to extract walls, openings and heights for the 3D volumes.</p>
           <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
             <span>{floors.length === 0 ? "Import architectural PDF or DWG" : "Import another complete drawings set"}</span><Upload />
