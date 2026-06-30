@@ -985,8 +985,10 @@ export function DetectionEditor({
 
       <div className="space-y-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend · tap to pick paint color</p>
-          {paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Painting <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span> · tap inside a black-line contour. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend · pick a category for paint mode</p>
+          {tool === "paint" && paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Paint mode · click any shape to colour it as <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span>. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
+          {tool === "move" && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Move className="size-3" />Move mode · drag any shape to reposition it.</p>}
+          {tool === "pick" && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><MousePointer2 className="size-3" />Select mode · click a shape to inspect, recolour or delete it.</p>}
           {activeDetection?.planWidthMeters && activeDetection?.calibration && <p className="mt-1 text-[10px] text-foreground/80">Scale locked: {CATEGORY_LABEL[activeDetection.calibration.category].toLowerCase()} ≈ {activeDetection.calibration.assumedMeters} m → plan ≈ <span className="font-semibold">{activeDetection.planWidthMeters.toFixed(1)} m</span> wide.</p>}
           <ul className="mt-2 space-y-1.5">
             {CATEGORY_ORDER.map((cat) => {
