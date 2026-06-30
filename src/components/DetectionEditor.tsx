@@ -195,19 +195,21 @@ async function whiteToTransparentFromSource(source: string | HTMLCanvasElement):
   // grey shading and coloured strokes all survive untouched. A small
   // dead-zone near pure white kills paper texture / JPEG noise without
   // touching anything that reads as a line.
+  // Binary alpha key: anything that isn't near-pure-white is a LINE and
+  // stays fully opaque at its original RGB. Only true paper background
+  // (luma ≥ 250) goes transparent. This preserves every hairline,
+  // anti-aliased edge and faint grey stroke at full strength — the
+  // previous ramp was fading them out and breaking thin walls.
   const mask = new Uint8Array(w * h);
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
     const r = data[i], g = data[i + 1], b = data[i + 2];
     const luma = r * 0.299 + g * 0.587 + b * 0.114;
-    // Map luma 245..255 → alpha 0 (transparent paper),
-    //     luma 0..210  → alpha 255 (full strength line),
-    // smooth ramp in between so anti-aliased edges keep their softness.
-    let alpha: number;
-    if (luma >= 245) alpha = 0;
-    else if (luma <= 210) alpha = 255;
-    else alpha = Math.round(((245 - luma) / (245 - 210)) * 255);
-    data[i + 3] = alpha;
-    if (alpha >= 96) mask[p] = 1; // mask used downstream for flood-fill / region detection
+    if (luma >= 250) {
+      data[i + 3] = 0;
+    } else {
+      data[i + 3] = 255;
+      mask[p] = 1;
+    }
   }
   ctx.putImageData(id, 0, 0);
   return { dataUrl: canvas.toDataURL("image/png"), width: w, height: h, mask };
