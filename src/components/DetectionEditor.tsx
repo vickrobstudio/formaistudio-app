@@ -828,6 +828,83 @@ export function DetectionEditor({
   const colors = { ...DEFAULT_COLORS, ...(activeDetection?.colors ?? {}) };
   const displayUrl = activeDetection?.replannedDataUrl ?? activeFloor?.imageDataUrl;
 
+  // ---- Shapes-drawing export -----------------------------------------
+  // Build a standalone drawing of every recognized enclosed shape, each
+  // filled in its legend color, with a color key. Exports as SVG (vector)
+  // or PNG (raster). Uses the working canvas pixel size for aspect.
+  function buildShapesSvg(): string {
+    if (!activeFloor || !activeDetection) return "";
+    const work = workingRef.current[activeFloor.index];
+    const W = work?.width ?? 1600;
+    const H = work?.height ?? 1200;
+    const legendW = Math.round(W * 0.18);
+    const totalW = W + legendW + 40;
+    const usedCats = CATEGORY_ORDER.filter((c) => activeDetection.elements.some((e) => e.category === c));
+    const shapes = activeDetection.elements.map((el) => {
+      const fill = activeDetection.fills?.[el.id] ?? colors[el.category];
+      const pts = el.polygon.map(([x, y]) => `${(x * W).toFixed(1)},${(y * H).toFixed(1)}`).join(" ");
+      return `<polygon points="${pts}" fill="${fill}" fill-opacity="0.85" stroke="#111" stroke-width="1.2" />`;
+    }).join("");
+    const labels = activeDetection.elements.map((el) => {
+      const cx = el.polygon.reduce((s, p) => s + p[0], 0) / el.polygon.length * W;
+      const cy = el.polygon.reduce((s, p) => s + p[1], 0) / el.polygon.length * H;
+      const safe = el.label.replace(/[<>&]/g, "");
+      return `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" font-family="ui-sans-serif,system-ui" font-size="${Math.max(10, Math.round(W * 0.012))}" font-weight="600" fill="#111">${safe}</text>`;
+    }).join("");
+    const legendItems = usedCats.map((cat, i) => {
+      const count = activeDetection.elements.filter((e) => e.category === cat).length;
+      const y = 60 + i * 36;
+      return `<rect x="${W + 30}" y="${y}" width="24" height="24" fill="${colors[cat]}" stroke="#111" stroke-width="1" />`
+        + `<text x="${W + 62}" y="${y + 17}" font-family="ui-sans-serif,system-ui" font-size="16" fill="#111">${CATEGORY_LABEL[cat]} (${count})</text>`;
+    }).join("");
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${H}" width="${totalW}" height="${H}">
+  <rect width="100%" height="100%" fill="#ffffff" />
+  <g>${shapes}${labels}</g>
+  <g>
+    <text x="${W + 30}" y="36" font-family="ui-sans-serif,system-ui" font-size="20" font-weight="700" fill="#111">Legend</text>
+    ${legendItems}
+  </g>
+</svg>`;
+  }
+
+  async function exportShapesDrawing(kind: "svg" | "png") {
+    if (!activeFloor) return;
+    const svg = buildShapesSvg();
+    if (!svg) return;
+    const safeLabel = (activeFloor.label || "floor").replace(/[^a-z0-9-_]+/gi, "_");
+    if (kind === "svg") {
+      const blob = new Blob([svg], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${safeLabel}-shapes.svg`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+    // PNG: rasterize the SVG via an <img>.
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(new Error("svg load")); img.src = url; });
+      const canvas = document.createElement("canvas");
+      const w = img.naturalWidth || 1800;
+      const h = img.naturalHeight || 1200;
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      const pngUrl = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = pngUrl; a.download = `${safeLabel}-shapes.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
   return <div className="mt-6 rounded-2xl border border-foreground/30 bg-background p-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
