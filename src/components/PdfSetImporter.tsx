@@ -192,7 +192,7 @@ export function PdfSetImporter({
   async function handleFile(file: File) {
     setError("");
     if (!(file.type === "application/pdf" || /\.pdf$/i.test(file.name))) {
-      setError("Only PDF sets are supported."); return;
+      setError("Only complete drawings sets are supported."); return;
     }
     setFileName(file.name);
     setBusy("rendering");
