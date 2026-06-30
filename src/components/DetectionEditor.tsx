@@ -1115,7 +1115,7 @@ export function DetectionEditor({
           </div>
           <Button type="button" size="sm" variant="outline" className="w-full" onClick={clearPaint} disabled={!activeDetection?.replannedDataUrl || (activeDetection?.elements.length ?? 0) === 0}>
             <Trash2 className="size-3" />
-            Clear paint on this floor
+            Clear paint
           </Button>
           <Button
             type="button"
@@ -1126,19 +1126,16 @@ export function DetectionEditor({
             title="Download every recognized shape painted in its legend color, with a color key"
           >
             <Download className="size-3" />
-            Export shapes drawing (SVG)
+            Export shapes
           </Button>
-          <Button
+          <button
             type="button"
-            size="sm"
-            variant="outline"
-            className="w-full"
+            className="w-full text-[10px] uppercase tracking-[0.14em] text-muted-foreground underline-offset-2 hover:underline disabled:opacity-40"
             onClick={() => exportShapesDrawing("png")}
             disabled={!activeDetection || (activeDetection.elements.length ?? 0) === 0}
           >
-            <Download className="size-3" />
-            Export shapes drawing (PNG)
-          </Button>
+            Download as PNG instead
+          </button>
         </div>
       </div>
     </div>}

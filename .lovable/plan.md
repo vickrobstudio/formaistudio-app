@@ -1,75 +1,44 @@
-## Goal
+# Cleanup & Simplify Pass
 
-Kill the current "raster image + checker background + flood-fill paint bucket" surface. Replace it with a true interactive vector editor: every line is a pickable element, every enclosed shape is a selectable polygon you can paint or drag, all rendered as clean SVG on a real white sheet (no checker, no pixelation).
+Aggressive simplification across the four areas you picked, driven by a real audit first so I'm fixing actual problems, not guessing.
 
-## What it will look like
+## Phase 1 — Audit (no code changes)
 
-```text
-┌──────────────────────────────────────────────────────────┐
-│  white sheet (subtle paper texture, faint grid)          │
-│                                                          │
-│   ┌──────────────┐ ┌───────────────────────────┐         │
-│   │  Bedroom 1   │ │       Living              │         │
-│   │  (filled)    │ │     (filled, selected →   │         │
-│   │              │ │      blue outline +       │         │
-│   │              │ │      drag handles)        │         │
-│   └──────────────┘ └───────────────────────────┘         │
-│   ──────── ←── pickable wall line (highlights on hover)  │
-│                                                          │
-│  Toolbar: [Select] [Paint] [Move] [+ wall] [Delete]      │
-└──────────────────────────────────────────────────────────┘
-```
+Run a single pass to surface real defects and friction:
 
-No checker, no transparency artifacts, no pixelated raster — vector SVG only.
+1. Drive the live preview with Playwright across the key flows (landing → tools hub → each tool entry → 2D→3D upload → DWG importer → auth → wallet → settings). Capture screenshots + console + network for each step.
+2. Static scan: dead imports, unused components, oversized files (DetectionEditor, PdfSetImporter, ImageStudio), duplicate buttons, inconsistent copy/casing (e.g. "VIP · Unlimited" vs other labels), missing empty states, missing error states.
+3. Produce a short defect list with severity (crash > broken UX > clutter > copy).
 
-## Pipeline change
+I will share that list back before touching code in Phase 2/3 if anything looks risky.
 
-We already extract vector polygons (`extractRoomRegions` returns pixel polygons via Moore-neighbor + RDP). Today we throw the polygons away and re-paint them onto a canvas. We will:
+## Phase 2 — Bugs & crashes
 
-1. Keep the cleaned plan as a faint background reference layer (faded, no checker, on white).
-2. Trace every wall stroke as an SVG `<path>` (skeletonize the line mask + vectorize so each contiguous wall is one path).
-3. Render every enclosed region polygon as an SVG `<polygon>` with `fill`, `stroke`, `pointer-events: all`.
-4. Everything lives in one `<svg>` viewBox; the user pans/zooms the SVG, not a raster.
+Fix everything from the audit tagged crash/broken UX. Likely candidates based on recent work:
+- DWG/DXF importer: surface precheck errors as a clean inline message (no thrown stack), allow retry without page reload.
+- DetectionEditor: guard against empty `workingRef`/`activeFloor` before exporting; disable export buttons when not ready (some already disabled, verify all paths).
+- ToolEntry upload button: actual `<input type="file">` is missing — the button looks tappable but does nothing. Wire it to the tool's real handler or route, otherwise remove the affordance.
+- Auth redirect-back: confirm `/auth` returns the user to the tool they came from after sign-in.
 
-## Interactions
+## Phase 3 — Aggressive simplification
 
-- **Hover a wall line** → it lights up; click selects it (toolbar shows color + thickness).
-- **Hover an enclosed shape** → faint highlight; click selects it.
-- **Paint mode** → clicking a shape fills it with the active legend color; clicking a wall recolors that wall path.
-- **Move mode** → drag a selected shape to translate it; drag a wall endpoint to reshape.
-- **Delete** key removes the selected shape or line.
-- Multi-select with shift-click. Undo/redo already exists — reuse it on the new model.
+Per-screen rules:
 
-Existing zoom in/out/fit controls stay; they now zoom the SVG viewBox instead of CSS-scaling a raster.
+- **Landing**: keep logo + single Enter button + legal. Remove any secondary CTAs or chips.
+- **Tools hub**: 6 cards, equal weight, no "All-access bundle" row above the grid (move to Wallet/Pricing). One tagline per tool, max 4 words.
+- **Tool entry pages**: one big upload dropzone, one primary button, collapse the "How it works" steps into a single 2-line sentence + a "Learn more" disclosure that opens the full `ToolInformation` block. Hide credit count behind a small chip in the header instead of a paragraph.
+- **DWG importer dialog**: collapse the 7-rule checklist into a single sentence + "See requirements" disclosure. Keep precheck errors verbose only when triggered.
+- **DetectionEditor sidebar**: group export actions (SVG / PNG / Shapes SVG / Shapes PNG) under one "Export" menu instead of 4 stacked buttons.
+- **Auth / Wallet / Account / Settings**: remove duplicate nav, ensure every screen has a back link, unify button styles (`variant="studio"`, h-12), unify empty states.
 
-## Data model change
+Copy pass: shorter labels, sentence case, remove jargon ("rasterize", "precheck"), error messages always end with a next action.
 
-Replace `paintedDataUrl` (PNG) with a structured shape list:
+## Out of scope
 
-```ts
-type FloorVectorModel = {
-  walls: Array<{ id; d: string; stroke: string; width: number }>;
-  shapes: Array<{ id; polygon: number[][]; fill: string; category; label }>;
-  bgRefDataUrl?: string; // faded plan, optional
-};
-```
+- No backend / schema / RLS changes.
+- No new features, no redesign of the visual language (beige landing, SF Pro, black buttons stay per memory).
+- No changes to the 3D pipeline logic itself, only its UI surface.
 
-`paintedDataUrl` is regenerated on export by rasterizing the SVG — downstream 3D lift still gets a bitmap when it needs one.
+## Deliverable
 
-## Files to change
-
-- `src/components/DetectionEditor.tsx` — rip out the canvas/img/checker block, render an `<svg>` instead, add Select/Paint/Move tool state, click + drag handlers per element.
-- `src/lib/floor-pipeline.ts` — add `vectorizeWalls(mask, w, h)` that returns SVG path strings for each connected wall stroke (thinning + chain-following).
-- New `src/components/FloorVectorEditor.tsx` (split out of DetectionEditor) — pure SVG editor component, props in/out only.
-- Keep flood-fill room extraction; feed its polygons straight into the SVG model on first clean.
-
-## Out of scope (ask before adding)
-
-- Reshaping walls by adding new vertices (only endpoint drag for now).
-- Snapping walls to a grid.
-- Boolean ops on shapes (union / subtract).
-
-## Risks / notes
-
-- Large plans → thousands of SVG elements. We will cap wall paths by simplification (RDP epsilon) and group hit-testing.
-- The 3D lift step downstream still expects a painted raster; we keep a server-rasterize-on-export step so the rest of the pipeline doesn't move.
+One PR-style batch of edits across `src/components/*` and `src/routes/*`, plus a short summary of what was removed vs. kept. If the audit surfaces something that needs a design decision (e.g. "should the bundle row go to Pricing or Wallet?"), I'll ask before changing it.
