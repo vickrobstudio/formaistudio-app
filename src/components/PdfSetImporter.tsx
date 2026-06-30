@@ -289,7 +289,7 @@ export function PdfSetImporter({
     <DialogContent className="max-w-5xl">
       <DialogHeader>
         <DialogTitle>Import the architectural PDF set</DialogTitle>
-        <DialogDescription>Upload one PDF containing every project sheet. Each page is rendered and auto-classified as floor / roof / site / elevation. M.E.P. and other non-architectural sheets are skipped by default — you can override any page below.</DialogDescription>
+        <DialogDescription>Upload one PDF containing every project sheet. Each architectural page is auto-classified, then cleaned on import — text and numbers are erased and only the enclosed black-line geometry is kept. M.E.P. and other non-architectural sheets are skipped by default.</DialogDescription>
       </DialogHeader>
 
       {pages.length === 0 && <div>
@@ -302,7 +302,7 @@ export function PdfSetImporter({
         />
         <Button type="button" variant="outline" className="h-32 w-full" onClick={() => inputRef.current?.click()} disabled={busy === "rendering"}>
           {busy === "rendering"
-            ? <span className="inline-flex items-center gap-2"><LoaderCircle className="size-4 animate-spin" />Rendering page {progress.done} / {progress.total}…</span>
+            ? <span className="inline-flex items-center gap-2"><LoaderCircle className="size-4 animate-spin" />Cleaning page {progress.done} / {progress.total}…</span>
             : <span className="inline-flex items-center gap-2"><Upload className="size-4" />Choose a PDF drawing set</span>}
         </Button>
         {error && <p role="alert" className="mt-2 text-xs text-destructive">{error}</p>}
