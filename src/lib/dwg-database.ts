@@ -31,6 +31,7 @@ export type DwgEntityLite = {
   blockName?: string;
   rotation?: number;
   scale?: { x: number; y: number; z?: number };
+  lineType?: string;
 };
 
 export type DwgLayerLite = {
