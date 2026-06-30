@@ -660,6 +660,7 @@ export function FloorTo3D() {
           <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
             <span>{floors.length === 0 ? "Import architectural PDF set" : "Import another PDF set"}</span><Upload />
           </Button>
+          <InputQualityBadges />
           {(floors.length > 0 || roofPlans.length > 0 || sitePlan || elevations.length > 0) && <div className="mt-4 space-y-2 text-[11px]">
             <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
               <span><span className="font-semibold">{floors.length}</span> floor plan{floors.length === 1 ? "" : "s"} · <span className="font-semibold">{roofPlans.length}</span> roof · <span className="font-semibold">{sitePlan ? 1 : 0}</span> site · <span className="font-semibold">{elevations.length}</span> elevation{elevations.length === 1 ? "" : "s"}</span>
