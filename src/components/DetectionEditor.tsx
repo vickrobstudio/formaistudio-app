@@ -55,6 +55,100 @@ const REFERENCE_SHORT_SIDE_METERS: Record<DetectedCategory, number | null> = {
 };
 
 /**
+ * Render the first page of a PDF (as a data URL) into a high-resolution
+ * canvas using pdf.js. Returns the canvas plus its pixel dimensions.
+ */
+async function renderPdfToCanvas(dataUrl: string, targetLongSide = 2200): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
+  const pdfjs = await import("pdfjs-dist");
+  // Worker via Vite ?url import — bundles a hashed URL to the worker chunk.
+  const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  const base64 = dataUrl.split(",")[1];
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+  const page = await pdf.getPage(1);
+  const baseViewport = page.getViewport({ scale: 1 });
+  const scale = targetLongSide / Math.max(baseViewport.width, baseViewport.height);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No 2D context to render PDF.");
+  // White background so OCR + transparency pass behave predictably.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+  return { canvas, width: canvas.width, height: canvas.height };
+}
+
+/**
+ * Load a raster image (jpg / png) into a canvas at up to 2200 px on the
+ * long side so OCR and paint behave the same as for rendered PDFs.
+ */
+async function rasterImageToCanvas(dataUrl: string, targetLongSide = 2200): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(new Error("Could not load image")); img.src = dataUrl; });
+  const scale = Math.min(1, targetLongSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No 2D context.");
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return { canvas, width: w, height: h };
+}
+
+/**
+ * OCR-detect every text/number block in the rendered drawing and paint a
+ * solid white rectangle over each one (with a small pad), erasing labels and
+ * dimensions while leaving the black vector linework untouched.
+ */
+async function eraseTextOnCanvas(canvas: HTMLCanvasElement, onProgress?: (pct: number) => void): Promise<number> {
+  const Tesseract = await import("tesseract.js");
+  const worker = await Tesseract.createWorker("eng", 1, {
+    logger: (m) => { if (m.status === "recognizing text" && onProgress) onProgress(m.progress ?? 0); },
+  });
+  try {
+    const { data } = await worker.recognize(canvas, {}, { blocks: true });
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return 0;
+    ctx.fillStyle = "#ffffff";
+    let erased = 0;
+    type WordLike = { text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number }; confidence?: number };
+    const walk = (node: unknown) => {
+      if (!node || typeof node !== "object") return;
+      const obj = node as Record<string, unknown>;
+      if (Array.isArray(obj.words)) {
+        for (const w of obj.words as WordLike[]) {
+          const t = (w.text ?? "").trim();
+          if (!t || !w.bbox) continue;
+          if ((w.confidence ?? 0) < 35 && t.length < 2) continue;
+          const pad = 3;
+          const x = Math.max(0, w.bbox.x0 - pad);
+          const y = Math.max(0, w.bbox.y0 - pad);
+          const ww = Math.min(canvas.width - x, w.bbox.x1 - w.bbox.x0 + pad * 2);
+          const hh = Math.min(canvas.height - y, w.bbox.y1 - w.bbox.y0 + pad * 2);
+          if (ww > 0 && hh > 0) { ctx.fillRect(x, y, ww, hh); erased++; }
+        }
+      }
+      if (Array.isArray(obj.blocks)) for (const b of obj.blocks) walk(b);
+      if (Array.isArray(obj.paragraphs)) for (const p of obj.paragraphs) walk(p);
+      if (Array.isArray(obj.lines)) for (const l of obj.lines) walk(l);
+    };
+    walk(data);
+    return erased;
+  } finally {
+    await worker.terminate();
+  }
+}
+
+/**
  * Convert a cleaned floor plan image into a transparent PNG: anything dark
  * (the line work) stays opaque black; everything light becomes fully
  * transparent. Returns { dataUrl, width, height, mask } where mask[i] is 1
