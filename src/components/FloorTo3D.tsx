@@ -12,6 +12,7 @@ import { generateFloor3D, extractFurnitureBounds } from "@/lib/floor-3d.function
 import { buildMasterPrompt } from "@/lib/floor-3d-prompt.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
+import { Building3DViewer } from "@/components/Building3DViewer";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
