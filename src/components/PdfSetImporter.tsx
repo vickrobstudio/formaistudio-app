@@ -196,8 +196,8 @@ export function PdfSetImporter({
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-5xl">
       <DialogHeader>
-        <DialogTitle>Import a full drawing set</DialogTitle>
-        <DialogDescription>Upload one PDF containing every sheet of the project. Each page is rendered as a high-resolution drawing — go through them and assign each one to a floor, roof, site or elevation. The AI uses these labels to organize the 3D model build.</DialogDescription>
+        <DialogTitle>Import the architectural PDF set</DialogTitle>
+        <DialogDescription>Upload one PDF containing every project sheet. Each page is rendered and auto-classified as floor / roof / site / elevation. M.E.P. and other non-architectural sheets are skipped by default — you can override any page below.</DialogDescription>
       </DialogHeader>
 
       {pages.length === 0 && <div>
