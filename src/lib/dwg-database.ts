@@ -344,10 +344,11 @@ export function describePrecheckIssues(issues: DwgPrecheckIssue[]): string {
  */
 export function rasterizeDatabase(
   db: DwgDatabaseLite,
-  opts: { maxDimension?: number; padding?: number } = {},
+  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[] } = {},
 ): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"] } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
+  const sourceEntities = opts.entities ?? db.entities;
 
   // SIMPLIFICATION RULES (must match what the room-detector expects):
   //  - Skip text / dimensions / leaders / hatches / blocks entirely.
@@ -371,9 +372,11 @@ export function rasterizeDatabase(
 
   // Fall back to entity-bounding-box if extents are empty.
   let { min, max } = db.extents;
-  if (max.x - min.x <= 0 || max.y - min.y <= 0) {
+  // If a specific entity set was supplied (per-layout), recompute bounds
+  // from those entities so the layout fills the page.
+  if (opts.entities || max.x - min.x <= 0 || max.y - min.y <= 0) {
     let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
-    for (const e of db.entities) {
+    for (const e of sourceEntities) {
       for (const p of pointsOf(e)) {
         if (p.x < mnX) mnX = p.x; if (p.y < mnY) mnY = p.y;
         if (p.x > mxX) mxX = p.x; if (p.y > mxY) mxY = p.y;
@@ -409,7 +412,7 @@ export function rasterizeDatabase(
   // Flip Y so drawings render right-side-up.
   const ty = (y: number) => H - (padding + (y - min.y) * scale);
 
-  for (const e of db.entities) {
+  for (const e of sourceEntities) {
     const t = e.type.toUpperCase();
     // Drop annotation/dimension/text/hatch/block-insert entirely.
     if (t === "TEXT" || t === "MTEXT" || t === "ATTDEF" || t === "ATTRIB"
