@@ -153,6 +153,7 @@ export function FloorTo3D() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [floorParts, setFloorParts] = useState<FloorPart[]>([]);
   const [dae, setDae] = useState<string | null>(null);
   const [obj, setObj] = useState<string | null>(null);
@@ -175,6 +176,7 @@ export function FloorTo3D() {
       if (file.size > 200_000_000) { setError(`"${file.name}" is too large (200 MB max).`); return; }
     }
     setError("");
+    setUploading(true);
     try {
       const next: Floor[] = [];
       for (const file of files) {
@@ -194,6 +196,7 @@ export function FloorTo3D() {
       setFloors((prev) => [...prev, ...next]);
       reset();
     } catch (e) { setError(e instanceof Error ? e.message : "Could not read file."); }
+    finally { setUploading(false); }
   }
 
   async function onFurnitureUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -202,12 +205,14 @@ export function FloorTo3D() {
     if (!file) return;
     if (file.size > 200_000_000) { setError("File too large (200 MB max)."); return; }
     setError("");
+    setUploading(true);
     try {
       const url = await readDrawing(file);
       setFurnitureUrl(url);
       setFurnitureName(file.name);
       reset();
     } catch (e) { setError(e instanceof Error ? e.message : "Could not read file."); }
+    finally { setUploading(false); }
   }
 
   // Progress simulation while busy
