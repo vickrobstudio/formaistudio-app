@@ -290,7 +290,7 @@ export function PdfSetImporter({
 
   function commit() {
     const result: PdfSetImportResult = { floors: [], roofPlans: [], sitePlan: null, elevations: [] };
-    const base = fileName.replace(/\.pdf$/i, "");
+    const base = fileName.replace(/\.(pdf|dwg|dxf)$/i, "");
     for (const p of pages) {
       const fn = `${base} · page ${p.pageIndex}.png`;
       if (p.role.kind === "floor") {
