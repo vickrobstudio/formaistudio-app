@@ -717,6 +717,22 @@ export function FloorTo3D() {
                 <Input type="number" min={floor.heightUnit === "ft" ? 1 : 0.3} max={floor.heightUnit === "ft" ? 50 : 15} step={floor.heightUnit === "ft" ? 0.25 : 0.1} inputMode="decimal" value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters} onChange={(event) => { const raw = Number(event.target.value); const v = Number.isFinite(raw) && raw > 0 ? raw : 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; const clamped = Math.min(15, Math.max(0.3, meters || 2.7)); setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: clamped } : f)); }} className="mt-1 h-10" />
               </div>
             </div>
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-dashed border-foreground/40 px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Mark &amp; lift</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {floor.annotation
+                    ? `${floor.annotation.polygons.length} element${floor.annotation.polygons.length === 1 ? "" : "s"} ready · ${floor.annotation.planWidthMeters} m scale`
+                    : "Auto-detect walls, doors, windows — recolor to fix, then extrude."}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                {floor.annotation && <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, annotation: undefined } : f))}><X className="size-3" />Clear</Button>}
+                <Button type="button" variant={floor.annotation ? "outline" : "default"} size="sm" onClick={() => setAnnotatorFloorIndex(index)}>
+                  <MousePointer2 className="size-3" />{floor.annotation ? "Edit" : "Mark & lift"}
+                </Button>
+              </div>
+            </div>
           </div>)}
           <Button type="button" variant="outline" className="h-12 w-full justify-between" onClick={() => void addFloor()} disabled={floors.length >= 10}>
             <span>{floors.length === 0 ? "Add ground floor plan" : `Add floor ${floors.length}`}</span><Plus />
