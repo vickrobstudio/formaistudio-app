@@ -1005,7 +1005,11 @@ export function DetectionEditor({
                 <button
                   type="button"
                   className="flex-1 text-left hover:underline"
-                  onClick={() => setPaintCategory(isPainting ? null : cat)}
+                  onClick={() => {
+                    if (isPainting && tool === "paint") { setPaintCategory(null); return; }
+                    setPaintCategory(cat);
+                    setTool("paint");
+                  }}
                   disabled={!activeDetection?.replannedDataUrl}
                 >{CATEGORY_LABEL[cat]}</button>
                 <span className="tabular-nums text-muted-foreground">{count}</span>
