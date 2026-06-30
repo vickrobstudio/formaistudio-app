@@ -45,7 +45,7 @@ const information: ToolInfoSection[] = [
   {
     title: "What to upload",
     items: [
-      "Building: one floor plan per level (PDF, JPG, PNG, WEBP). Optional site plan, roof plans and elevations.",
+      "Building: one floor plan per level — PDF ONLY (vector lines so the AI can trace walls, doors and windows accurately). Optional site plan, roof plans and elevations are also PDF only.",
       "Furniture: orthographic views (top + front + side) with printed dimensions, plus an optional reference photo or render.",
       "Each file up to 40 MB.",
     ],
@@ -696,10 +696,10 @@ export function FloorTo3D() {
         </div>
       </div>
       {subject === "building" && <>
-        <input ref={floorInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onFloorPicked} />
-        <input ref={roofInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onRoofPicked} />
-        <input ref={siteInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onSitePicked} />
-        <input ref={elevationInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="sr-only" onChange={onElevationsPicked} />
+        <input ref={floorInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onFloorPicked} />
+        <input ref={roofInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onRoofPicked} />
+        <input ref={siteInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onSitePicked} />
+        <input ref={elevationInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onElevationsPicked} />
 
         <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Site plan (optional)</p>
         <p className="mt-2 text-xs text-muted-foreground">A top-down view of the site — property lines, setbacks, driveway, landscaping. Used to place the building on the ground.</p>
