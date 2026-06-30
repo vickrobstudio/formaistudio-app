@@ -731,25 +731,40 @@ export function DetectionEditor({
     </div>}
 
     {activeFloor && <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_240px]">
-      <div
-        className="relative overflow-hidden rounded-xl border border-border"
-        style={{
-          // Subtle checker so transparent areas are obvious.
-          backgroundImage:
-            "linear-gradient(45deg, #e8e8e8 25%, transparent 25%), linear-gradient(-45deg, #e8e8e8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8e8 75%), linear-gradient(-45deg, transparent 75%, #e8e8e8 75%)",
-          backgroundSize: "16px 16px",
-          backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
-          backgroundColor: "#fafafa",
-        }}
-      >
-        <div className="relative">
-          {displayUrl && <img src={displayUrl} alt={activeFloor.label} className="block w-full select-none" draggable={false} />}
-          {activeDetection?.replannedDataUrl && <canvas
-            ref={paintCanvasRef}
-            onClick={paintCategory ? handlePaintClick : undefined}
-            className={`absolute inset-0 size-full ${paintCategory ? "cursor-crosshair" : "pointer-events-none"}`}
-          />}
+      <div className="relative">
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-full border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
+          <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => setZoom((z) => Math.max(0.25, +(z - 0.25).toFixed(2)))} disabled={zoom <= 0.25} aria-label="Zoom out">
+            <ZoomOut className="size-3.5" />
+          </Button>
+          <span className="min-w-10 text-center text-[10px] font-bold tabular-nums">{Math.round(zoom * 100)}%</span>
+          <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => setZoom((z) => Math.min(6, +(z + 0.25).toFixed(2)))} disabled={zoom >= 6} aria-label="Zoom in">
+            <ZoomIn className="size-3.5" />
+          </Button>
+          <Button type="button" size="icon" variant="ghost" className="size-7" onClick={() => setZoom(1)} disabled={zoom === 1} aria-label="Reset zoom" title="Fit">
+            <Maximize2 className="size-3.5" />
+          </Button>
         </div>
+        <div
+          className="relative max-h-[75vh] overflow-auto rounded-xl border border-border"
+          style={{
+            // Subtle checker so transparent areas are obvious.
+            backgroundImage:
+              "linear-gradient(45deg, #e8e8e8 25%, transparent 25%), linear-gradient(-45deg, #e8e8e8 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e8e8e8 75%), linear-gradient(-45deg, transparent 75%, #e8e8e8 75%)",
+            backgroundSize: "16px 16px",
+            backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
+            backgroundColor: "#fafafa",
+          }}
+        >
+          <div className="relative origin-top-left" style={{ transform: `scale(${zoom})`, width: zoom === 1 ? "100%" : `${100 * zoom}%` }}>
+            <div className="relative" style={{ width: zoom === 1 ? "100%" : `${100 / zoom}%` }}>
+              {displayUrl && <img src={displayUrl} alt={activeFloor.label} className="block w-full select-none" draggable={false} />}
+              {activeDetection?.replannedDataUrl && <canvas
+                ref={paintCanvasRef}
+                onClick={paintCategory ? handlePaintClick : undefined}
+                className={`absolute inset-0 size-full ${paintCategory ? "cursor-crosshair" : "pointer-events-none"}`}
+              />}
+            </div>
+          </div>
         {!activeDetection?.replannedDataUrl && <div className="absolute inset-0 grid place-items-center bg-background/70 backdrop-blur-sm">
           <Button type="button" size="sm" onClick={() => void prepare(activeFloor)} disabled={busyIndex !== null}>
             {busyIndex === activeFloor.index ? <LoaderCircle className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
@@ -759,6 +774,7 @@ export function DetectionEditor({
         {busyIndex === activeFloor.index && <div className="absolute inset-0 grid place-items-center bg-background/60 backdrop-blur-sm">
           <p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em]"><LoaderCircle className="size-3 animate-spin" />Cleaning…</p>
         </div>}
+        </div>
       </div>
 
       <div className="space-y-3">
