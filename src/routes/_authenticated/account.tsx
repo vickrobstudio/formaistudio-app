@@ -94,7 +94,7 @@ function AccountPage() {
             <p className="text-[10px] font-bold uppercase tracking-[0.14em]">Language</p>
             <div className="mt-2 flex gap-2">
               {(["en", "es"] as const).map((l) => (
-                <Button key={l} type="button" variant={aiLang === l ? "default" : "outline"} className="flex-1" onClick={() => setAiLang(l)}>
+                <Button key={l} type="button" variant={aiLang === l ? "default" : "outline"} className={`flex-1 ${aiLang === l ? "bg-neutral-500 text-white hover:bg-neutral-500" : ""}`} onClick={() => setAiLang(l)}>
                   {l === "en" ? "English" : "Español"}
                 </Button>
               ))}
@@ -104,7 +104,7 @@ function AccountPage() {
             <p className="text-[10px] font-bold uppercase tracking-[0.14em]">Units</p>
             <div className="mt-2 flex gap-2">
               {(["m", "ft"] as const).map((u) => (
-                <Button key={u} type="button" variant={aiUnits === u ? "default" : "outline"} className="flex-1" onClick={() => setAiUnits(u)}>
+                <Button key={u} type="button" variant={aiUnits === u ? "default" : "outline"} className={`flex-1 ${aiUnits === u ? "bg-neutral-500 text-white hover:bg-neutral-500" : ""}`} onClick={() => setAiUnits(u)}>
                   {u === "m" ? "Meters" : "Feet"}
                 </Button>
               ))}
