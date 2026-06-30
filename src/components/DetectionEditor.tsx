@@ -373,14 +373,9 @@ export function DetectionEditor({
         const { canvas } = isPdf
           ? await renderPdfToCanvas(floor.imageDataUrl)
           : await rasterImageToCanvas(floor.imageDataUrl);
-        // 2. OCR every word/number and paint it out with solid white. Vectors
-        //    stay intact — only the text glyphs are erased.
-        pushLog(`${floor.label}: scanning for labels, numbers and dimensions to erase…`);
-        const erased = await eraseTextOnCanvas(canvas, (pct) => {
-          if (pct === 0 || pct === 1) pushLog(`${floor.label}: OCR ${(pct * 100).toFixed(0)}%`);
-        });
-        pushLog(`${floor.label}: erased ${erased} text region${erased === 1 ? "" : "s"} — black vectors preserved.`);
-        // 3. White → transparent; build the line mask used for paint flood-fill.
+        // 2. Convert the white background to transparent. Every black line —
+        //    including text, dimensions and annotations — is preserved.
+        pushLog(`${floor.label}: removing white background, keeping all black lines…`);
         const { dataUrl, width, height, mask } = await whiteToTransparentFromSource(canvas);
         cleanedUrl = dataUrl;
         workingRef.current[floor.index] = { width, height, mask };
