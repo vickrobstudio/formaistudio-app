@@ -9,15 +9,14 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-foreground text-background shadow-none hover:bg-foreground/85",
-        destructive: "bg-foreground text-background shadow-none hover:bg-foreground/85",
-        outline:
-          "border border-foreground bg-background text-foreground shadow-none hover:bg-foreground hover:text-background",
-        secondary: "border border-foreground bg-background text-foreground shadow-none hover:bg-foreground hover:text-background",
-        ghost: "text-foreground hover:bg-foreground hover:text-background",
+        default: "bg-background text-foreground border border-foreground/30 shadow-none hover:bg-secondary",
+        destructive: "bg-background text-foreground border border-foreground/30 shadow-none hover:bg-secondary",
+        outline: "border border-foreground bg-background text-foreground shadow-none hover:bg-secondary",
+        secondary: "border border-foreground bg-background text-foreground shadow-none hover:bg-secondary",
+        ghost: "text-foreground hover:bg-secondary",
         link: "text-foreground underline-offset-4 hover:underline",
-        studio: "bg-foreground text-background shadow-none hover:bg-foreground/85 uppercase tracking-[0.16em] text-[11px]",
-        studioOutline: "border border-foreground bg-background text-foreground shadow-none hover:bg-foreground hover:text-background uppercase tracking-[0.16em] text-[11px]",
+        studio: "bg-background text-foreground border border-foreground/30 shadow-none hover:bg-secondary uppercase tracking-[0.16em] text-[11px]",
+        studioOutline: "border border-foreground bg-background text-foreground shadow-none hover:bg-secondary uppercase tracking-[0.16em] text-[11px]",
       },
       size: {
         default: "h-11 px-5 py-2",
