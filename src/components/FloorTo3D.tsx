@@ -17,6 +17,7 @@ import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotato
 import { BuildAssistant, type BuildingSpec } from "@/components/BuildAssistant";
 import { DetectionEditor, type FloorDetection } from "@/components/DetectionEditor";
 import { PdfSetImporter, type PdfSetImportResult } from "@/components/PdfSetImporter";
+import { InputQualityBadges } from "@/components/InputQualityBadges";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import { streamImage } from "@/lib/stream-image";
 
