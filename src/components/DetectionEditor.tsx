@@ -698,6 +698,133 @@ export function DetectionEditor({
     });
   }
 
+  // ---- SVG vector editor helpers --------------------------------------
+
+  function updateElement(id: string, mutate: (el: DetectedElement) => DetectedElement) {
+    if (!activeFloor || !activeDetection) return;
+    pushUndo(activeFloor.index, snapshotOf(activeDetection));
+    const next = activeDetection.elements.map((e) => (e.id === id ? mutate(e) : e));
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: { ...activeDetection, elements: next },
+    });
+  }
+
+  function setElementFill(id: string, color: string) {
+    if (!activeFloor || !activeDetection) return;
+    pushUndo(activeFloor.index, snapshotOf(activeDetection));
+    const fills = { ...(activeDetection.fills ?? {}), [id]: color };
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: { ...activeDetection, fills },
+    });
+  }
+
+  function deleteElement(id: string) {
+    if (!activeFloor || !activeDetection) return;
+    pushUndo(activeFloor.index, snapshotOf(activeDetection));
+    const fills = { ...(activeDetection.fills ?? {}) };
+    delete fills[id];
+    onDetectionsChange({
+      ...detections,
+      [activeFloor.index]: {
+        ...activeDetection,
+        elements: activeDetection.elements.filter((e) => e.id !== id),
+        fills,
+      },
+    });
+    setSelectedId(null);
+  }
+
+  // Convert a pointer event into SVG-normalized (0..1) coordinates.
+  function svgPoint(evt: React.PointerEvent<SVGElement> | PointerEvent): { x: number; y: number } | null {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    return { x: (evt.clientX - rect.left) / rect.width, y: (evt.clientY - rect.top) / rect.height };
+  }
+
+  function onShapePointerDown(evt: React.PointerEvent<SVGPolygonElement>, el: DetectedElement) {
+    evt.stopPropagation();
+    setSelectedId(el.id);
+    if (tool === "paint" && paintCategory) {
+      const color = (activeDetection?.colors?.[paintCategory]) ?? DEFAULT_COLORS[paintCategory];
+      // Paint also re-categorises the element so legend counts stay accurate.
+      if (el.category !== paintCategory) {
+        updateElement(el.id, (e) => ({ ...e, category: paintCategory }));
+      }
+      setElementFill(el.id, color);
+      return;
+    }
+    if (tool === "move") {
+      const p = svgPoint(evt);
+      if (!p) return;
+      dragRef.current = { id: el.id, startX: p.x, startY: p.y, orig: el.polygon.map(([x, y]) => [x, y]) };
+      (evt.currentTarget as Element).setPointerCapture?.(evt.pointerId);
+    }
+  }
+
+  function onSvgPointerMove(evt: React.PointerEvent<SVGSVGElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const p = svgPoint(evt);
+    if (!p) return;
+    const dx = p.x - drag.startX;
+    const dy = p.y - drag.startY;
+    if (!activeFloor || !activeDetection) return;
+    const next = activeDetection.elements.map((e) =>
+      e.id === drag.id ? { ...e, polygon: drag.orig.map(([x, y]) => [Math.min(1, Math.max(0, x + dx)), Math.min(1, Math.max(0, y + dy))] as [number, number]) } : e,
+    );
+    onDetectionsChange({ ...detections, [activeFloor.index]: { ...activeDetection, elements: next } });
+  }
+
+  function onSvgPointerUp(evt: React.PointerEvent<SVGSVGElement>) {
+    if (dragRef.current) {
+      // Snapshot AFTER the drag so undo restores the pre-drag position.
+      // The first move already pushed an undo via updateElement? No — we
+      // mutated directly. Push one snapshot now of the moved state's
+      // PREVIOUS frame from history? Simpler: snapshot the un-dragged
+      // polygon as the undo target.
+      const drag = dragRef.current;
+      if (activeFloor && activeDetection) {
+        const stack = undoRef.current[activeFloor.index] ?? [];
+        const originalElements = activeDetection.elements.map((e) =>
+          e.id === drag.id ? { ...e, polygon: drag.orig } : e,
+        );
+        stack.push({
+          elements: originalElements,
+          paintedDataUrl: activeDetection.paintedDataUrl,
+          planWidthMeters: activeDetection.planWidthMeters,
+          calibration: activeDetection.calibration,
+          fills: activeDetection.fills,
+        });
+        if (stack.length > 50) stack.shift();
+        undoRef.current[activeFloor.index] = stack;
+        redoRef.current[activeFloor.index] = [];
+        setHistoryTick((t) => t + 1);
+      }
+      dragRef.current = null;
+      (evt.currentTarget as Element).releasePointerCapture?.(evt.pointerId);
+    }
+  }
+
+  // Delete-key shortcut for the SVG editor.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/i.test(target.tagName)) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
+        e.preventDefault();
+        deleteElement(selectedId);
+      } else if (e.key === "Escape") {
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, activeFloor?.index]);
+
   const colors = { ...DEFAULT_COLORS, ...(activeDetection?.colors ?? {}) };
   const displayUrl = activeDetection?.replannedDataUrl ?? activeFloor?.imageDataUrl;
 
