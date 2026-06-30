@@ -515,8 +515,18 @@ export function DetectionEditor({
         </div>
 
         <div className="space-y-2 border-t border-border pt-3">
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)">
+              <Undo2 className="size-3" />
+              Undo
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={redo} disabled={!canRedo} title="Redo (Shift+Ctrl/Cmd+Z)">
+              <Redo2 className="size-3" />
+              Redo
+            </Button>
+          </div>
           <Button type="button" size="sm" variant="outline" className="w-full" onClick={clearPaint} disabled={!activeDetection?.replannedDataUrl || (activeDetection?.elements.length ?? 0) === 0}>
-            <Undo2 className="size-3" />
+            <Trash2 className="size-3" />
             Clear paint on this floor
           </Button>
         </div>
