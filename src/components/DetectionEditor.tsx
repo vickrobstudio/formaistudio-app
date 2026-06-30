@@ -755,15 +755,13 @@ export function DetectionEditor({
             backgroundColor: "#fafafa",
           }}
         >
-          <div className="relative origin-top-left" style={{ transform: `scale(${zoom})`, width: zoom === 1 ? "100%" : `${100 * zoom}%` }}>
-            <div className="relative" style={{ width: zoom === 1 ? "100%" : `${100 / zoom}%` }}>
-              {displayUrl && <img src={displayUrl} alt={activeFloor.label} className="block w-full select-none" draggable={false} />}
-              {activeDetection?.replannedDataUrl && <canvas
-                ref={paintCanvasRef}
-                onClick={paintCategory ? handlePaintClick : undefined}
-                className={`absolute inset-0 size-full ${paintCategory ? "cursor-crosshair" : "pointer-events-none"}`}
-              />}
-            </div>
+          <div className="relative" style={{ width: `${100 * zoom}%` }}>
+            {displayUrl && <img src={displayUrl} alt={activeFloor.label} className="block w-full select-none" draggable={false} />}
+            {activeDetection?.replannedDataUrl && <canvas
+              ref={paintCanvasRef}
+              onClick={paintCategory ? handlePaintClick : undefined}
+              className={`absolute inset-0 size-full ${paintCategory ? "cursor-crosshair" : "pointer-events-none"}`}
+            />}
           </div>
         {!activeDetection?.replannedDataUrl && <div className="absolute inset-0 grid place-items-center bg-background/70 backdrop-blur-sm">
           <Button type="button" size="sm" onClick={() => void prepare(activeFloor)} disabled={busyIndex !== null}>
