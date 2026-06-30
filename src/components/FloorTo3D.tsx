@@ -70,7 +70,6 @@ const BUILDING_IMAGE_MAX_DIMENSION = 2400;
 const BUILDING_IMAGE_JPEG_QUALITY = 0.88;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  // no-op marker
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
