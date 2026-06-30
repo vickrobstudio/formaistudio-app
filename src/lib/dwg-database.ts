@@ -251,3 +251,106 @@ export function summarize(db: DwgDatabaseLite): string {
   const h = Math.max(0, db.extents.max.y - db.extents.min.y);
   return `${db.source.toUpperCase()} · ${db.entities.length} entities · ${db.layers.length} layers · ${db.blocks.length} blocks · ${w.toFixed(1)}×${h.toFixed(1)} ${db.units}`;
 }
+
+/**
+ * Render the parsed database to a black-on-white PNG so the existing
+ * vision pipeline can run on it. The parser itself never rasterizes —
+ * this helper is opt-in for callers that still need an image, e.g. the
+ * room-segmentation step.
+ */
+export function rasterizeDatabase(
+  db: DwgDatabaseLite,
+  opts: { maxDimension?: number; padding?: number } = {},
+): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"] } {
+  const maxDim = opts.maxDimension ?? 2400;
+  const padding = opts.padding ?? 24;
+
+  // Fall back to entity-bounding-box if extents are empty.
+  let { min, max } = db.extents;
+  if (max.x - min.x <= 0 || max.y - min.y <= 0) {
+    let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+    for (const e of db.entities) {
+      for (const p of pointsOf(e)) {
+        if (p.x < mnX) mnX = p.x; if (p.y < mnY) mnY = p.y;
+        if (p.x > mxX) mxX = p.x; if (p.y > mxY) mxY = p.y;
+      }
+    }
+    if (!isFinite(mnX) || !isFinite(mxX)) {
+      mnX = 0; mnY = 0; mxX = 1000; mxY = 1000;
+    }
+    min = { x: mnX, y: mnY };
+    max = { x: mxX, y: mxY };
+  }
+
+  const w = max.x - min.x;
+  const h = max.y - min.y;
+  const scale = Math.min((maxDim - 2 * padding) / w, (maxDim - 2 * padding) / h);
+  const W = Math.round(w * scale + 2 * padding);
+  const H = Math.round(h * scale + 2 * padding);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not supported.");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#000000";
+  ctx.lineWidth = 1;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const tx = (x: number) => padding + (x - min.x) * scale;
+  // Flip Y so drawings render right-side-up.
+  const ty = (y: number) => H - (padding + (y - min.y) * scale);
+
+  for (const e of db.entities) {
+    const t = e.type.toUpperCase();
+    if (t === "LINE" && e.start && e.end) {
+      ctx.beginPath();
+      ctx.moveTo(tx(e.start.x), ty(e.start.y));
+      ctx.lineTo(tx(e.end.x), ty(e.end.y));
+      ctx.stroke();
+    } else if ((t === "LWPOLYLINE" || t === "POLYLINE") && e.vertices && e.vertices.length > 1) {
+      ctx.beginPath();
+      e.vertices.forEach((v, i) => {
+        const X = tx(v.x), Y = ty(v.y);
+        if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+      });
+      if (e.closed) ctx.closePath();
+      ctx.stroke();
+    } else if (t === "CIRCLE" && e.center && typeof e.radius === "number") {
+      ctx.beginPath();
+      ctx.arc(tx(e.center.x), ty(e.center.y), e.radius * scale, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (t === "ARC" && e.center && typeof e.radius === "number"
+        && typeof e.startAngle === "number" && typeof e.endAngle === "number") {
+      ctx.beginPath();
+      // Canvas Y is flipped, so swap angles + direction.
+      ctx.arc(
+        tx(e.center.x), ty(e.center.y),
+        e.radius * scale,
+        -e.endAngle, -e.startAngle,
+        false,
+      );
+      ctx.stroke();
+    }
+  }
+
+  return { dataUrl: canvas.toDataURL("image/png"), width: W, height: H, bounds: { min, max } };
+}
+
+function pointsOf(e: DwgEntityLite): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = [];
+  if (e.start) out.push(e.start);
+  if (e.end) out.push(e.end);
+  if (e.center) {
+    const r = e.radius ?? 0;
+    out.push({ x: e.center.x - r, y: e.center.y - r });
+    out.push({ x: e.center.x + r, y: e.center.y + r });
+  }
+  if (e.vertices) for (const v of e.vertices) out.push({ x: v.x, y: v.y });
+  if (e.insertionPoint) out.push(e.insertionPoint);
+  return out;
+}
