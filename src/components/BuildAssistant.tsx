@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, LoaderCircle, MessageSquare, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useAssistantPrefs } from "@/lib/assistant-prefs";
 
 export type RoofType = "flat" | "gable" | "hip" | "shed";
 export type RidgeDirection = "NS" | "EW";
@@ -92,6 +93,7 @@ export function BuildAssistant({
   const [rejected, setRejected] = useState<Set<string>>(new Set());
   const [applied, setApplied] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { lang, units } = useAssistantPrefs();
 
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/build-chat" }), []);
   const { messages, sendMessage, status } = useChat({
@@ -100,7 +102,7 @@ export function BuildAssistant({
     onError: (e) => console.error("build chat error", e),
   });
 
-  const ctx = useMemo(() => ({ floors, hasRoofPlans, hasElevations, spec }), [floors, hasRoofPlans, hasElevations, spec]);
+  const ctx = useMemo(() => ({ floors, hasRoofPlans, hasElevations, spec, lang, units }), [floors, hasRoofPlans, hasElevations, spec, lang, units]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
