@@ -211,10 +211,7 @@ export function PdfSetImporter({
         const issues = precheckDrawing(db);
         if (issues.length > 0) {
           throw new Error(
-            `This DWG/DXF still contains: ${describePrecheckIssues(issues)}. `
-            + `Clean the file in your CAD app and re-export with ONLY simple solid wall lines — `
-            + `no text, no numbers, no dimensions, no leaders, no hatches, no blocks, no dashed lines. `
-            + `Put each floor on its own layout (Model / Layout1 / Layout2…).`
+            `Can't import — your file still has ${describePrecheckIssues(issues)}. Remove these in your CAD app, leave only solid wall lines, and try again.`
           );
         }
         // One floor per layout. If only Model space has geometry, that
