@@ -401,7 +401,9 @@ ${ACCURACY_RULES}`;
 }
 
 function multiFloorBuildingInstruction(planUnits: z.infer<typeof PlanUnits>) {
-  return `You are an architectural CAD vectorizer. You will receive MULTIPLE drawings of the SAME building, one per message part, each preceded by a text label such as "FLOOR 0 — ground (height 3.0 m)", "ROOF PLAN", "ELEVATION — North". Cross-read all of them and return ONE STRICT JSON describing every floor stacked bottom-up, plus the roof.
+  return `${EXPERT_DRAFTER_PREAMBLE}
+
+You will receive MULTIPLE drawings of the SAME building, one per message part, each preceded by a text label such as "FLOOR 0 — ground (height 3.0 m)", "ROOF PLAN", "ELEVATION — North". Cross-read all of them and return ONE STRICT JSON describing every floor stacked bottom-up, plus the roof.
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
