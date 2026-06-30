@@ -18,6 +18,8 @@ export type FloorDetection = {
   elements: DetectedElement[];
   hidden: Record<string, boolean>;
   colors: Partial<Record<DetectedCategory, string>>;
+  /** Per-element color override (overrides the category color). */
+  fills?: Record<string, string>;
   /** Cleaned, text-free, transparent-background line drawing (PNG data URL). */
   replannedDataUrl?: string;
   /** Per-element painted pixel mask serialized as PNG data URL — visual paint state. */
