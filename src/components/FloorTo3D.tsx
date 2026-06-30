@@ -23,43 +23,12 @@ import { streamImage } from "@/lib/stream-image";
 
 const information: ToolInfoSection[] = [
   {
-    title: "How it works — Building",
+    title: "How it works",
+    description: "Upload a clean drawings set or a furniture sheet. We auto-classify pages, find the walls and download 3D files at real-world scale.",
     items: [
-      "1 · Pick units (meters or feet & inches)",
-      "2 · Import your complete drawings set — one architectural PDF or DWG with every sheet (site, floors, roof, elevations). Plan views are auto-kept; M.E.P., structural notes and schedules are skipped.",
-      "3 · Each floor plan is cleaned in the browser — paper goes transparent, every line is preserved at full strength (no thresholding, no morphology eating walls).",
-      "4 · FormAI finds the walls, temporarily seals door openings so rooms stay enclosed, flood-fills every closed area and traces each one as a real polygon.",
-      "5 · AI names and categorises each room from the drawing (Kitchen, Bath, Living, Stair, Closet…). Review and edit the labels.",
-      "6 · Set the floor-to-floor height per level. (Optional) Add roof plans and elevations to lock heights and roof shape.",
-      "7 · Tap 'Build 3D model from drawings' — walls are pulled up into volumes, one group per floor.",
-      "8 · Download one .dae / .obj / .fbx per floor at real-world scale, ready for SketchUp or Blender.",
-    ],
-  },
-  {
-    title: "How it works — Furniture",
-    items: [
-      "1 · Pick units (meters or feet & inches)",
-      "2 · Upload a furniture drawing with top, front and side views and printed dimensions — a reference photo or render helps a lot",
-      "3 · AI reads the views and reconstructs the 3D mesh at the printed scale",
-      "4 · Live 3D preview opens in your browser — rotate, zoom, pan",
-      "5 · Download .dae / .obj / .fbx scaled 1:1 so it imports at real size in SketchUp / Blender",
-    ],
-  },
-  {
-    title: "What to upload",
-    items: [
-      "Building: upload ONE complete drawings set. The AI walks the pages, keeps only architectural plan views (floors, roof, site, elevations), and automatically skips M.E.P., structural notes and schedules so the 3D model is built from architecture only.",
-      "Furniture: orthographic views (top + front + side) with printed dimensions, plus an optional reference photo or render.",
-      "Each file up to 40 MB.",
-    ],
-  },
-  {
-    title: "Output",
-    items: [
-      "Direct 3D downloads — no live preview step for buildings",
-      "Collada .dae · OBJ · FBX — Z-up, units of your choice",
-      "Buildings: one group per floor (Ground floor, Floor 1, Roof) so SketchUp / Blender shows separate layers",
-      "Furniture: scaled 1:1 to the drawing so dimensions match in SketchUp",
+      "Buildings: import one PDF or DWG with every sheet — floors are auto-kept, M.E.P. and schedules are skipped.",
+      "Furniture: upload top/front/side views with printed dimensions.",
+      "Output: Collada .dae, OBJ or FBX — Z-up, one group per floor, scaled 1:1.",
     ],
   },
 ];
