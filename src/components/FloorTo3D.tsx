@@ -944,5 +944,17 @@ export function FloorTo3D() {
       <ToolInformation sections={information} />
     </section>
     <ToolTabBar />
+    {annotatorFloorIndex !== null && floors[annotatorFloorIndex] && (
+      <FloorAnnotator
+        imageDataUrl={floors[annotatorFloorIndex].imageDataUrl}
+        initialResult={floors[annotatorFloorIndex].annotation}
+        onClose={() => setAnnotatorFloorIndex(null)}
+        onApply={(result) => {
+          const idx = annotatorFloorIndex;
+          setFloors((prev) => prev.map((f, i) => i === idx ? { ...f, annotation: result } : f));
+          setAnnotatorFloorIndex(null);
+        }}
+      />
+    )}
   </main>;
 }
