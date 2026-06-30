@@ -45,6 +45,49 @@ async function renderPage(pdf: { getPage: (n: number) => Promise<{ getViewport: 
   return canvas.toDataURL("image/png");
 }
 
+/**
+ * Heuristic auto-classifier for a sheet, based on its embedded text layer.
+ * Architectural plan views become floors/roof/site/elevation. M.E.P.,
+ * structural-only, schedules, details and notes are ignored by default so
+ * the AI only works on architectural geometry.
+ */
+function classifySheet(text: string, floorCounter: number): PdfPageRole {
+  // M.E.P. and other non-architectural disciplines → ignore.
+  const mepHints = [
+    "mechanical", "hvac", "duct", "ductwork", "diffuser", "vav", "rtu",
+    "electrical", "lighting plan", "power plan", "panel schedule", "circuit",
+    "plumbing", "sanitary", "waste", "vent", "domestic water", "riser diagram",
+    "fire protection", "sprinkler", "fire alarm",
+    "low voltage", "data plan", "telecom",
+    "structural notes", "framing plan", "foundation plan", "rebar", "shear wall",
+    "schedule", "specifications", "general notes", "abbreviations", "legend sheet",
+    "details ", "wall types", "door schedule", "window schedule",
+  ];
+  if (mepHints.some((h) => text.includes(h))) return { kind: "ignore" };
+
+  // Plan-view sheet types that we DO want.
+  const looksLikePlan = /\b(floor plan|level \d|first floor|second floor|third floor|ground floor|basement|main floor|upper floor|lower floor|plan view|architectural plan)\b/.test(text);
+  const looksLikeRoof = /\broof plan\b/.test(text);
+  const looksLikeSite = /\b(site plan|plot plan|survey)\b/.test(text);
+  const looksLikeElevation = /\b(elevation|north elev|south elev|east elev|west elev|front elev|rear elev)\b/.test(text);
+
+  if (looksLikeRoof) return { kind: "roof" };
+  if (looksLikeSite) return { kind: "site" };
+  if (looksLikeElevation) {
+    const facing: "N" | "S" | "E" | "W" | "other" =
+      /\bnorth\b/.test(text) ? "N" :
+      /\bsouth\b/.test(text) ? "S" :
+      /\beast\b/.test(text) ? "E" :
+      /\bwest\b/.test(text) ? "W" : "other";
+    return { kind: "elevation", facing };
+  }
+  if (looksLikePlan) {
+    return { kind: "floor", order: floorCounter, label: floorCounter === 0 ? "Ground floor" : `Floor ${floorCounter}` };
+  }
+  // Unknown / no text → safest is to skip; the user can re-assign.
+  return { kind: "ignore" };
+}
+
 export function PdfSetImporter({
   open,
   onOpenChange,
@@ -89,13 +132,15 @@ export function PdfSetImporter({
         const thumb = await renderPage(pdf as never, i, 360);
         // eslint-disable-next-line no-await-in-loop
         const hiRes = await renderPage(pdf as never, i, 2200);
-        next.push({
-          pageIndex: i,
-          thumbDataUrl: thumb,
-          hiResDataUrl: hiRes,
-          role: { kind: "floor", order: floorCounter, label: floorCounter === 0 ? "Ground floor" : `Floor ${floorCounter}` },
-        });
-        floorCounter++;
+        // Pull the page's text layer to auto-classify the sheet. We focus
+        // ONLY on architectural plan views and ignore M.E.P. (mechanical,
+        // electrical, plumbing), structural-only and detail sheets.
+        // eslint-disable-next-line no-await-in-loop
+        const textContent = await (await pdf.getPage(i)).getTextContent();
+        const text = (textContent.items as Array<{ str?: string }>).map((it) => it.str ?? "").join(" ").toLowerCase();
+        const role = classifySheet(text, floorCounter);
+        if (role.kind === "floor") floorCounter++;
+        next.push({ pageIndex: i, thumbDataUrl: thumb, hiResDataUrl: hiRes, role });
         setProgress({ done: i, total: pdf.numPages });
       }
       setPages(next);
@@ -151,8 +196,8 @@ export function PdfSetImporter({
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-5xl">
       <DialogHeader>
-        <DialogTitle>Import a full drawing set</DialogTitle>
-        <DialogDescription>Upload one PDF containing every sheet of the project. Each page is rendered as a high-resolution drawing — go through them and assign each one to a floor, roof, site or elevation. The AI uses these labels to organize the 3D model build.</DialogDescription>
+        <DialogTitle>Import the architectural PDF set</DialogTitle>
+        <DialogDescription>Upload one PDF containing every project sheet. Each page is rendered and auto-classified as floor / roof / site / elevation. M.E.P. and other non-architectural sheets are skipped by default — you can override any page below.</DialogDescription>
       </DialogHeader>
 
       {pages.length === 0 && <div>

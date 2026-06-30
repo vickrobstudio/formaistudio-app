@@ -46,7 +46,7 @@ const information: ToolInfoSection[] = [
   {
     title: "What to upload",
     items: [
-      "Building: one floor plan per level — PDF ONLY (vector lines so the AI can trace walls, doors and windows accurately). Optional site plan, roof plans and elevations are also PDF only.",
+      "Building: upload ONE complete architectural PDF set. The AI walks the pages, keeps only architectural plan views (floors, roof, site, elevations), and automatically skips M.E.P., structural notes and schedules so the 3D model is built from architecture only.",
       "Furniture: orthographic views (top + front + side) with printed dimensions, plus an optional reference photo or render.",
       "Each file up to 40 MB.",
     ],
@@ -156,12 +156,6 @@ export function FloorTo3D() {
   const [pdfSetOpen, setPdfSetOpen] = useState(false);
   const detectorAutoOpened = useRef(false);
   const assistantAutoOpened = useRef(false);
-  const floorInputRef = useRef<HTMLInputElement>(null);
-  const floorInputIndex = useRef<number>(-1);
-  const floorInputSlot = useRef<1 | 2>(1);
-  const roofInputRef = useRef<HTMLInputElement>(null);
-  const siteInputRef = useRef<HTMLInputElement>(null);
-  const elevationInputRef = useRef<HTMLInputElement>(null);
 
   function readFileAsDataUrl(file: File): Promise<string> {
     if (!file.type.startsWith("image/")) return readRawDataUrl(file);
@@ -198,85 +192,6 @@ export function FloorTo3D() {
     });
   }
 
-  async function addFloor() {
-    floorInputIndex.current = -1;
-    floorInputSlot.current = 1;
-    floorInputRef.current?.click();
-  }
-  async function replaceFloor(index: number) {
-    floorInputIndex.current = index;
-    floorInputSlot.current = 1;
-    floorInputRef.current?.click();
-  }
-  async function pickFloorImage2(index: number) {
-    floorInputIndex.current = index;
-    floorInputSlot.current = 2;
-    floorInputRef.current?.click();
-  }
-  async function onFloorPicked(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!isPdfFile(file)) { setError("Floor plans must be PDF. Export your drawing as PDF so the AI can read the vector lines."); return; }
-    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
-    const url = await readFileAsDataUrl(file);
-    const idx = floorInputIndex.current;
-    const slot = floorInputSlot.current;
-    if (idx >= 0) {
-      setFloors((prev) => prev.map((f, i) => i === idx
-        ? (slot === 2 ? { ...f, imageDataUrl2: url, fileName2: file.name } : { ...f, imageDataUrl: url, fileName: file.name })
-        : f));
-    } else {
-      setFloors((prev) => [...prev, {
-        imageDataUrl: url,
-        label: prev.length === 0 ? "Ground floor" : `Floor ${prev.length}`,
-        heightMeters: 2.7,
-                heightUnit: prev[prev.length - 1]?.heightUnit ?? "ft",
-        fileName: file.name,
-      }]);
-    }
-    setError("");
-  }
-  async function onRoofPicked(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    if (files.some((file) => !isPdfFile(file))) { setError("Roof plans must be PDF."); return; }
-    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
-    const added: Array<{ imageDataUrl: string; fileName: string }> = [];
-    for (const file of files) {
-      const url = await readFileAsDataUrl(file);
-      added.push({ imageDataUrl: url, fileName: file.name });
-    }
-    setRoofPlans((prev) => [...prev, ...added].slice(0, 6));
-    setError("");
-  }
-  async function onSitePicked(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!isPdfFile(file)) { setError("Site plans must be PDF."); return; }
-    if (file.size > 40_000_000) { setError("Each drawing must be under 40 MB."); return; }
-    const url = await readFileAsDataUrl(file);
-    setSitePlan({ imageDataUrl: url, fileName: file.name });
-    setError("");
-  }
-  async function onElevationsPicked(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = "";
-    if (!files.length) return;
-    if (files.some((file) => !isPdfFile(file))) { setError("Elevations must be PDF."); return; }
-    if (files.some((file) => file.size > 40_000_000)) { setError("Each drawing must be under 40 MB."); return; }
-    const cycle: ElevationEntry["facing"][] = ["N", "E", "S", "W", "other"];
-    const added: ElevationEntry[] = [];
-    for (const file of files) {
-      const url = await readFileAsDataUrl(file);
-      const facing = cycle[(elevations.length + added.length) % cycle.length];
-      added.push({ imageDataUrl: url, facing, label: "", fileName: file.name });
-    }
-    setElevations((prev) => [...prev, ...added].slice(0, 8));
-    setError("");
-  }
 
   async function buildFromDrawings() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
@@ -706,106 +621,48 @@ export function FloorTo3D() {
         </div>
       </div>
       {subject === "building" && <>
-        <input ref={floorInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onFloorPicked} />
-        <input ref={roofInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onRoofPicked} />
-        <input ref={siteInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onSitePicked} />
-        <input ref={elevationInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onElevationsPicked} />
-
-        <div className="mb-5 rounded-2xl border border-dashed border-foreground/30 bg-secondary/30 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Have a full PDF set?</p>
-          <p className="mt-1 text-xs text-muted-foreground">Upload one multi-page PDF with every sheet. Walk page-by-page and label each as floor, roof, site or elevation — they will populate the slots below automatically.</p>
-          <Button type="button" variant="outline" className="mt-3 h-11 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
-            <span>Import a complete drawing set (PDF)</span><Upload />
+        <div className="rounded-2xl border border-dashed border-foreground/30 bg-secondary/30 p-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Complete PDF set</p>
+          <p className="mt-1 text-xs text-muted-foreground">Upload one multi-page PDF with every architectural sheet — floor plans, roof, site, elevations. The AI focuses ONLY on architectural plan views and automatically ignores M.E.P. (mechanical, electrical, plumbing) sheets to extract walls, openings and heights for the 3D volumes.</p>
+          <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
+            <span>{floors.length === 0 ? "Import architectural PDF set" : "Import another PDF set"}</span><Upload />
           </Button>
-        </div>
-
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Site plan (optional)</p>
-        <p className="mt-2 text-xs text-muted-foreground">A top-down view of the site — property lines, setbacks, driveway, landscaping. Used to place the building on the ground.</p>
-        {sitePlan ? <div className="mt-3 rounded-2xl border border-border p-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Site</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setSitePlan(null)}><X className="size-3" />Remove</Button>
-          </div>
-          <button type="button" onClick={() => siteInputRef.current?.click()} className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
-            {sitePlan.imageDataUrl.startsWith("data:image/") ? <img src={sitePlan.imageDataUrl} alt="Site plan" className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{sitePlan.fileName}</span>}
-          </button>
-        </div> : <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => siteInputRef.current?.click()}><span>Add site plan</span><Plus /></Button>}
-
-        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Floors — bottom → top (up to 2 images per floor)</p>
-        <p className="mt-2 text-xs text-muted-foreground">Upload each floor plan separately so the 3D model stacks them in real-world order. You can add a second drawing per floor (e.g. furnished plan, RCP, or a dimensioned variant). Set the floor-to-floor height for each level.</p>
-        <div className="mt-3 space-y-3">
-          {floors.map((floor, index) => <div key={index} className="rounded-2xl border border-border p-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Floor {index}</span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
+          {(floors.length > 0 || roofPlans.length > 0 || sitePlan || elevations.length > 0) && <div className="mt-4 space-y-2 text-[11px]">
+            <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+              <span><span className="font-semibold">{floors.length}</span> floor plan{floors.length === 1 ? "" : "s"} · <span className="font-semibold">{roofPlans.length}</span> roof · <span className="font-semibold">{sitePlan ? 1 : 0}</span> site · <span className="font-semibold">{elevations.length}</span> elevation{elevations.length === 1 ? "" : "s"}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setFloors([]); setRoofPlans([]); setSitePlan(null); setElevations([]); setDetections({}); }}><X className="size-3" />Clear</Button>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => void replaceFloor(index)} className="block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
-                {floor.imageDataUrl.startsWith("data:image/") ? <img src={floor.imageDataUrl} alt={floor.label} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{floor.fileName}</span>}
-              </button>
-              {floor.imageDataUrl2 ? <div className="relative">
-                <button type="button" onClick={() => void pickFloorImage2(index)} className="block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
-                  {floor.imageDataUrl2.startsWith("data:image/") ? <img src={floor.imageDataUrl2} alt={`${floor.label} second drawing`} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{floor.fileName2}</span>}
-                </button>
-                <button type="button" aria-label="Remove second drawing" className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-background/90 text-foreground" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, imageDataUrl2: undefined, fileName2: undefined } : f))}><X className="size-3" /></button>
-              </div> : <button type="button" onClick={() => void pickFloorImage2(index)} className="grid aspect-[4/3] w-full place-items-center rounded-xl border border-dashed border-border bg-secondary/40 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                <span className="flex flex-col items-center gap-1"><Plus className="size-4" />Add 2nd image</span>
-              </button>}
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <label className="text-[10px] uppercase tracking-[0.18em]">Label
-                <Input value={floor.label} onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, label: event.target.value } : f))} className="mt-1 h-10" />
-              </label>
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-[0.18em]">Floor height</span>
+            {floors.length > 0 && <ul className="space-y-1.5">
+              {floors.map((floor, index) => <li key={index} className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                <span className="grid h-10 w-12 place-items-center overflow-hidden rounded border border-border bg-secondary text-[9px] text-muted-foreground">
+                  {floor.imageDataUrl.startsWith("data:image/") ? <img src={floor.imageDataUrl} alt="" className="size-full object-contain" /> : "PDF"}
+                </span>
+                <Input
+                  value={floor.label}
+                  onChange={(event) => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, label: event.target.value } : f))}
+                  className="h-9 flex-1"
+                  placeholder={index === 0 ? "Ground floor" : `Floor ${index}`}
+                />
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={floor.heightUnit === "ft" ? 1 : 0.3}
+                    max={floor.heightUnit === "ft" ? 50 : 15}
+                    step={floor.heightUnit === "ft" ? 0.25 : 0.1}
+                    inputMode="decimal"
+                    value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters}
+                    onChange={(event) => { const raw = Number(event.target.value); const v = Number.isFinite(raw) && raw > 0 ? raw : 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; const clamped = Math.min(15, Math.max(0.3, meters || 2.7)); setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: clamped } : f)); }}
+                    className="h-9 w-20"
+                  />
                   <div className="flex overflow-hidden rounded-md border border-border">
-                    {(["m", "ft"] as const).map((u) => <button key={u} type="button" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightUnit: u } : f))} className={`px-2 py-0.5 text-[10px] font-bold uppercase ${floor.heightUnit === u ? "bg-foreground text-background" : "bg-background text-foreground"}`}>{u}</button>)}
+                    {(["ft", "m"] as const).map((u) => <button key={u} type="button" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightUnit: u } : f))} className={`px-2 py-1 text-[10px] font-bold uppercase ${floor.heightUnit === u ? "bg-foreground text-background" : "bg-background text-foreground"}`}>{u}</button>)}
                   </div>
                 </div>
-                <Input type="number" min={floor.heightUnit === "ft" ? 1 : 0.3} max={floor.heightUnit === "ft" ? 50 : 15} step={floor.heightUnit === "ft" ? 0.25 : 0.1} inputMode="decimal" value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters} onChange={(event) => { const raw = Number(event.target.value); const v = Number.isFinite(raw) && raw > 0 ? raw : 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; const clamped = Math.min(15, Math.max(0.3, meters || 2.7)); setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: clamped } : f)); }} className="mt-1 h-10" />
-              </div>
-            </div>
-          </div>)}
-          <Button type="button" variant="outline" className="h-12 w-full justify-between" onClick={() => void addFloor()} disabled={floors.length >= 10}>
-            <span>{floors.length === 0 ? "Add ground floor plan" : `Add floor ${floors.length}`}</span><Plus />
-          </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" /></Button>
+              </li>)}
+            </ul>}
+          </div>}
         </div>
-
-        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Roof plans (optional)</p>
-        <p className="mt-2 text-xs text-muted-foreground">Top-down views of the roof. You can add multiple (e.g. structural plan, finish plan, drainage). Used together with the elevations to set the roof outline.</p>
-        {roofPlans.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {roofPlans.map((roof, index) => <div key={index} className="rounded-2xl border border-border p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Roof {index + 1}</span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setRoofPlans((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
-            </div>
-            <div className="mt-2 block aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-secondary">
-              {roof.imageDataUrl.startsWith("data:image/") ? <img src={roof.imageDataUrl} alt={`Roof plan ${index + 1}`} className="size-full object-contain" /> : <span className="grid size-full place-items-center text-xs text-muted-foreground">{roof.fileName}</span>}
-            </div>
-          </div>)}
-        </div>}
-        <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => roofInputRef.current?.click()} disabled={roofPlans.length >= 6}>
-          <span>{roofPlans.length === 0 ? "Add roof plan" : `Add another roof plan (${roofPlans.length}/6)`}</span><Plus />
-        </Button>
-
-        <p className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em]">Elevations</p>
-        <p className="mt-2 text-xs text-muted-foreground">Add one image per facade (North, South, East, West). Used to lock heights, window positions and roof shape.</p>
-        {elevations.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {elevations.map((elev, index) => <div key={index} className="rounded-2xl border border-border p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Elevation</span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setElevations((prev) => prev.filter((_, i) => i !== index))}><X className="size-3" />Remove</Button>
-            </div>
-            {elev.imageDataUrl.startsWith("data:image/") ? <img src={elev.imageDataUrl} alt={`Elevation ${elev.facing}`} className="mt-2 aspect-[4/3] w-full rounded-xl border border-border bg-secondary object-contain" /> : <div className="mt-2 grid aspect-[4/3] w-full place-items-center rounded-xl border border-border bg-secondary text-xs text-muted-foreground">{elev.fileName}</div>}
-            <div className="mt-2 flex gap-1">
-              {(["N", "E", "S", "W", "other"] as const).map((dir) => <Button key={dir} type="button" size="sm" variant={elev.facing === dir ? "default" : "outline"} className="flex-1" onClick={() => setElevations((prev) => prev.map((e, i) => i === index ? { ...e, facing: dir } : e))}>{dir}</Button>)}
-            </div>
-          </div>)}
-        </div>}
-        <Button type="button" variant="outline" className="mt-3 h-12 w-full justify-between" onClick={() => elevationInputRef.current?.click()} disabled={elevations.length >= 8}>
-          <span>{elevations.length === 0 ? "Add elevations" : `Add more elevations (${elevations.length}/8)`}</span><Plus />
-        </Button>
       </>}
 
       {subject === "furniture" && <>
