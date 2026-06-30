@@ -719,38 +719,35 @@ export function FloorTo3D() {
       </div>
       </>}
 
-      <div className="organic-divider py-8">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Drawing units</p>
-            <p className="mt-2 text-xs text-muted-foreground">Units printed on your source drawing</p>
+      <details className="organic-divider py-6">
+        <summary className="flex cursor-pointer select-none items-center justify-between text-[10px] font-bold uppercase tracking-[0.2em]">
+          <span>Advanced options</span>
+          <span className="text-muted-foreground">{planUnits === "meters" ? "m" : "ft/in"} · {outputUnits} · {quality} poly</span>
+        </summary>
+        <div className="mt-4 space-y-5">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted-foreground">Drawing units</p>
+            <div className="flex rounded-xl border border-foreground p-1">
+              <Button type="button" size="sm" variant={planUnits === "feet-inches" ? "default" : "ghost"} onClick={() => setPlanUnits("feet-inches")}>Feet</Button>
+              <Button type="button" size="sm" variant={planUnits === "meters" ? "default" : "ghost"} onClick={() => setPlanUnits("meters")}>Meters</Button>
+            </div>
           </div>
-          <div className="flex rounded-xl border border-foreground p-1">
-            <Button type="button" size="sm" variant={planUnits === "feet-inches" ? "default" : "ghost"} onClick={() => setPlanUnits("feet-inches")}>Feet & inches</Button>
-            <Button type="button" size="sm" variant={planUnits === "meters" ? "default" : "ghost"} onClick={() => setPlanUnits("meters")}>Meters</Button>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted-foreground">Export units</p>
+            <div className="flex rounded-xl border border-foreground p-1">
+              <Button type="button" size="sm" variant={outputUnits === "feet" ? "default" : "ghost"} onClick={() => setOutputUnits("feet")}>Feet</Button>
+              <Button type="button" size="sm" variant={outputUnits === "meters" ? "default" : "ghost"} onClick={() => setOutputUnits("meters")}>Meters</Button>
+            </div>
           </div>
-        </div>
-        <div className="mt-6 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">.dae output units</p>
-            <p className="mt-2 text-xs text-muted-foreground">Units the exported 3D file will use</p>
-          </div>
-          <div className="flex rounded-xl border border-foreground p-1">
-            <Button type="button" size="sm" variant={outputUnits === "feet" ? "default" : "ghost"} onClick={() => setOutputUnits("feet")}>Feet</Button>
-            <Button type="button" size="sm" variant={outputUnits === "meters" ? "default" : "ghost"} onClick={() => setOutputUnits("meters")}>Meters</Button>
-          </div>
-        </div>
-        <div className="mt-6 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Model detail</p>
-            <p className="mt-2 text-xs text-muted-foreground">High poly = fine geometric detail. Low poly = lighter mesh, fast loading, game-engine ready.</p>
-          </div>
-          <div className="flex rounded-xl border border-foreground p-1">
-            <Button type="button" size="sm" variant={quality === "low" ? "default" : "ghost"} onClick={() => setQuality("low")}>Low poly</Button>
-            <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High poly</Button>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-muted-foreground">Mesh detail</p>
+            <div className="flex rounded-xl border border-foreground p-1">
+              <Button type="button" size="sm" variant={quality === "low" ? "default" : "ghost"} onClick={() => setQuality("low")}>Low</Button>
+              <Button type="button" size="sm" variant={quality === "high" ? "default" : "ghost"} onClick={() => setQuality("high")}>High</Button>
+            </div>
           </div>
         </div>
-      </div>
+      </details>
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
