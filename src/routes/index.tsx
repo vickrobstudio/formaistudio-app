@@ -22,8 +22,8 @@ function HomePage() {
     <section className="relative flex h-full w-full items-center justify-center overflow-hidden bg-white">
       <LandingBackgroundPaint enabled={logoDone} />
       <h1 className="sr-only">FormAI Studio</h1>
-      <LandingPaintLogo onComplete={() => setLogoDone(true)} />
-      <p className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4rem))] z-20 -translate-x-1/2 whitespace-nowrap text-center text-base font-medium tracking-tight text-neutral-500 sm:text-xl md:text-2xl">
+      <LandingPaintLogo onComplete={() => setLogoDone(true)} revealed={logoDone} />
+      <p className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4rem))] z-20 -translate-x-1/2 whitespace-nowrap text-center text-base font-medium tracking-tight text-white sm:text-xl md:text-2xl [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
         AI Architects Shaping the Form of the World
       </p>
       <Button asChild variant="studio" className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-10 min-w-36 -translate-x-1/2 border border-black bg-black text-white hover:bg-black/85">

@@ -1,31 +1,7 @@
 import { useEffect, useRef } from "react";
 import logoAsset from "@/assets/formai-logo-bubble-cut.png.asset.json";
 
-// Per-letter colors. Coordinates are normalized 0-1 within the square logo bbox.
-const COLOR_F = "#1438a0";   // Bauhaus blue
-const COLOR_O = "#d8261b";   // red
-const COLOR_R = "#ffd500";   // yellow
-const COLOR_M = "#ffffff";   // white
-const COLOR_AI = "#000000";  // black (always)
-
-function colorForPoint(nx: number, ny: number): string {
-  // AI badge (small, top-right) takes priority
-  if (nx > 0.62 && nx < 0.88 && ny > 0.28 && ny < 0.50) return COLOR_AI;
-  // Top row: F (left), O (right)
-  if (ny < 0.52) {
-    if (nx < 0.36) return COLOR_F;
-    return COLOR_O;
-  }
-  // Bottom row: R (left), M (right)
-  if (nx < 0.55) {
-    // F descends through the left column too — keep F color on far left
-    if (nx < 0.28) return COLOR_F;
-    return COLOR_R;
-  }
-  return COLOR_M;
-}
-
-export function LandingPaintLogo({ onComplete }: { onComplete?: () => void }) {
+export function LandingPaintLogo({ onComplete, revealed }: { onComplete?: () => void; revealed?: boolean }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastRef = useRef<{ x: number; y: number; t: number } | null>(null);
@@ -103,7 +79,7 @@ export function LandingPaintLogo({ onComplete }: { onComplete?: () => void }) {
 
       const baseR = Math.max(18, Math.min(r.width, r.height) * 0.06);
       const radius = baseR + Math.min(28, speed * 12);
-      const color = colorForPoint(x / r.width, y / r.height);
+      const color = "#000000";
 
       // Soft watercolor blob
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
@@ -161,7 +137,7 @@ export function LandingPaintLogo({ onComplete }: { onComplete?: () => void }) {
     <div
       ref={wrapRef}
       className="relative z-10 aspect-square select-none"
-      style={{ width: "50vmin", height: "50vmin" }}
+      style={{ width: "50vmin", height: "50vmin", filter: revealed ? "invert(1)" : undefined }}
     >
       <img
         src={logoAsset.url}
