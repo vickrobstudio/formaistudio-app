@@ -187,6 +187,42 @@ export function FloorTo3D() {
     setFloorParts([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
   }
 
+  function getImageSize(src: string): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+      img.onerror = () => reject(new Error("Could not read image dimensions."));
+      img.src = src;
+    });
+  }
+
+  async function runRecognition(index: number) {
+    const f = floors[index];
+    if (!f || !f.imageDataUrl.startsWith("data:image/")) return;
+    setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: true, recognizeError: undefined } : x));
+    try {
+      const { width, height } = await getImageSize(f.imageDataUrl);
+      const result = await detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } });
+      if (!result.ok) {
+        setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: result.error } : x));
+        return;
+      }
+      const polygons: RecognizedPolygon[] = result.polygons.map((p, k) => ({
+        id: p.id ?? `det_${k}`,
+        type: p.type as MarkLiftType,
+        points: p.points as Array<[number, number]>,
+      }));
+      setFloors((p) => p.map((x, j) => j === index ? {
+        ...x,
+        recognizing: false,
+        recognition: { imageWidth: width, imageHeight: height, planWidthMeters: 12, polygons },
+      } : x));
+      setRecognitionPreview(index);
+    } catch (cause) {
+      setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: cause instanceof Error ? cause.message : "Recognition failed." } : x));
+    }
+  }
+
   async function onFloorUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     if (event.target) event.target.value = "";
