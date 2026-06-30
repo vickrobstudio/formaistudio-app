@@ -1,18 +1,34 @@
 import { useEffect, useRef } from "react";
 import logoAsset from "@/assets/formai-logo-bubble-cut.png.asset.json";
 
-// Bauhaus primaries: red, yellow, blue
-const PALETTE = [
-  "#e1261c", "#d8261b", "#c81d1d",
-  "#ffd500", "#f5c400", "#ffdc1f",
-  "#1e4ea8", "#1438a0", "#2a5cc7",
-];
+// Per-letter colors. Coordinates are normalized 0-1 within the square logo bbox.
+const COLOR_F = "#1438a0";   // Bauhaus blue
+const COLOR_O = "#d8261b";   // red
+const COLOR_R = "#ffd500";   // yellow
+const COLOR_M = "#ffffff";   // white
+const COLOR_AI = "#000000";  // black (always)
+
+function colorForPoint(nx: number, ny: number): string {
+  // AI badge (small, top-right) takes priority
+  if (nx > 0.62 && nx < 0.88 && ny > 0.28 && ny < 0.50) return COLOR_AI;
+  // Top row: F (left), O (right)
+  if (ny < 0.52) {
+    if (nx < 0.36) return COLOR_F;
+    return COLOR_O;
+  }
+  // Bottom row: R (left), M (right)
+  if (nx < 0.55) {
+    // F descends through the left column too — keep F color on far left
+    if (nx < 0.28) return COLOR_F;
+    return COLOR_R;
+  }
+  return COLOR_M;
+}
 
 export function LandingPaintLogo({ onComplete }: { onComplete?: () => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const hueRef = useRef(0);
   const completedRef = useRef(false);
 
   useEffect(() => {
@@ -87,8 +103,7 @@ export function LandingPaintLogo({ onComplete }: { onComplete?: () => void }) {
 
       const baseR = Math.max(18, Math.min(r.width, r.height) * 0.06);
       const radius = baseR + Math.min(28, speed * 12);
-      hueRef.current = (hueRef.current + 7) % PALETTE.length;
-      const color = PALETTE[Math.floor(hueRef.current)];
+      const color = colorForPoint(x / r.width, y / r.height);
 
       // Soft watercolor blob
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
