@@ -319,7 +319,7 @@ export function PdfSetImporter({
     <DialogContent className="max-w-5xl">
       <DialogHeader>
         <DialogTitle>Import architectural PDF or DWG</DialogTitle>
-        <DialogDescription>Upload one PDF containing every project sheet. Each architectural page is auto-classified, then cleaned on import — text and numbers are erased and only the enclosed black-line geometry is kept. M.E.P. and other non-architectural sheets are skipped by default.</DialogDescription>
+        <DialogDescription>Upload one drawings set (PDF or DWG) containing every project sheet. Each architectural page is auto-classified, then cleaned on import — text and numbers are erased and only the enclosed black-line geometry is kept. M.E.P. and other non-architectural sheets are skipped by default.</DialogDescription>
       </DialogHeader>
 
       {pages.length === 0 && <div>
