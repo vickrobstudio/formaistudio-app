@@ -73,8 +73,16 @@ export type DwgDatabaseLite = {
   layers: DwgLayerLite[];
   blocks: DwgBlockLite[];
   entities: DwgEntityLite[];
+  /** One entry per AutoCAD layout (Model + each paper-space tab). */
+  layouts: DwgLayoutLite[];
   /** Original DwgDatabase for advanced consumers. */
   raw: DwgDatabase;
+};
+
+export type DwgLayoutLite = {
+  name: string;
+  isModelSpace: boolean;
+  entities: DwgEntityLite[];
 };
 
 const UNIT_TO_METERS: Record<DwgUnits, number> = {
@@ -177,6 +185,29 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
     normalizeEntity(e as unknown as Record<string, unknown>, i),
   );
 
+  // Extract per-layout entity buckets. Model space is `db.entities`;
+  // every other layout lives inside a BLOCK_RECORD whose `layout` handle
+  // links to a LAYOUT object (which carries the human "Layout1" name).
+  const layoutObjs = (db.objects?.LAYOUT ?? []) as Array<{ handle?: string; layoutName?: string }>;
+  const layoutByHandle = new Map<string, string>();
+  for (const lo of layoutObjs) {
+    if (lo.handle && lo.layoutName) layoutByHandle.set(String(lo.handle), String(lo.layoutName));
+  }
+  const layouts: DwgLayoutLite[] = [];
+  // Model space first, always.
+  layouts.push({ name: "Model", isModelSpace: true, entities });
+  for (const br of blockEntries) {
+    const rec = br as unknown as Record<string, unknown>;
+    const name = String(rec.name ?? "");
+    if (!name || /^\*model[_ ]?space$/i.test(name)) continue;
+    if (!/^\*paper[_ ]?space/i.test(name)) continue;
+    const layoutHandle = typeof rec.layout === "string" ? rec.layout : "";
+    const human = (layoutHandle && layoutByHandle.get(layoutHandle)) || name.replace(/^\*/, "");
+    const ents = Array.isArray(rec.entities) ? (rec.entities as unknown[]) : [];
+    const lite = ents.map((e, i) => normalizeEntity(e as Record<string, unknown>, i));
+    if (lite.length > 0) layouts.push({ name: human, isModelSpace: false, entities: lite });
+  }
+
   return {
     source,
     units,
@@ -185,6 +216,7 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
     layers,
     blocks,
     entities,
+    layouts,
     raw: db,
   };
 }
@@ -253,6 +285,58 @@ export function summarize(db: DwgDatabaseLite): string {
 }
 
 /**
+ * Strict pre-check before we accept a DWG/DXF for the 2D→3D pipeline.
+ * The pipeline needs a CLEAN line drawing — no text, no dimensions, no
+ * dashed reference lines, no hatches/leaders. Anything else confuses
+ * flood-fill room detection. We count the noise; if any category is
+ * present we report exactly what to remove.
+ */
+export type DwgPrecheckIssue = {
+  category: "text" | "dimension" | "leader" | "hatch" | "block_insert" | "dashed_line";
+  count: number;
+};
+
+const DASHED_LT_RE = /(dash|hidden|center|phantom|dot|break|gap|divide)/i;
+
+function isNoiseType(t: string): DwgPrecheckIssue["category"] | null {
+  const u = t.toUpperCase();
+  if (u === "TEXT" || u === "MTEXT" || u === "ATTDEF" || u === "ATTRIB") return "text";
+  if (u === "DIMENSION" || u.startsWith("DIM")) return "dimension";
+  if (u === "LEADER" || u === "MLEADER" || u === "MULTILEADER") return "leader";
+  if (u === "HATCH" || u === "SOLID") return "hatch";
+  if (u === "INSERT") return "block_insert";
+  return null;
+}
+
+export function precheckDrawing(db: DwgDatabaseLite): DwgPrecheckIssue[] {
+  const counts = new Map<DwgPrecheckIssue["category"], number>();
+  const bump = (c: DwgPrecheckIssue["category"]) => counts.set(c, (counts.get(c) ?? 0) + 1);
+  const layerByName = new Map(db.layers.map((l) => [l.name, l] as const));
+  // Walk every layout (model + paper) so a "clean" model space can't hide
+  // a paper-space full of titleblock text.
+  const all = db.layouts?.length ? db.layouts.flatMap((l) => l.entities) : db.entities;
+  for (const e of all) {
+    const noise = isNoiseType(e.type);
+    if (noise) { bump(noise); continue; }
+    const layer = layerByName.get(e.layer);
+    if (layer?.lineType && DASHED_LT_RE.test(layer.lineType)) bump("dashed_line");
+  }
+  return Array.from(counts.entries()).map(([category, count]) => ({ category, count }));
+}
+
+export function describePrecheckIssues(issues: DwgPrecheckIssue[]): string {
+  const label: Record<DwgPrecheckIssue["category"], string> = {
+    text: "text / numbers",
+    dimension: "dimensions",
+    leader: "leaders / callouts",
+    hatch: "hatches / fills",
+    block_insert: "block inserts (furniture / symbols)",
+    dashed_line: "dashed / hidden / centerlines",
+  };
+  return issues.map((i) => `${i.count} ${label[i.category]}`).join(", ");
+}
+
+/**
  * Render the parsed database to a black-on-white PNG so the existing
  * vision pipeline can run on it. The parser itself never rasterizes —
  * this helper is opt-in for callers that still need an image, e.g. the
@@ -260,10 +344,11 @@ export function summarize(db: DwgDatabaseLite): string {
  */
 export function rasterizeDatabase(
   db: DwgDatabaseLite,
-  opts: { maxDimension?: number; padding?: number } = {},
+  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[] } = {},
 ): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"] } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
+  const sourceEntities = opts.entities ?? db.entities;
 
   // SIMPLIFICATION RULES (must match what the room-detector expects):
   //  - Skip text / dimensions / leaders / hatches / blocks entirely.
@@ -287,9 +372,11 @@ export function rasterizeDatabase(
 
   // Fall back to entity-bounding-box if extents are empty.
   let { min, max } = db.extents;
-  if (max.x - min.x <= 0 || max.y - min.y <= 0) {
+  // If a specific entity set was supplied (per-layout), recompute bounds
+  // from those entities so the layout fills the page.
+  if (opts.entities || max.x - min.x <= 0 || max.y - min.y <= 0) {
     let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
-    for (const e of db.entities) {
+    for (const e of sourceEntities) {
       for (const p of pointsOf(e)) {
         if (p.x < mnX) mnX = p.x; if (p.y < mnY) mnY = p.y;
         if (p.x > mxX) mxX = p.x; if (p.y > mxY) mxY = p.y;
@@ -325,7 +412,7 @@ export function rasterizeDatabase(
   // Flip Y so drawings render right-side-up.
   const ty = (y: number) => H - (padding + (y - min.y) * scale);
 
-  for (const e of db.entities) {
+  for (const e of sourceEntities) {
     const t = e.type.toUpperCase();
     // Drop annotation/dimension/text/hatch/block-insert entirely.
     if (t === "TEXT" || t === "MTEXT" || t === "ATTDEF" || t === "ATTRIB"
