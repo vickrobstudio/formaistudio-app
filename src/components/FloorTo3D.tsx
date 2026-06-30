@@ -538,18 +538,8 @@ export function FloorTo3D() {
     anchor.remove();
   }
 
-  function downloadFloorPart(part: { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string }, isTop: boolean) {
-    const map = { dae: part.daeDataUrl, obj: part.objDataUrl, fbx: part.fbxDataUrl } as const;
-    const href = map[downloadFormat];
-    if (!href) return;
-    void isTop;
-    const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `part`;
-    let prefix: string;
-    if (part.index === -1) prefix = "00_site";
-    else if (part.index === 9999) prefix = "99_roof";
-    else prefix = `${String(part.index + 1).padStart(2, "0")}_floor`;
-    downloadHref(href, `${prefix}_${slug}.${downloadFormat}`);
-  }
+  // Per-part building downloads are now handled inside <Building3DViewer />
+  // so the user can recolour / hide groups before exporting.
 
   async function reconstructMesh(urlOverride?: string) {
     const source = urlOverride ?? renderUrl;
