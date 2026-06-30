@@ -17,7 +17,7 @@ function AboutPage() {
       <p>FormAI STUDIO is for architects, designers, interior designers and furniture designers — and for every creator interested in building 3D worlds and rendering photorealistic views to showcase their ideas. An app for the architects of the world: human and god creators.</p>
     </LegalSection>
     <LegalSection title="Design without limits">
-      <p>An AI-powered creative platform for custom furniture, interior concepts, photorealistic visualizations, image editing and virtual space tours — backed by a Construction Bible of US and European building codes.</p>
+      <p>An AI-powered creative platform for custom furniture, interior concepts, photorealistic visualizations, image editing and virtual space tours — backed by a Construction Assistant covering US and European building codes.</p>
     </LegalSection>
     <LegalSection title="Built for real design work">
       <p>Our tools help designers and clients move from references and ideas to clear visual concepts while preserving materials, finishes, furniture intent and spatial context.</p>
