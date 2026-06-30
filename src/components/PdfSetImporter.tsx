@@ -349,24 +349,20 @@ export function PdfSetImporter({
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-5xl">
       <DialogHeader>
-        <DialogTitle>Import architectural PDF or DWG</DialogTitle>
-        <DialogDescription>Upload one drawings set (PDF or DWG) containing every project sheet. Each architectural page is auto-classified, then cleaned on import — text and numbers are erased and only the enclosed black-line geometry is kept. M.E.P. and other non-architectural sheets are skipped by default.</DialogDescription>
+        <DialogTitle>Import drawings</DialogTitle>
+        <DialogDescription>Upload one PDF, DWG or DXF with all your sheets. We auto-sort floor, roof, site and elevation pages and skip the rest.</DialogDescription>
       </DialogHeader>
 
       {pages.length === 0 && <div>
-        <div className="mb-3 rounded-lg border border-foreground/20 bg-secondary/40 p-3 text-[11px] leading-relaxed">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">DWG / DXF preparation rules</p>
-          <p className="mt-1 text-muted-foreground">The file must be a clean line drawing. The importer runs a strict pre-check and rejects anything noisy.</p>
+        <details className="mb-3 rounded-lg border border-foreground/20 bg-secondary/40 p-3 text-[11px] leading-relaxed">
+          <summary className="cursor-pointer select-none font-semibold">DWG / DXF: how to prepare your file</summary>
+          <p className="mt-2 text-muted-foreground">Clean line drawing only — the importer rejects noisy files.</p>
           <ul className="mt-2 space-y-1 list-disc pl-4">
-            <li>One layout per floor — Model = ground floor, Layout1 = floor 1, Layout2 = floor 2…</li>
-            <li>Only simple solid wall lines (LINE / LWPOLYLINE / POLYLINE / ARC / CIRCLE).</li>
-            <li>No text, no numbers, no room labels, no titleblock — purge TEXT, MTEXT, ATTRIB.</li>
-            <li>No dimensions, leaders or callouts — purge DIMENSION, LEADER, MLEADER.</li>
-            <li>No hatches or solid fills — purge HATCH, SOLID.</li>
-            <li>No block inserts (furniture, doors, fixtures, north arrow) — explode + erase.</li>
-            <li>No dashed / hidden / centerlines — set every layer linetype to Continuous.</li>
+            <li>One layout per floor (Model = ground, Layout1 = floor 1…).</li>
+            <li>Only solid wall lines — no text, numbers, dimensions, hatches, blocks or dashed lines.</li>
+            <li>Set every layer linetype to Continuous, then purge.</li>
           </ul>
-        </div>
+        </details>
         <input
           ref={inputRef}
           type="file"
@@ -376,8 +372,8 @@ export function PdfSetImporter({
         />
         <Button type="button" variant="outline" className="h-32 w-full" onClick={() => inputRef.current?.click()} disabled={busy === "rendering"}>
           {busy === "rendering"
-            ? <span className="inline-flex items-center gap-2"><LoaderCircle className="size-4 animate-spin" />Cleaning page {progress.done} / {progress.total}…</span>
-            : <span className="inline-flex items-center gap-2"><Upload className="size-4" />Choose a complete drawings set</span>}
+            ? <span className="inline-flex items-center gap-2"><LoaderCircle className="size-4 animate-spin" />Reading page {progress.done} of {progress.total}…</span>
+            : <span className="inline-flex items-center gap-2"><Upload className="size-4" />Choose a PDF, DWG or DXF</span>}
         </Button>
         {error && <p role="alert" className="mt-2 text-xs text-destructive">{error}</p>}
       </div>}
