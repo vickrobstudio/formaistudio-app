@@ -3,6 +3,7 @@ import { Eye, EyeOff, LoaderCircle, Sparkles, Wand2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { detectFloorElements, type DetectedCategory, type DetectedElement } from "@/lib/floor-detect.functions";
+import { streamImage } from "@/lib/stream-image";
 
 export type FloorPlanInput = {
   index: number;
@@ -104,20 +105,14 @@ export function DetectionEditor({
         return `${CATEGORY_LABEL[cat]}: ${items.map((i) => i.label).slice(0, 12).join(", ")}`;
       }).filter(Boolean).join(" · ");
       const prompt = `Redraw this messy floor plan as a CLEAN, SIMPLIFIED, top-down 2D architectural floor plan in crisp black-on-white drafting style. Keep the SAME overall outline, same rooms in the same locations, same door/window positions and same proportions as the source image, but remove clutter, smudges, scan noise, hatching, dimension lines, callouts and text. Use thick black walls, thin black openings (doors with swing arcs, windows as double-line breaks in walls), and label each room in a small clean sans-serif uppercase tag at its centroid. 2D floor plan, orthographic top view, no perspective, no shadows, no color fills, pure black ink on pure white background, architectural drafting line weights. The drawing already contains: ${summary || "rooms, walls, doors, windows"}.`;
-      const res = await fetch("/api/generate-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, sourceImage: floor.imageDataUrl }),
+      let finalUrl = "";
+      await streamImage(prompt, floor.imageDataUrl, (src, isFinal) => {
+        if (isFinal) finalUrl = src;
       });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `Replan failed (${res.status}).`);
-      }
-      const payload = (await res.json()) as { imageDataUrl?: string };
-      if (!payload.imageDataUrl) throw new Error("Replan returned no image.");
+      if (!finalUrl) throw new Error("Replan returned no image.");
       onDetectionsChange({
         ...detections,
-        [floor.index]: { ...det, replannedDataUrl: payload.imageDataUrl },
+        [floor.index]: { ...det, replannedDataUrl: finalUrl },
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Replan failed.");
