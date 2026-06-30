@@ -19,13 +19,6 @@ body {
   background-color: #ffffff;
 }
 
-/* Desktop: subtle surround so the 520px app column reads as a device. */
-@media (min-width: 768px) {
-  html:not(:has(.landing-screen)),
-  body:not(:has(.landing-screen)) {
-    background-color: oklch(0.96 0 0);
-  }
-}
 
 /* Lock the document so fixed headers/footers truly stay pinned in iOS
  * WKWebView. Pages scroll inside <main>, which is a scroll container but
