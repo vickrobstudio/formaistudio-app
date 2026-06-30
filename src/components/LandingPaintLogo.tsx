@@ -136,7 +136,7 @@ export function LandingPaintLogo() {
     <div
       ref={wrapRef}
       className="relative aspect-square select-none"
-      style={{ width: "50vmin", height: "50vmin", filter: "url(#landing-water)" }}
+      style={{ width: "50vmin", height: "50vmin" }}
     >
       <svg width="0" height="0" className="absolute" aria-hidden="true">
         <defs>
