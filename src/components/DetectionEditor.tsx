@@ -108,20 +108,22 @@ function hexToRgb(hex: string): [number, number, number] {
  * the list of pixel indices that belong to the same connected line region,
  * plus its bounding box.
  */
-function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: number): { pixels: number[]; bbox: [number, number, number, number] } | null {
+function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: number, target: 0 | 1): { pixels: number[]; bbox: [number, number, number, number]; touchedEdge: boolean } | null {
   const start = sy * w + sx;
-  if (mask[start] !== 1) return null;
+  if (mask[start] !== target) return null;
   const visited = new Uint8Array(w * h);
   const stack: number[] = [start];
   const pixels: number[] = [];
   let minX = sx, maxX = sx, minY = sy, maxY = sy;
+  let touchedEdge = false;
   while (stack.length) {
     const p = stack.pop()!;
     if (visited[p]) continue;
     visited[p] = 1;
-    if (mask[p] !== 1) continue;
+    if (mask[p] !== target) continue;
     pixels.push(p);
     const x = p % w, y = (p - x) / w;
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchedEdge = true;
     if (x < minX) minX = x; if (x > maxX) maxX = x;
     if (y < minY) minY = y; if (y > maxY) maxY = y;
     if (x > 0) stack.push(p - 1);
@@ -131,7 +133,7 @@ function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: n
     // Cap region size for safety on huge plans.
     if (pixels.length > 2_000_000) break;
   }
-  return { pixels, bbox: [minX, minY, maxX, maxY] };
+  return { pixels, bbox: [minX, minY, maxX, maxY], touchedEdge };
 }
 
 export function DetectionEditor({
@@ -242,10 +244,13 @@ export function DetectionEditor({
     const sx = Math.floor(((evt.clientX - rect.left) / rect.width) * work.width);
     const sy = Math.floor(((evt.clientY - rect.top) / rect.height) * work.height);
     if (sx < 0 || sy < 0 || sx >= work.width || sy >= work.height) return;
-    const fill = floodFillMask(work.mask, work.width, work.height, sx, sy);
+    const fill = floodFillMask(work.mask, work.width, work.height, sx, sy, 0);
     if (!fill || fill.pixels.length < 4) {
-      pushLog("That spot is transparent — click directly on a black line to paint it.");
+      pushLog("That spot is on a black line — click INSIDE a contour to paint it.");
       return;
+    }
+    if (fill.touchedEdge) {
+      pushLog("That area isn't fully enclosed (the fill reached the edge). Painting it anyway — close gaps in the outline for cleaner shapes.");
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -407,7 +412,7 @@ export function DetectionEditor({
       <div className="space-y-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Legend · tap to pick paint color</p>
-          {paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Painting <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span> · tap a black line. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
+          {paintCategory && <p className="mt-1 text-[10px] text-foreground/80 inline-flex items-center gap-1"><Paintbrush className="size-3" />Painting <span className="font-semibold">{CATEGORY_LABEL[paintCategory]}</span> · tap inside a black-line contour. <button type="button" className="underline" onClick={() => setPaintCategory(null)}>Stop</button></p>}
           {activeDetection?.planWidthMeters && activeDetection?.calibration && <p className="mt-1 text-[10px] text-foreground/80">Scale locked: {CATEGORY_LABEL[activeDetection.calibration.category].toLowerCase()} ≈ {activeDetection.calibration.assumedMeters} m → plan ≈ <span className="font-semibold">{activeDetection.planWidthMeters.toFixed(1)} m</span> wide.</p>}
           <ul className="mt-2 space-y-1.5">
             {CATEGORY_ORDER.map((cat) => {
