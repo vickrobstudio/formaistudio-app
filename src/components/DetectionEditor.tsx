@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Paintbrush, Redo2, Sparkles, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
+import { extractRoomRegions, buildClassifierThumbnail, buildRegionMaskDataUrl } from "@/lib/floor-pipeline";
+import { classifyFloorRegions } from "@/lib/floor-classify.functions";
 
 // pdf.js + tesseract.js are loaded lazily inside prepare() so they don't
 // inflate the initial bundle and never run on the server.
@@ -476,8 +478,11 @@ export function DetectionEditor({
       let paintedDataUrl = detections[floor.index]?.paintedDataUrl;
       const work = workingRef.current[floor.index];
       if (didFreshClean && existing.length === 0 && work) {
-        const regions = detectEnclosedRegions(work.mask, work.width, work.height);
-        pushLog(`${floor.label}: detected ${regions.length} enclosed shape${regions.length === 1 ? "" : "s"} from the line work.`);
+        // Pipeline step 6+7: flood-fill every enclosed region, then trace
+        // each one as a real polygon (not a bounding box) via Moore-
+        // neighbor contour + Douglas-Peucker simplification.
+        const regions = extractRoomRegions(work.mask, work.width, work.height);
+        pushLog(`${floor.label}: traced ${regions.length} enclosed polygon${regions.length === 1 ? "" : "s"} from the line work.`);
         if (regions.length > 0) {
           const paint = document.createElement("canvas");
           paint.width = work.width; paint.height = work.height;
@@ -492,23 +497,73 @@ export function DetectionEditor({
                 const i = p * 4;
                 id.data[i] = r; id.data[i + 1] = g; id.data[i + 2] = b; id.data[i + 3] = 200;
               }
-              const [minX, minY, maxX, maxY] = reg.bbox;
               newElements.push({
                 id: `auto-${Date.now()}-${idx}`,
                 category: "room",
                 label: `Room ${idx + 1}`,
-                polygon: [
-                  [minX / work.width, minY / work.height],
-                  [maxX / work.width, minY / work.height],
-                  [maxX / work.width, maxY / work.height],
-                  [minX / work.width, maxY / work.height],
-                ],
+                polygon: reg.polygon,
                 confidence: 0.9,
               });
             });
             pctx.putImageData(id, 0, 0);
             paintedDataUrl = paint.toDataURL("image/png");
             elements = newElements;
+
+            // Pipeline step 8: ask the AI to NAME and CATEGORIZE each
+            // region. We send a numbered overlay so the model just has
+            // to label by number — no free-form spatial detection.
+            try {
+              pushLog(`${floor.label}: asking AI to label each room…`);
+              const thumb = buildClassifierThumbnail(
+                Object.assign(document.createElement("canvas"), { width: work.width, height: work.height }),
+                regions,
+              );
+              // Re-render: the helper draws on top of an existing canvas
+              // copy, so we need the actual cleaned image for context.
+              const baseImg = new Image();
+              await new Promise<void>((res, rej) => {
+                baseImg.onload = () => res();
+                baseImg.onerror = () => rej(new Error("thumbnail base load"));
+                baseImg.src = cleanedUrl;
+              });
+              const base = document.createElement("canvas");
+              base.width = work.width; base.height = work.height;
+              const bctx = base.getContext("2d");
+              if (bctx) {
+                bctx.fillStyle = "#ffffff";
+                bctx.fillRect(0, 0, base.width, base.height);
+                bctx.drawImage(baseImg, 0, 0, base.width, base.height);
+              }
+              const overlay = buildClassifierThumbnail(base, regions);
+              const regionInput = regions.map((reg, i) => ({
+                id: newElements[i].id,
+                bbox: [
+                  reg.bbox[0] / work.width,
+                  reg.bbox[1] / work.height,
+                  reg.bbox[2] / work.width,
+                  reg.bbox[3] / work.height,
+                ] as [number, number, number, number],
+                areaFraction: reg.pixels.length / (work.width * work.height),
+              }));
+              void thumb; // (silences the placeholder canvas above)
+              const result = await classifyFloorRegions({
+                data: { imageDataUrl: overlay.dataUrl, regions: regionInput, hint: floor.label },
+              });
+              if (result.ok) {
+                const byId = new Map(result.regions.map((r) => [r.id, r] as const));
+                elements = newElements.map((el) => {
+                  const cls = byId.get(el.id);
+                  if (!cls) return el;
+                  return { ...el, category: cls.category, label: cls.label, confidence: cls.confidence };
+                });
+                pushLog(`${floor.label}: labeled ${result.regions.length} region${result.regions.length === 1 ? "" : "s"} (kitchen, bath, bedroom…).`);
+              } else {
+                pushLog(`${floor.label}: AI labeling skipped — ${result.error}`);
+              }
+            } catch (cause) {
+              const msg = cause instanceof Error ? cause.message : "unknown";
+              pushLog(`${floor.label}: AI labeling skipped (${msg}).`);
+            }
           }
         }
         pushLog(`${floor.label}: ready. Tap any shape to recolor it or pick a different category.`);
