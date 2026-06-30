@@ -25,7 +25,7 @@ export function GlobalAssistant() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { lang, units, setLang, setUnits } = useAssistantPrefs();
+  const { lang, units, region, setLang, setUnits } = useAssistantPrefs();
 
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/build-chat" }), []);
   const { messages, sendMessage, status } = useChat({
@@ -34,7 +34,7 @@ export function GlobalAssistant() {
     onError: (e) => console.error("global assistant error", e),
   });
 
-  const ctx = useMemo(() => ({ route: pathname, mode: "global-helper", lang, units }), [pathname, lang, units]);
+  const ctx = useMemo(() => ({ route: pathname, mode: "global-helper", lang, units, region }), [pathname, lang, units, region]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
