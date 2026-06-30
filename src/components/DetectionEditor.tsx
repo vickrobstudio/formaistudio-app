@@ -55,6 +55,11 @@ export function DetectionEditor({
   const [busyReplan, setBusyReplan] = useState<number | null>(null);
   const [error, setError] = useState<string>("");
   const [activeIndex, setActiveIndex] = useState<number>(floors[0]?.index ?? 0);
+  const [progressLog, setProgressLog] = useState<string[]>([]);
+
+  function pushLog(line: string) {
+    setProgressLog((prev) => [...prev, line]);
+  }
 
   const activeFloor = floors.find((f) => f.index === activeIndex) ?? floors[0];
   const activeDetection = activeFloor ? detections[activeFloor.index] : undefined;
@@ -68,8 +73,14 @@ export function DetectionEditor({
     setError("");
     setBusyIndex(floor.index);
     try {
+      pushLog(`${floor.label}: small enclosed shapes → walls, narrow gaps in walls → doors & windows.`);
       const res = await detect({ data: { imageDataUrl: floor.imageDataUrl, label: floor.label } });
       if (!res.ok) { setError(res.error); return; }
+      const counts = res.elements.reduce<Record<string, number>>((acc, el) => {
+        acc[el.category] = (acc[el.category] ?? 0) + 1;
+        return acc;
+      }, {});
+      pushLog(`${floor.label}: open enclosed areas → rooms. Found ${Object.entries(counts).map(([k, v]) => `${v} ${k}${v === 1 ? "" : "s"}`).join(", ") || "no elements"}.`);
       onDetectionsChange({
         ...detections,
         [floor.index]: {
@@ -87,10 +98,15 @@ export function DetectionEditor({
   }
 
   async function runDetectAll() {
-    for (const f of floors) {
+    setProgressLog([]);
+    const ordered = [...floors].sort((a, b) => a.index - b.index);
+    for (const f of ordered) {
+      setActiveIndex(f.index);
+      pushLog(`Reading ${f.label}: tracing every closed black-line shape on the plan…`);
       // eslint-disable-next-line no-await-in-loop
       await runDetect(f);
     }
+    pushLog("All floors processed. Review, recolor or replan before building the 3D model.");
   }
 
   async function replan(floor: FloorPlanInput) {
@@ -188,6 +204,13 @@ export function DetectionEditor({
     </div>}
 
     {error && <p role="alert" className="mt-3 text-xs text-destructive">{error}</p>}
+
+    {progressLog.length > 0 && <div className="mt-3 max-h-32 overflow-y-auto rounded-xl border border-border bg-secondary/40 p-3 text-[11px] leading-relaxed">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">AI progress</p>
+      <ol className="mt-1.5 space-y-1">
+        {progressLog.map((line, i) => <li key={i} className="flex gap-2"><span className="text-muted-foreground">{i + 1}.</span><span>{line}</span></li>)}
+      </ol>
+    </div>}
 
     {activeFloor && <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_240px]">
       <div className="relative overflow-hidden rounded-xl border border-border bg-secondary/40">

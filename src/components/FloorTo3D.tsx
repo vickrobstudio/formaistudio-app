@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Check, Download, ImagePlus, LoaderCircle, MousePointer2, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
+import { Check, Download, ImagePlus, LoaderCircle, Plus, RefreshCw, Sparkles, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -146,6 +146,7 @@ export function FloorTo3D() {
   const [elevations, setElevations] = useState<ElevationEntry[]>([]);
   const [buildingSpec, setBuildingSpec] = useState<BuildingSpec>({ floors: [] });
   const [detections, setDetections] = useState<Record<number, FloorDetection>>({});
+  const [detectorOpen, setDetectorOpen] = useState(false);
   const floorInputRef = useRef<HTMLInputElement>(null);
   const floorInputIndex = useRef<number>(-1);
   const floorInputSlot = useRef<1 | 2>(1);
@@ -721,22 +722,6 @@ export function FloorTo3D() {
                 <Input type="number" min={floor.heightUnit === "ft" ? 1 : 0.3} max={floor.heightUnit === "ft" ? 50 : 15} step={floor.heightUnit === "ft" ? 0.25 : 0.1} inputMode="decimal" value={floor.heightUnit === "ft" ? Number((floor.heightMeters * 3.28084).toFixed(2)) : floor.heightMeters} onChange={(event) => { const raw = Number(event.target.value); const v = Number.isFinite(raw) && raw > 0 ? raw : 0; const meters = floor.heightUnit === "ft" ? v / 3.28084 : v; const clamped = Math.min(15, Math.max(0.3, meters || 2.7)); setFloors((prev) => prev.map((f, i) => i === index ? { ...f, heightMeters: clamped } : f)); }} className="mt-1 h-10" />
               </div>
             </div>
-            <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-dashed border-foreground/40 px-3 py-2">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Mark &amp; lift</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {floor.annotation
-                    ? `${floor.annotation.polygons.length} element${floor.annotation.polygons.length === 1 ? "" : "s"} ready · ${floor.annotation.planWidthMeters} m scale`
-                    : "Auto-detect walls, doors, windows — recolor to fix, then extrude."}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-1">
-                {floor.annotation && <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((prev) => prev.map((f, i) => i === index ? { ...f, annotation: undefined } : f))}><X className="size-3" />Clear</Button>}
-                <Button type="button" variant={floor.annotation ? "outline" : "default"} size="sm" onClick={() => setAnnotatorFloorIndex(index)}>
-                  <MousePointer2 className="size-3" />{floor.annotation ? "Edit" : "Mark & lift"}
-                </Button>
-              </div>
-            </div>
           </div>)}
           <Button type="button" variant="outline" className="h-12 w-full justify-between" onClick={() => void addFloor()} disabled={floors.length >= 10}>
             <span>{floors.length === 0 ? "Add ground floor plan" : `Add floor ${floors.length}`}</span><Plus />
@@ -862,22 +847,41 @@ export function FloorTo3D() {
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
-      {subject === "building" && floors.length > 0 && <DetectionEditor
-        floors={floors.map((f, i) => ({ index: i, label: f.label || `Floor ${i}`, imageDataUrl: f.imageDataUrl }))}
-        detections={detections}
-        onDetectionsChange={(next) => {
-          setDetections(next);
-          // If the user accepted a replanned (cleaned) drawing, swap it into the
-          // floor's imageDataUrl so the 3D builder uses the simpler plan.
-          setFloors((prev) => prev.map((f, i) => {
-            const det = next[i];
-            if (det?.replannedDataUrl && det.replannedDataUrl !== f.imageDataUrl) {
-              return { ...f, imageDataUrl: det.replannedDataUrl };
-            }
-            return f;
-          }));
-        }}
-      />}
+      {subject === "building" && floors.length > 0 && <Button
+        type="button"
+        variant={Object.keys(detections).length === 0 ? "default" : "outline"}
+        className="mt-6 h-12 w-full justify-between"
+        onClick={() => setDetectorOpen(true)}
+      >
+        <span>{Object.keys(detections).length === 0 ? "Detect & review elements" : "Re-open detect & review"}</span>
+        <Sparkles />
+      </Button>}
+
+      {subject === "building" && detectorOpen && <div className="fixed inset-0 z-50 flex flex-col bg-background">
+        <div className="flex items-center justify-between border-b border-border px-5 py-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Detect & review elements</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground truncate">Ground floor → top, one level at a time.</p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => setDetectorOpen(false)}><Check className="size-3" />Done</Button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5" style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}>
+          <DetectionEditor
+            floors={floors.map((f, i) => ({ index: i, label: f.label || (i === 0 ? "Ground floor" : `Floor ${i}`), imageDataUrl: f.imageDataUrl }))}
+            detections={detections}
+            onDetectionsChange={(next) => {
+              setDetections(next);
+              setFloors((prev) => prev.map((f, i) => {
+                const det = next[i];
+                if (det?.replannedDataUrl && det.replannedDataUrl !== f.imageDataUrl) {
+                  return { ...f, imageDataUrl: det.replannedDataUrl };
+                }
+                return f;
+              }));
+            }}
+          />
+        </div>
+      </div>}
 
       {subject === "building" && (() => {
         const hasDetections = floors.length > 0 && floors.every((_, i) => detections[i] && detections[i].elements.length > 0);
