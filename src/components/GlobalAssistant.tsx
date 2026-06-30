@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Hammer, LoaderCircle, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useAssistantPrefs } from "@/lib/assistant-prefs";
 
 const HIDDEN_ROUTES = ["/"];
 
@@ -13,6 +14,7 @@ export function GlobalAssistant() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { lang, units, setLang, setUnits } = useAssistantPrefs();
 
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/build-chat" }), []);
   const { messages, sendMessage, status } = useChat({
@@ -21,7 +23,7 @@ export function GlobalAssistant() {
     onError: (e) => console.error("global assistant error", e),
   });
 
-  const ctx = useMemo(() => ({ route: pathname, mode: "global-helper" }), [pathname]);
+  const ctx = useMemo(() => ({ route: pathname, mode: "global-helper", lang, units }), [pathname, lang, units]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -49,10 +51,21 @@ export function GlobalAssistant() {
     {open && <div className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-h-[78vh] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-foreground/30 bg-background shadow-2xl sm:right-5 sm:left-auto sm:inset-x-auto">
       <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">AI Architect</p>
-          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Help with renders, plans &amp; 3D worlds</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">AI Architect · Construction Bible</p>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">US (IBC/IRC/ADA) + EU (Eurocodes/CTE) codes</p>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}><X className="size-4" /></Button>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-2">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Lang</span>
+          {(["en", "es"] as const).map((l) => <button key={l} type="button" onClick={() => setLang(l)} className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${lang === l ? "bg-foreground text-background" : "bg-secondary text-foreground"}`}>{l === "en" ? "English" : "Español"}</button>)}
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Units</span>
+          {(["m", "ft"] as const).map((u) => <button key={u} type="button" onClick={() => setUnits(u)} className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${units === u ? "bg-foreground text-background" : "bg-secondary text-foreground"}`}>{u === "m" ? "Meters" : "Feet"}</button>)}
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
