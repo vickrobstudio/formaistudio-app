@@ -2763,9 +2763,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       const height = poly.type === "wall" ? wallH : spec.height;
       const baseZ = poly.type === "roof" ? wallH : spec.baseZ;
       const bucket = buckets.get(poly.type)!;
-      extrudePolygonIntoGroup(bucket.group, world, baseZ, baseZ + height, 1);
-      // Note: scale=1 here because makeGroupBuilder closure scales — but we
-      // bypass addCorners and push directly with outputScale already applied.
+      extrudePolygonIntoGroup(bucket.group, world, baseZ, baseZ + height, outputScale);
     }
 
     const groups: Group[] = [];
