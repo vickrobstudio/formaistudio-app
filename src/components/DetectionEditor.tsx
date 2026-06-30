@@ -154,24 +154,32 @@ async function eraseTextOnCanvas(canvas: HTMLCanvasElement, onProgress?: (pct: n
  * transparent. Returns { dataUrl, width, height, mask } where mask[i] is 1
  * for "line pixel", 0 for "transparent".
  */
-async function whiteToTransparent(dataUrl: string): Promise<{ dataUrl: string; width: number; height: number; mask: Uint8Array }> {
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  await new Promise<void>((res, rej) => {
-    img.onload = () => res();
-    img.onerror = () => rej(new Error("Could not load cleaned image"));
-    img.src = dataUrl;
-  });
+async function whiteToTransparentFromSource(source: string | HTMLCanvasElement): Promise<{ dataUrl: string; width: number; height: number; mask: Uint8Array }> {
+  let srcCanvas: HTMLCanvasElement;
+  if (typeof source === "string") {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((res, rej) => {
+      img.onload = () => res();
+      img.onerror = () => rej(new Error("Could not load cleaned image"));
+      img.src = source;
+    });
+    srcCanvas = document.createElement("canvas");
+    srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight;
+    srcCanvas.getContext("2d")!.drawImage(img, 0, 0);
+  } else {
+    srcCanvas = source;
+  }
   // Cap working resolution so flood fill stays responsive.
-  const MAX = 1600;
-  const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
-  const w = Math.max(1, Math.round(img.naturalWidth * scale));
-  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const MAX = 1800;
+  const scale = Math.min(1, MAX / Math.max(srcCanvas.width, srcCanvas.height));
+  const w = Math.max(1, Math.round(srcCanvas.width * scale));
+  const h = Math.max(1, Math.round(srcCanvas.height * scale));
   const canvas = document.createElement("canvas");
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("No 2D context");
-  ctx.drawImage(img, 0, 0, w, h);
+  ctx.drawImage(srcCanvas, 0, 0, w, h);
   const id = ctx.getImageData(0, 0, w, h);
   const data = id.data;
   const mask = new Uint8Array(w * h);
