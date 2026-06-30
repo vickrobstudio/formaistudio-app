@@ -49,7 +49,7 @@ const REFERENCE_SHORT_SIDE_METERS: Record<DetectedCategory, number | null> = {
   window: 1.2,      // ~4 ft typical window opening
   wall: 0.15,       // ~6 in interior partition thickness
   stair: 0.28,      // ~11 in typical tread depth
-  fixture: 0.6,     // ~2 ft typical fixture footprint
+  fixture: 0.6096, // 24 in standard kitchen base-cabinet depth
   room: null,       // rooms vary too much to calibrate from
 };
 
@@ -211,7 +211,10 @@ export function DetectionEditor({
         const clamped = Math.min(120, Math.max(2, inferred));
         planWidthMeters = clamped;
         calibration = { elementId, category: paintCategory, assumedMeters: referenceMeters };
-        pushLog(`Calibrated from ${CATEGORY_LABEL[paintCategory].toLowerCase()} ≈ ${referenceMeters} m → plan is about ${clamped.toFixed(1)} m wide.`);
+        const note = paintCategory === "fixture"
+          ? `kitchen cabinet depth ≈ 24 in (0.61 m)`
+          : `${CATEGORY_LABEL[paintCategory].toLowerCase()} ≈ ${referenceMeters} m`;
+        pushLog(`Calibrated from ${note} → plan is about ${clamped.toFixed(1)} m wide. Walls, rooms and openings now scale from this.`);
       }
     }
     onDetectionsChange({
