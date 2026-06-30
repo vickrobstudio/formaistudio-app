@@ -318,19 +318,28 @@ export function DetectionEditor({
     try {
       let cleanedUrl = detections[floor.index]?.replannedDataUrl ?? "";
       if (!cleanedUrl) {
-        pushLog(`${floor.label}: erasing every letter, number, dimension line and callout…`);
-        const cleanPrompt = `Redraw this floor plan as a CLEAN PURE-BLACK-OUTLINE-ON-WHITE technical drawing.\n\nABSOLUTE RULES — these are non-negotiable:\n- DELETE every letter, number, word, label, room name, dimension, measurement, leader line, arrow, tick mark, scale bar, north arrow, callout, legend, title block, stamp, signature, sheet number, hatching, shading, color and texture. There must be ZERO TEXT and ZERO NUMBERS anywhere in the output.\n- Keep ONLY the geometric line work: walls, door openings (with swing arcs), window openings, stair treads, and fixed fixtures (toilets, sinks, tubs, counters, stoves).\n- Render as pure 1-pixel-to-3-pixel black ink lines on a 100% pure white background. No greys, no fills, no gradients, no shadows.\n- Preserve the EXACT outline, proportions, room positions and opening positions of the source.\n- Top-down orthographic 2D view. No perspective. No 3D.\n\nThe output is a clean black-outline floor plan ready for a human to paint each line by hand.`;
-        let aiUrl = "";
-        await streamImage(cleanPrompt, floor.imageDataUrl, (src, isFinal) => { if (isFinal) aiUrl = src; });
-        if (!aiUrl) throw new Error("Could not strip text from the drawing.");
-        pushLog(`${floor.label}: text removed. Converting white to transparent…`);
-        const { dataUrl, width, height, mask } = await whiteToTransparent(aiUrl);
+        // 1. Render the source (PDF vectors or raster image) at high DPI so
+        //    no line work is lost — we keep the EXACT original vectors.
+        const isPdf = floor.imageDataUrl.startsWith("data:application/pdf");
+        pushLog(`${floor.label}: ${isPdf ? "rendering PDF vectors at high resolution" : "loading drawing"}…`);
+        const { canvas } = isPdf
+          ? await renderPdfToCanvas(floor.imageDataUrl)
+          : await rasterImageToCanvas(floor.imageDataUrl);
+        // 2. OCR every word/number and paint it out with solid white. Vectors
+        //    stay intact — only the text glyphs are erased.
+        pushLog(`${floor.label}: scanning for labels, numbers and dimensions to erase…`);
+        const erased = await eraseTextOnCanvas(canvas, (pct) => {
+          if (pct === 0 || pct === 1) pushLog(`${floor.label}: OCR ${(pct * 100).toFixed(0)}%`);
+        });
+        pushLog(`${floor.label}: erased ${erased} text region${erased === 1 ? "" : "s"} — black vectors preserved.`);
+        // 3. White → transparent; build the line mask used for paint flood-fill.
+        const { dataUrl, width, height, mask } = await whiteToTransparentFromSource(canvas);
         cleanedUrl = dataUrl;
         workingRef.current[floor.index] = { width, height, mask };
-        pushLog(`${floor.label}: ready to paint. Pick a legend color and tap any black line.`);
+        pushLog(`${floor.label}: ready to paint. Pick a legend color and tap inside any enclosed black-line shape.`);
       } else if (!workingRef.current[floor.index]) {
         // Rebuild mask from saved cleaned image (after a refresh / first mount).
-        const { width, height, mask } = await whiteToTransparent(cleanedUrl);
+        const { width, height, mask } = await whiteToTransparentFromSource(cleanedUrl);
         workingRef.current[floor.index] = { width, height, mask };
       }
       onDetectionsChange({
