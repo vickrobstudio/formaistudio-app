@@ -711,6 +711,14 @@ export function FloorTo3D() {
         <input ref={siteInputRef} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={onSitePicked} />
         <input ref={elevationInputRef} type="file" multiple accept="application/pdf,.pdf" className="sr-only" onChange={onElevationsPicked} />
 
+        <div className="mb-5 rounded-2xl border border-dashed border-foreground/30 bg-secondary/30 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Have a full PDF set?</p>
+          <p className="mt-1 text-xs text-muted-foreground">Upload one multi-page PDF with every sheet. Walk page-by-page and label each as floor, roof, site or elevation — they will populate the slots below automatically.</p>
+          <Button type="button" variant="outline" className="mt-3 h-11 w-full justify-between" onClick={() => setPdfSetOpen(true)}>
+            <span>Import a complete drawing set (PDF)</span><Upload />
+          </Button>
+        </div>
+
         <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Site plan (optional)</p>
         <p className="mt-2 text-xs text-muted-foreground">A top-down view of the site — property lines, setbacks, driveway, landscaping. Used to place the building on the ground.</p>
         {sitePlan ? <div className="mt-3 rounded-2xl border border-border p-3">
