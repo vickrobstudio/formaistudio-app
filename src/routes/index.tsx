@@ -20,7 +20,7 @@ function HomePage() {
   const [logoDone, setLogoDone] = useState(false);
   return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen overflow-hidden overscroll-none bg-white">
     <section className="relative flex h-full w-full items-center justify-center overflow-hidden bg-white">
-      <LandingBackgroundPaint enabled={logoDone} />
+      <LandingBackgroundPaint enabled={true} />
       <h1 className="sr-only">FormAI Studio</h1>
       <LandingPaintLogo onComplete={() => setLogoDone(true)} revealed={logoDone} />
       <p className="pointer-events-none absolute left-1/2 top-[max(5rem,calc(env(safe-area-inset-top)+4rem))] z-20 -translate-x-1/2 whitespace-nowrap text-center text-base font-medium tracking-tight text-white sm:text-xl md:text-2xl [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]">
