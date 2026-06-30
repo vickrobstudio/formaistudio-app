@@ -1,23 +1,11 @@
 import { useEffect, useRef } from "react";
-
-// Plant greens, water tones and earth colors (no orange/red/yellow/blue primaries)
-const EARTH = [
-  // Plant greens
-  "#1f3a1f", "#2e5a2a", "#3f6b3a", "#5a8a4e",
-  "#86a96b", "#a8c48a", "#c8dca4", "#4a7c3a",
-  "#6b8e23",
-  // Water tones
-  "#2b6e6a", "#3c9a8f", "#7ec8c0", "#bfe3df",
-  "#5a8aa0", "#9bbfd0",
-  // Earth tones
-  "#5a3a22", "#7a5230", "#a07248", "#c69b6d",
-  "#d8b48a", "#e8d2a8",
-];
+import edenMobile from "@/assets/eden-mobile.png.asset.json";
+import edenIpad from "@/assets/eden-ipad.png.asset.json";
+import edenDesktop from "@/assets/eden-desktop.png.asset.json";
 
 export function LandingBackgroundPaint({ enabled }: { enabled: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const hueRef = useRef(0);
   const enabledRef = useRef(enabled);
 
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
@@ -30,12 +18,16 @@ export function LandingBackgroundPaint({ enabled }: { enabled: boolean }) {
       canvas.width = Math.round(window.innerWidth * dpr);
       canvas.height = Math.round(window.innerHeight * dpr);
       const ctx = canvas.getContext("2d");
-      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (ctx) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+      }
     };
     resize();
     window.addEventListener("resize", resize);
 
-    const paint = (clientX: number, clientY: number) => {
+    const erase = (clientX: number, clientY: number) => {
       if (!enabledRef.current) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
@@ -49,32 +41,32 @@ export function LandingBackgroundPaint({ enabled }: { enabled: boolean }) {
       }
       lastRef.current = { x, y, t: now };
 
-      const baseR = Math.max(40, Math.min(window.innerWidth, window.innerHeight) * 0.08);
+      const baseR = Math.max(45, Math.min(window.innerWidth, window.innerHeight) * 0.09);
       const radius = baseR + Math.min(60, speed * 20);
-      hueRef.current = (hueRef.current + 1) % EARTH.length;
-      const color = EARTH[hueRef.current];
 
+      ctx.globalCompositeOperation = "destination-out";
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
-      grad.addColorStop(0, color + "cc");
-      grad.addColorStop(0.5, color + "66");
-      grad.addColorStop(1, color + "00");
+      grad.addColorStop(0, "rgba(0,0,0,1)");
+      grad.addColorStop(0.6, "rgba(0,0,0,0.6)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
 
       if (last) {
-        ctx.strokeStyle = color + "88";
-        ctx.lineWidth = radius * 0.7;
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+        ctx.lineWidth = radius * 1.2;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(last.x, last.y);
         ctx.lineTo(x, y);
         ctx.stroke();
       }
+      ctx.globalCompositeOperation = "source-over";
     };
 
-    const onMove = (e: PointerEvent) => paint(e.clientX, e.clientY);
+    const onMove = (e: PointerEvent) => erase(e.clientX, e.clientY);
     const onLeave = () => { lastRef.current = null; };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerleave", onLeave);
@@ -86,10 +78,13 @@ export function LandingBackgroundPaint({ enabled }: { enabled: boolean }) {
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0 size-full"
-    />
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 size-full overflow-hidden">
+      <picture>
+        <source media="(min-width: 1024px)" srcSet={edenDesktop.url} />
+        <source media="(min-width: 640px)" srcSet={edenIpad.url} />
+        <img src={edenMobile.url} alt="" className="absolute inset-0 size-full object-cover" draggable={false} />
+      </picture>
+      <canvas ref={canvasRef} className="absolute inset-0 size-full" />
+    </div>
   );
 }
