@@ -108,20 +108,22 @@ function hexToRgb(hex: string): [number, number, number] {
  * the list of pixel indices that belong to the same connected line region,
  * plus its bounding box.
  */
-function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: number): { pixels: number[]; bbox: [number, number, number, number] } | null {
+function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: number, target: 0 | 1): { pixels: number[]; bbox: [number, number, number, number]; touchedEdge: boolean } | null {
   const start = sy * w + sx;
-  if (mask[start] !== 1) return null;
+  if (mask[start] !== target) return null;
   const visited = new Uint8Array(w * h);
   const stack: number[] = [start];
   const pixels: number[] = [];
   let minX = sx, maxX = sx, minY = sy, maxY = sy;
+  let touchedEdge = false;
   while (stack.length) {
     const p = stack.pop()!;
     if (visited[p]) continue;
     visited[p] = 1;
-    if (mask[p] !== 1) continue;
+    if (mask[p] !== target) continue;
     pixels.push(p);
     const x = p % w, y = (p - x) / w;
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchedEdge = true;
     if (x < minX) minX = x; if (x > maxX) maxX = x;
     if (y < minY) minY = y; if (y > maxY) maxY = y;
     if (x > 0) stack.push(p - 1);
@@ -131,7 +133,7 @@ function floodFillMask(mask: Uint8Array, w: number, h: number, sx: number, sy: n
     // Cap region size for safety on huge plans.
     if (pixels.length > 2_000_000) break;
   }
-  return { pixels, bbox: [minX, minY, maxX, maxY] };
+  return { pixels, bbox: [minX, minY, maxX, maxY], touchedEdge };
 }
 
 export function DetectionEditor({
