@@ -6,7 +6,7 @@ import { LoaderCircle, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAssistantPrefs } from "@/lib/assistant-prefs";
-import hardhatAsset from "@/assets/hardhat-icon.png.asset.json";
+import hardhatIconUrl from "@/assets/hardhat-icon.svg";
 
 const HIDDEN_ROUTES = ["/"];
 
@@ -46,7 +46,7 @@ export function GlobalAssistant() {
       onClick={() => setOpen(true)}
       className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg transition-transform hover:scale-105 active:scale-95"
     >
-      <img src={hardhatAsset.url} alt="" className="size-9 object-contain invert" />
+      <img src={hardhatIconUrl} alt="" className="size-9 object-contain invert" />
     </button>}
 
     {open && <div className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-h-[78vh] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-foreground/30 bg-background shadow-2xl sm:right-5 sm:left-auto sm:inset-x-auto">
