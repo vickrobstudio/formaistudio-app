@@ -3,12 +3,12 @@ import { ArrowRight, Box, Boxes, Camera, Film, ImagePlus, Sparkles } from "lucid
 import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 
 const tools = [
-  { icon: Boxes, name: "2D to 3D", tagline: "Plan → 3D model", to: "/2d-to-3d", price: "$20/mo" },
-  { icon: Sparkles, name: "Studio AI", tagline: "Furnish a space", to: "/studio", price: "$5/mo" },
-  { icon: Box, name: "3D to AI", tagline: "Render any view", to: "/model-to-ai", price: "$10/mo" },
-  { icon: ImagePlus, name: "AI Edits", tagline: "Edit & relight", to: "/ai-edits", price: "$15/mo" },
-  { icon: Camera, name: "Photo to AI", tagline: "Chat with a photo", to: "/photo-to-ai", price: "Free" },
-  { icon: Film, name: "AI to Video", tagline: "10s virtual tour", to: "/ai-to-video", price: "$10/mo" },
+  { icon: Boxes, name: "2D to 3D", tagline: "Plan → 3D model", to: "/2d-to-3d" },
+  { icon: Sparkles, name: "Studio AI", tagline: "Furnish a space", to: "/studio" },
+  { icon: Box, name: "3D to AI", tagline: "Render any view", to: "/model-to-ai" },
+  { icon: ImagePlus, name: "AI Edits", tagline: "Edit & relight", to: "/ai-edits" },
+  { icon: Camera, name: "Photo to AI", tagline: "Chat with a photo", to: "/photo-to-ai" },
+  { icon: Film, name: "AI to Video", tagline: "10s virtual tour", to: "/ai-to-video" },
 ] as const;
 
 export function ToolsHub() {
@@ -19,16 +19,12 @@ export function ToolsHub() {
         <span className="mt-1 block text-base font-semibold">FormAI Pro · every tool</span>
       </span>
       <span className="shrink-0 text-right">
-        <span className="block text-lg font-bold">$45<span className="text-xs font-normal text-muted-foreground">/mo</span></span>
-        <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em]">View plans <ArrowRight className="size-3" /></span>
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em]">View plans <ArrowRight className="size-3" /></span>
       </span>
     </Link>
     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-      {tools.map(({ icon: Icon, name, tagline, to, price }) => <Link key={to} to={to} className="group relative flex aspect-square flex-col justify-between rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-accent">
-        <span className="flex items-start justify-between">
-          <Icon className="size-6" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{price}</span>
-        </span>
+      {tools.map(({ icon: Icon, name, tagline, to }) => <Link key={to} to={to} className="group relative flex aspect-square flex-col justify-between rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-accent">
+        <Icon className="size-6" />
         <span className="block">
           <span className="block text-sm font-semibold leading-tight">{name}</span>
           <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">{tagline}</span>
