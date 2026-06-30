@@ -1,38 +1,28 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FormAILogo } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
-import mobileWallpaper from "@/assets/formai-wallpaper-mobile.jpeg.asset.json";
-import ipadWallpaper from "@/assets/formai-wallpaper-ipad.png.asset.json";
-import desktopWallpaper from "@/assets/formai-wallpaper-desktop.jpeg.asset.json";
+import { LandingPaintLogo } from "@/components/LandingPaintLogo";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
     { title: "FormAI STUDIO — For the architects of the world" },
     { name: "description", content: "The creative app for architects, interior and furniture designers — build 3D worlds and photorealistic renderings to showcase your ideas. For human and god creators." },
-    { name: "theme-color", content: "#fbf5e7" },
+    { name: "theme-color", content: "#ffffff" },
     { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     { property: "og:title", content: "FormAI STUDIO — For the architects of the world" },
     { property: "og:description", content: "Build 3D worlds and photorealistic renderings. For architects, interior and furniture designers — and every creator." },
-  ], links: [{ rel: "preload", as: "image", href: mobileWallpaper.url, fetchPriority: "high" }, { rel: "preload", as: "image", href: desktopWallpaper.url, fetchPriority: "high" }] }),
+  ] }),
   component: HomePage,
 });
 
 function HomePage() {
-  return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen touch-none overflow-hidden overscroll-none bg-landing-paper">
-    <section className="relative h-full w-full overflow-hidden bg-landing-paper">
-      <picture>
-        <source media="(min-width: 1024px)" srcSet={desktopWallpaper.url} />
-        <source media="(min-width: 768px)" srcSet={ipadWallpaper.url} />
-        <img src={mobileWallpaper.url} alt="Watercolor FORM lettering composed of furniture pieces" fetchPriority="high" className="absolute inset-0 block size-full min-h-full min-w-full object-cover object-center" />
-      </picture>
-      <Link to="/dashboard" aria-label="Open FormAI Studio" className="absolute left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-10 flex min-h-11 -translate-x-1/2 items-center justify-center rounded-lg px-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-foreground">
-        <FormAILogo className="w-16 sm:w-20" />
-      </Link>
-      <h1 className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-4xl font-bold tracking-tight text-primary-foreground sm:text-5xl">AI Studio</h1>
-      <Button asChild variant="studio" className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-10 min-w-36 -translate-x-1/2 border border-landing-button bg-landing-button text-landing-paper hover:bg-landing-button/85">
+  return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen overflow-hidden overscroll-none bg-white">
+    <section className="relative flex h-full w-full items-center justify-center overflow-hidden bg-white">
+      <h1 className="sr-only">FormAI Studio</h1>
+      <LandingPaintLogo />
+      <Button asChild variant="studio" className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-10 min-w-36 -translate-x-1/2 border border-black bg-black text-white hover:bg-black/85">
         <Link to="/dashboard">Enter</Link>
       </Button>
-      <nav aria-label="Legal" className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center whitespace-nowrap font-sans text-[9px] tracking-[0.04em] text-primary-foreground sm:text-[11px]">
+      <nav aria-label="Legal" className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-10 flex -translate-x-1/2 items-center whitespace-nowrap font-sans text-[9px] tracking-[0.04em] text-black/70 sm:text-[11px]">
         <Link to="/privacy" className="min-h-11 px-1.5 leading-[2.75rem]">Privacy Policy</Link><span aria-hidden="true">|</span>
         <Link to="/terms" className="min-h-11 px-1.5 leading-[2.75rem]">Terms of Use</Link><span aria-hidden="true">|</span>
         <Link to="/contact" className="min-h-11 px-1.5 leading-[2.75rem]">Contact</Link>
