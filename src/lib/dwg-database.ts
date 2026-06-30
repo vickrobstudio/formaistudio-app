@@ -298,7 +298,7 @@ function normalizeEntity(e: Record<string, unknown>, i: number): DwgEntityLite {
         };
       });
       const flags = numberOf(e, "flags", "flag") ?? 0;
-      base.closed = Boolean(e.isClosed ?? e.closed ?? (flags & 1) || (flags & 2));
+      base.closed = Boolean(e.isClosed ?? e.closed ?? ((flags & 1) || (flags & 2)));
       break;
     }
     case "ELLIPSE":
@@ -452,7 +452,7 @@ export function rasterizeDatabase(
 ): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"] } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
-  const sourceEntities = expandRenderableEntities(db, opts.entities ?? db.entities);
+  let sourceEntities = expandRenderableEntities(db, opts.entities ?? db.entities);
 
   // SIMPLIFICATION RULES (must match what the room-detector expects):
   //  - Skip text / dimensions / leaders / hatches / blocks entirely.
@@ -495,12 +495,22 @@ export function rasterizeDatabase(
       || t === "LEADER" || t === "MLEADER" || t === "MULTILEADER"
       || t === "HATCH" || t === "SOLID" || t === "INSERT" || t === "VIEWPORT");
   }
-  const visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
-  const strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
+  let visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
+  let strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
   // If a CAD author put real plan linework on a badly named layer, keep the
   // preview from going blank. Entity types still remove text/dimensions/arrows,
   // and dashed/hidden/center linetypes still stay out.
-  const drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
+  let drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
+
+  // Some DWGs have paper-space layout tabs with VIEWPORT records that LibreDWG
+  // parses incompletely. If projection produces no wall lines, render the clean
+  // model-space linework instead of showing an empty white sheet.
+  if (drawableEntities.length === 0 && opts.entities) {
+    sourceEntities = expandRenderableEntities(db, db.entities);
+    visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
+    strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
+    drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
+  }
 
   // Fall back to entity-bounding-box if extents are empty.
   let { min, max } = db.extents;
@@ -551,7 +561,7 @@ export function rasterizeDatabase(
       ctx.moveTo(tx(e.start.x), ty(e.start.y));
       ctx.lineTo(tx(e.end.x), ty(e.end.y));
       ctx.stroke();
-    } else if ((t === "LWPOLYLINE" || t === "POLYLINE" || t === "SPLINE" || t === "MLINE") && e.vertices && e.vertices.length > 1) {
+    } else if ((t === "LWPOLYLINE" || t === "POLYLINE" || t === "POLYLINE2D" || t === "POLYLINE3D" || t === "SPLINE" || t === "MLINE") && e.vertices && e.vertices.length > 1) {
       ctx.beginPath();
       e.vertices.forEach((v, i) => {
         const X = tx(v.x), Y = ty(v.y);
