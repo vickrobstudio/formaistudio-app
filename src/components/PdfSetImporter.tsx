@@ -29,7 +29,7 @@ async function readPdfAsBytes(file: File): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
-async function renderPage(pdf: { getPage: (n: number) => Promise<{ getViewport: (opts: { scale: number }) => { width: number; height: number }; render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number }; canvas: HTMLCanvasElement }) => { promise: Promise<void> } }> }, pageNum: number, targetLongSide: number): Promise<string> {
+async function renderPageToCanvas(pdf: { getPage: (n: number) => Promise<{ getViewport: (opts: { scale: number }) => { width: number; height: number }; render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number }; canvas: HTMLCanvasElement }) => { promise: Promise<void> } }> }, pageNum: number, targetLongSide: number): Promise<HTMLCanvasElement> {
   const page = await pdf.getPage(pageNum);
   const base = page.getViewport({ scale: 1 });
   const scale = targetLongSide / Math.max(base.width, base.height);
@@ -42,6 +42,84 @@ async function renderPage(pdf: { getPage: (n: number) => Promise<{ getViewport: 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+  return canvas;
+}
+
+/**
+ * OCR every word/number on the rendered page and paint solid white over each
+ * text bbox. Removes labels, dimensions, room names, sheet titles — leaves
+ * vector linework untouched.
+ */
+async function eraseTextOnCanvas(canvas: HTMLCanvasElement): Promise<void> {
+  const Tesseract = await import("tesseract.js");
+  const worker = await Tesseract.createWorker("eng", 1);
+  try {
+    const { data } = await worker.recognize(canvas, {}, { blocks: true });
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#ffffff";
+    type WordLike = { text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number }; confidence?: number };
+    const walk = (node: unknown) => {
+      if (!node || typeof node !== "object") return;
+      const obj = node as Record<string, unknown>;
+      if (Array.isArray(obj.words)) {
+        for (const w of obj.words as WordLike[]) {
+          const t = (w.text ?? "").trim();
+          if (!t || !w.bbox) continue;
+          if ((w.confidence ?? 0) < 30 && t.length < 2) continue;
+          const pad = 3;
+          const x = Math.max(0, w.bbox.x0 - pad);
+          const y = Math.max(0, w.bbox.y0 - pad);
+          const ww = Math.min(canvas.width - x, w.bbox.x1 - w.bbox.x0 + pad * 2);
+          const hh = Math.min(canvas.height - y, w.bbox.y1 - w.bbox.y0 + pad * 2);
+          if (ww > 0 && hh > 0) ctx.fillRect(x, y, ww, hh);
+        }
+      }
+      if (Array.isArray(obj.blocks)) for (const b of obj.blocks) walk(b);
+      if (Array.isArray(obj.paragraphs)) for (const p of obj.paragraphs) walk(p);
+      if (Array.isArray(obj.lines)) for (const l of obj.lines) walk(l);
+    };
+    walk(data);
+  } finally {
+    await worker.terminate();
+  }
+}
+
+/**
+ * Binarize the cleaned page to crisp black-on-white lines using a generous
+ * luma cutoff plus a local-contrast rescue for hairlines. Anything else
+ * becomes pure white, so the imported sheet is already a simple line drawing.
+ */
+function binarizeCanvas(canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = id.data;
+  const w = canvas.width, h = canvas.height;
+  const luma = new Float32Array(w * h);
+  const mask = new Uint8Array(w * h);
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    luma[p] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    if (luma[p] < 205) mask[p] = 1;
+  }
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const p = y * w + x;
+      if (mask[p]) continue;
+      const avg = (luma[p - 1] + luma[p + 1] + luma[p - w] + luma[p + w]) * 0.25;
+      if (luma[p] < avg - 14 && luma[p] < 235) mask[p] = 1;
+    }
+  }
+  for (let p = 0, i = 0; p < mask.length; p++, i += 4) {
+    if (mask[p]) { data[i] = 0; data[i + 1] = 0; data[i + 2] = 0; data[i + 3] = 255; }
+    else { data[i] = 255; data[i + 1] = 255; data[i + 2] = 255; data[i + 3] = 255; }
+  }
+  ctx.putImageData(id, 0, 0);
+}
+
+/** Render a page and return its PNG data URL — used for the small thumbnails. */
+async function renderPage(pdf: Parameters<typeof renderPageToCanvas>[0], pageNum: number, targetLongSide: number): Promise<string> {
+  const canvas = await renderPageToCanvas(pdf, pageNum, targetLongSide);
   return canvas.toDataURL("image/png");
 }
 
@@ -128,18 +206,32 @@ export function PdfSetImporter({
       const next: PdfPageAssignment[] = [];
       let floorCounter = 0;
       for (let i = 1; i <= pdf.numPages; i++) {
-        // eslint-disable-next-line no-await-in-loop
-        const thumb = await renderPage(pdf as never, i, 360);
-        // eslint-disable-next-line no-await-in-loop
-        const hiRes = await renderPage(pdf as never, i, 2200);
-        // Pull the page's text layer to auto-classify the sheet. We focus
-        // ONLY on architectural plan views and ignore M.E.P. (mechanical,
-        // electrical, plumbing), structural-only and detail sheets.
+        // Pull the page's text layer FIRST to classify. We only spend time
+        // cleaning sheets we will actually keep.
         // eslint-disable-next-line no-await-in-loop
         const textContent = await (await pdf.getPage(i)).getTextContent();
         const text = (textContent.items as Array<{ str?: string }>).map((it) => it.str ?? "").join(" ").toLowerCase();
         const role = classifySheet(text, floorCounter);
         if (role.kind === "floor") floorCounter++;
+        // eslint-disable-next-line no-await-in-loop
+        const hiResCanvas = await renderPageToCanvas(pdf as never, i, 2600);
+        if (role.kind !== "ignore") {
+          // Clean architectural pages before importing: erase text/numbers,
+          // then binarize to a simple enclosed black-line drawing.
+          // eslint-disable-next-line no-await-in-loop
+          await eraseTextOnCanvas(hiResCanvas);
+          binarizeCanvas(hiResCanvas);
+        }
+        const hiRes = hiResCanvas.toDataURL("image/png");
+        // Build the thumbnail from the cleaned hi-res so users see the clean
+        // line drawing immediately.
+        const thumbCanvas = document.createElement("canvas");
+        const thumbScale = 360 / Math.max(hiResCanvas.width, hiResCanvas.height);
+        thumbCanvas.width = Math.max(1, Math.round(hiResCanvas.width * thumbScale));
+        thumbCanvas.height = Math.max(1, Math.round(hiResCanvas.height * thumbScale));
+        const tctx = thumbCanvas.getContext("2d");
+        if (tctx) { tctx.fillStyle = "#ffffff"; tctx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height); tctx.drawImage(hiResCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height); }
+        const thumb = thumbCanvas.toDataURL("image/png");
         next.push({ pageIndex: i, thumbDataUrl: thumb, hiResDataUrl: hiRes, role });
         setProgress({ done: i, total: pdf.numPages });
       }
