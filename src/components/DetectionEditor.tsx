@@ -58,7 +58,7 @@ const REFERENCE_SHORT_SIDE_METERS: Record<DetectedCategory, number | null> = {
  * Render the first page of a PDF (as a data URL) into a high-resolution
  * canvas using pdf.js. Returns the canvas plus its pixel dimensions.
  */
-async function renderPdfToCanvas(dataUrl: string, targetLongSide = 2200): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
+async function renderPdfToCanvas(dataUrl: string, targetLongSide = 3400): Promise<{ canvas: HTMLCanvasElement; width: number; height: number }> {
   const pdfjs = await import("pdfjs-dist");
   // Worker via Vite ?url import — bundles a hashed URL to the worker chunk.
   const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
