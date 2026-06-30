@@ -244,10 +244,13 @@ export function DetectionEditor({
     const sx = Math.floor(((evt.clientX - rect.left) / rect.width) * work.width);
     const sy = Math.floor(((evt.clientY - rect.top) / rect.height) * work.height);
     if (sx < 0 || sy < 0 || sx >= work.width || sy >= work.height) return;
-    const fill = floodFillMask(work.mask, work.width, work.height, sx, sy);
+    const fill = floodFillMask(work.mask, work.width, work.height, sx, sy, 0);
     if (!fill || fill.pixels.length < 4) {
-      pushLog("That spot is transparent — click directly on a black line to paint it.");
+      pushLog("That spot is on a black line — click INSIDE a contour to paint it.");
       return;
+    }
+    if (fill.touchedEdge) {
+      pushLog("That area isn't fully enclosed (the fill reached the edge). Painting it anyway — close gaps in the outline for cleaner shapes.");
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
