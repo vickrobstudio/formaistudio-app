@@ -79,7 +79,7 @@ export function LandingPaintLogo({ onComplete, revealed }: { onComplete?: () => 
 
       const baseR = Math.max(18, Math.min(r.width, r.height) * 0.06);
       const radius = baseR + Math.min(28, speed * 12);
-      const color = "#000000";
+      const color = "#ffffff";
 
       // Soft watercolor blob
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
@@ -137,13 +137,14 @@ export function LandingPaintLogo({ onComplete, revealed }: { onComplete?: () => 
     <div
       ref={wrapRef}
       className="relative z-10 aspect-square select-none"
-      style={{ width: "50vmin", height: "50vmin", filter: revealed ? "invert(1)" : undefined }}
+      style={{ width: "50vmin", height: "50vmin" }}
     >
       <img
         src={logoAsset.url}
         alt="FORM AI"
         draggable={false}
         className="absolute inset-0 size-full object-contain"
+        style={{ filter: "invert(0.82)" }}
       />
       <canvas
         ref={canvasRef}
