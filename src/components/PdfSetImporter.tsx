@@ -200,43 +200,62 @@ export function PdfSetImporter({
     setBusy("rendering");
     try {
       if (isDwgDxf) {
-        // DWG / DXF imports as a SINGLE floor — the vector database is a
-        // single drawing, not a paged set. Parse, rasterize once, hand to
-        // the same cleaning + classification pipeline as a PDF page.
-        const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
+        // DWG / DXF: each AutoCAD layout (Model tab + every paper-space
+        // tab) becomes its own floor page. We enforce a strict pre-check
+        // first — the file must be clean line geometry only: no text, no
+        // numbers, no dimensions, no leaders, no hatches, no block
+        // inserts, no dashed/hidden/centerlines. Anything else aborts the
+        // import with a precise list of what to remove.
+        const { parseDrawing, rasterizeDatabase, precheckDrawing, describePrecheckIssues } = await import("@/lib/dwg-database");
         const db = await parseDrawing(file);
-        const { dataUrl, width, height } = rasterizeDatabase(db, { maxDimension: 2600 });
-        // Auto-classify the drawing from its TEXT/MTEXT labels — exactly
-        // the same heuristics PDF sheets use. Title blocks like
-        // "FLOOR PLAN", "SITE PLAN", "ROOF PLAN", "NORTH ELEVATION"
-        // map to floor / site / roof / elevation roles automatically.
-        const allText = db.entities
-          .map((e) => (typeof e.text === "string" ? e.text : ""))
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        let role = classifySheet(allText, 0);
-        // For a single-sheet DWG, never silently ignore — fall back to floor.
-        if (role.kind === "ignore") role = { kind: "floor", order: 0, label: "Ground floor" };
-        // Build a thumbnail.
-        const thumbCanvas = document.createElement("canvas");
-        const thumbScale = 360 / Math.max(width, height);
-        thumbCanvas.width = Math.max(1, Math.round(width * thumbScale));
-        thumbCanvas.height = Math.max(1, Math.round(height * thumbScale));
-        const tctx = thumbCanvas.getContext("2d");
-        if (tctx) {
-          const img = new Image();
-          await new Promise<void>((res, rej) => {
-            img.onload = () => res();
-            img.onerror = () => rej(new Error("Could not render the DWG/DXF."));
-            img.src = dataUrl;
-          });
-          tctx.fillStyle = "#ffffff"; tctx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
-          tctx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        const issues = precheckDrawing(db);
+        if (issues.length > 0) {
+          throw new Error(
+            `This DWG/DXF still contains: ${describePrecheckIssues(issues)}. `
+            + `Clean the file in your CAD app and re-export with ONLY simple solid wall lines — `
+            + `no text, no numbers, no dimensions, no leaders, no hatches, no blocks, no dashed lines. `
+            + `Put each floor on its own layout (Model / Layout1 / Layout2…).`
+          );
         }
-        const thumb = thumbCanvas.toDataURL("image/png");
-        setPages([{ pageIndex: 1, thumbDataUrl: thumb, hiResDataUrl: dataUrl, role }]);
-        setProgress({ done: 1, total: 1 });
+        // One floor per layout. If only Model space has geometry, that
+        // becomes the single floor.
+        const usableLayouts = (db.layouts ?? []).filter((l) => l.entities.length > 0);
+        if (usableLayouts.length === 0) throw new Error("This DWG/DXF has no drawable geometry.");
+        const pagesOut: PdfPageAssignment[] = [];
+        let floorOrder = 0;
+        for (let i = 0; i < usableLayouts.length; i++) {
+          const layout = usableLayouts[i];
+          const { dataUrl, width, height } = rasterizeDatabase(db, { maxDimension: 2600, entities: layout.entities });
+          // Classify by layout name first ("floor 1", "site plan", "roof", "north elevation"…).
+          let role = classifySheet(layout.name.toLowerCase(), floorOrder);
+          if (role.kind === "ignore") {
+            role = { kind: "floor", order: floorOrder, label: floorOrder === 0 ? "Ground floor" : `Floor ${floorOrder}` };
+          }
+          if (role.kind === "floor") {
+            role = { kind: "floor", order: floorOrder, label: layout.isModelSpace && usableLayouts.length === 1 ? "Ground floor" : (layout.name || (floorOrder === 0 ? "Ground floor" : `Floor ${floorOrder}`)) };
+            floorOrder++;
+          }
+          const thumbCanvas = document.createElement("canvas");
+          const thumbScale = 360 / Math.max(width, height);
+          thumbCanvas.width = Math.max(1, Math.round(width * thumbScale));
+          thumbCanvas.height = Math.max(1, Math.round(height * thumbScale));
+          const tctx = thumbCanvas.getContext("2d");
+          if (tctx) {
+            const img = new Image();
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise<void>((res, rej) => {
+              img.onload = () => res();
+              img.onerror = () => rej(new Error("Could not render the DWG/DXF."));
+              img.src = dataUrl;
+            });
+            tctx.fillStyle = "#ffffff"; tctx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+            tctx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+          }
+          const thumb = thumbCanvas.toDataURL("image/png");
+          pagesOut.push({ pageIndex: i + 1, thumbDataUrl: thumb, hiResDataUrl: dataUrl, role });
+          setProgress({ done: i + 1, total: usableLayouts.length });
+        }
+        setPages(pagesOut);
         return;
       }
       const pdfjs = await import("pdfjs-dist");
