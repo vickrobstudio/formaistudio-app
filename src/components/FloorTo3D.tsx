@@ -85,6 +85,43 @@ async function readDrawing(file: File): Promise<string> {
   return readImageOptimized(file);
 }
 
+/**
+ * AutoCAD drawings: skip Model space and export every paper-space layout
+ * (floors, roof, site plan, etc.) as its own page. Layouts are classified
+ * by tab name so we can label them "Ground floor", "Roof", "Site plan"…
+ * Falls back to Model space only when the file has no paper-space layouts.
+ */
+async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; label: string }>> {
+  if (isDwg(file) || isDxf(file)) {
+    const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
+    const db = await parseDrawing(file);
+    const all = (db.layouts ?? []).filter((l) => l.entities.length > 0);
+    const paper = all.filter((l) => !l.isModelSpace);
+    const layouts = paper.length > 0 ? paper : all;
+    if (layouts.length === 0) throw new Error("This DWG/DXF has no drawable geometry.");
+    const out: Array<{ dataUrl: string; label: string }> = [];
+    let floorOrder = 0;
+    for (const layout of layouts) {
+      const { dataUrl } = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: layout.entities });
+      const name = (layout.name || "").toLowerCase();
+      let label: string;
+      if (/\broof\b/.test(name)) label = "Roof";
+      else if (/\b(site|plot|survey)\b/.test(name)) label = "Site plan";
+      else if (/\belev/.test(name)) label = layout.name;
+      else if (/\b(basement|cellar)\b/.test(name)) { label = "Basement"; }
+      else if (/\b(ground|level 0|l0|first floor|main)\b/.test(name)) { label = "Ground floor"; floorOrder = Math.max(floorOrder, 1); }
+      else {
+        label = layout.name || (floorOrder === 0 ? "Ground floor" : `Floor ${floorOrder}`);
+        floorOrder++;
+      }
+      out.push({ dataUrl, label });
+    }
+    return out;
+  }
+  const single = isPdf(file) ? await readRaw(file) : await readImageOptimized(file);
+  return [{ dataUrl: single, label: "" }];
+}
+
 type Stage = "upload" | "modeling" | "ready";
 type Floor = { imageDataUrl: string; label: string; heightMeters: number; fileName: string };
 type FloorPart = { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string };
@@ -134,7 +171,6 @@ export function FloorTo3D() {
     const files = Array.from(event.target.files ?? []);
     if (event.target) event.target.value = "";
     if (files.length === 0) return;
-    if (floors.length + files.length > 10) { setError("Up to 10 floors."); return; }
     for (const file of files) {
       if (file.size > 200_000_000) { setError(`"${file.name}" is too large (200 MB max).`); return; }
     }
@@ -142,14 +178,19 @@ export function FloorTo3D() {
     try {
       const next: Floor[] = [];
       for (const file of files) {
-        const imageDataUrl = await readDrawing(file);
-        next.push({
-          imageDataUrl,
-          label: floors.length + next.length === 0 ? "Ground floor" : `Floor ${floors.length + next.length}`,
-          heightMeters: 2.7,
-          fileName: file.name,
-        });
+        const sheets = await readDrawingSheets(file);
+        for (const sheet of sheets) {
+          const idx = floors.length + next.length;
+          const label = sheet.label || (idx === 0 ? "Ground floor" : `Floor ${idx}`);
+          next.push({
+            imageDataUrl: sheet.dataUrl,
+            label,
+            heightMeters: 2.7,
+            fileName: sheets.length > 1 ? `${file.name} — ${label}` : file.name,
+          });
+        }
       }
+      if (floors.length + next.length > 10) { setError("Up to 10 floors."); return; }
       setFloors((prev) => [...prev, ...next]);
       reset();
     } catch (e) { setError(e instanceof Error ? e.message : "Could not read file."); }
