@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { MATERIAL_IDS, MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared";
+import earcut from "earcut";
 
 const Subject = z.enum(["building", "furniture"]);
 const PlanUnits = z.enum(["meters", "feet-inches"]);
