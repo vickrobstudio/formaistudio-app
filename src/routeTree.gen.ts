@@ -35,6 +35,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CheckoutReturnRouteImport } from './routes/checkout.return'
 import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
+import { Route as ApiBuildChatRouteImport } from './routes/api/build-chat'
 import { Route as AuthenticatedWalletRouteImport } from './routes/_authenticated/wallet'
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/cloud'
@@ -171,6 +172,11 @@ const ApiGenerateImageRoute = ApiGenerateImageRouteImport.update({
   path: '/api/generate-image',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBuildChatRoute = ApiBuildChatRouteImport.update({
+  id: '/api/build-chat',
+  path: '/api/build-chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedWalletRoute = AuthenticatedWalletRouteImport.update({
   id: '/wallet',
   path: '/wallet',
@@ -231,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/wallet': typeof AuthenticatedWalletRoute
+  '/api/build-chat': typeof ApiBuildChatRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/checkout/return': typeof CheckoutReturnRoute
@@ -264,6 +271,7 @@ export interface FileRoutesByTo {
   '/cloud': typeof AuthenticatedCloudRoute
   '/history': typeof AuthenticatedHistoryRoute
   '/wallet': typeof AuthenticatedWalletRoute
+  '/api/build-chat': typeof ApiBuildChatRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/checkout/return': typeof CheckoutReturnRoute
@@ -299,6 +307,7 @@ export interface FileRoutesById {
   '/_authenticated/cloud': typeof AuthenticatedCloudRoute
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/wallet': typeof AuthenticatedWalletRoute
+  '/api/build-chat': typeof ApiBuildChatRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/checkout/return': typeof CheckoutReturnRoute
@@ -334,6 +343,7 @@ export interface FileRouteTypes {
     | '/cloud'
     | '/history'
     | '/wallet'
+    | '/api/build-chat'
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/checkout/return'
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
     | '/cloud'
     | '/history'
     | '/wallet'
+    | '/api/build-chat'
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/checkout/return'
@@ -401,6 +412,7 @@ export interface FileRouteTypes {
     | '/_authenticated/cloud'
     | '/_authenticated/history'
     | '/_authenticated/wallet'
+    | '/api/build-chat'
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/checkout/return'
@@ -432,6 +444,7 @@ export interface RootRouteChildren {
   StudioRoute: typeof StudioRoute
   TermsRoute: typeof TermsRoute
   ToolsRoute: typeof ToolsRoute
+  ApiBuildChatRoute: typeof ApiBuildChatRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
   CheckoutReturnRoute: typeof CheckoutReturnRoute
@@ -623,6 +636,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGenerateImageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/build-chat': {
+      id: '/api/build-chat'
+      path: '/api/build-chat'
+      fullPath: '/api/build-chat'
+      preLoaderRoute: typeof ApiBuildChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/wallet': {
       id: '/_authenticated/wallet'
       path: '/wallet'
@@ -709,6 +729,7 @@ const rootRouteChildren: RootRouteChildren = {
   StudioRoute: StudioRoute,
   TermsRoute: TermsRoute,
   ToolsRoute: ToolsRoute,
+  ApiBuildChatRoute: ApiBuildChatRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
   CheckoutReturnRoute: CheckoutReturnRoute,
