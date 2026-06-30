@@ -322,13 +322,20 @@ export function DetectionEditor({
   const [progressLog, setProgressLog] = useState<string[]>([]);
   const [paintCategory, setPaintCategory] = useState<DetectedCategory | null>(null);
   const [zoom, setZoom] = useState<number>(1);
+  // Editor tool: pick = hover/click to select an element;
+  // paint = clicking an element re-colors it; move = drag an element to translate it.
+  const [tool, setTool] = useState<"pick" | "paint" | "move">("pick");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragRef = useRef<{ id: string; startX: number; startY: number; orig: Array<[number, number]> } | null>(null);
 
   // Per-floor cached working data: line mask + canvas refs + dimensions.
   const workingRef = useRef<Record<number, { width: number; height: number; mask: Uint8Array }>>({});
   const paintCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Per-floor undo/redo history of detection snapshots.
-  type Snap = Pick<FloorDetection, "elements" | "paintedDataUrl" | "planWidthMeters" | "calibration">;
+  type Snap = Pick<FloorDetection, "elements" | "paintedDataUrl" | "planWidthMeters" | "calibration" | "fills">;
   const undoRef = useRef<Record<number, Snap[]>>({});
   const redoRef = useRef<Record<number, Snap[]>>({});
   const [historyTick, setHistoryTick] = useState(0);
@@ -339,6 +346,7 @@ export function DetectionEditor({
       paintedDataUrl: det.paintedDataUrl,
       planWidthMeters: det.planWidthMeters,
       calibration: det.calibration,
+      fills: det.fills,
     };
   }
 
