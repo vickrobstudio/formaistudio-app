@@ -153,6 +153,7 @@ export function FloorTo3D() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [floorParts, setFloorParts] = useState<FloorPart[]>([]);
   const [dae, setDae] = useState<string | null>(null);
   const [obj, setObj] = useState<string | null>(null);
@@ -175,6 +176,7 @@ export function FloorTo3D() {
       if (file.size > 200_000_000) { setError(`"${file.name}" is too large (200 MB max).`); return; }
     }
     setError("");
+    setUploading(true);
     try {
       const next: Floor[] = [];
       for (const file of files) {
@@ -194,6 +196,7 @@ export function FloorTo3D() {
       setFloors((prev) => [...prev, ...next]);
       reset();
     } catch (e) { setError(e instanceof Error ? e.message : "Could not read file."); }
+    finally { setUploading(false); }
   }
 
   async function onFurnitureUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -202,12 +205,14 @@ export function FloorTo3D() {
     if (!file) return;
     if (file.size > 200_000_000) { setError("File too large (200 MB max)."); return; }
     setError("");
+    setUploading(true);
     try {
       const url = await readDrawing(file);
       setFurnitureUrl(url);
       setFurnitureName(file.name);
       reset();
     } catch (e) { setError(e instanceof Error ? e.message : "Could not read file."); }
+    finally { setUploading(false); }
   }
 
   // Progress simulation while busy
@@ -348,11 +353,11 @@ export function FloorTo3D() {
       {subject === "building" && <div className="space-y-3">
         <input ref={floorInputRef} type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp,.dxf,.dwg" className="sr-only" onChange={(e) => void onFloorUpload(e)} />
         {floors.length === 0
-          ? <Button type="button" variant="outline" onClick={() => floorInputRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
+          ? <Button type="button" variant="outline" disabled={uploading} onClick={() => floorInputRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
               <span className="px-6 text-center">
-                <Upload className="mx-auto size-6" />
-                <span className="mt-3 block text-sm font-bold">Upload floor plans</span>
-                <span className="mt-1 block text-xs text-muted-foreground">One image per floor · PDF · DWG · DXF · JPG · PNG</span>
+                {uploading ? <LoaderCircle className="mx-auto size-6 animate-spin" /> : <Upload className="mx-auto size-6" />}
+                <span className="mt-3 block text-sm font-bold">{uploading ? "Reading drawing…" : "Upload floor plans"}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{uploading ? "Parsing sheets, please wait" : "One image per floor · PDF · DWG · DXF · JPG · PNG"}</span>
               </span>
             </Button>
           : <>
@@ -372,16 +377,23 @@ export function FloorTo3D() {
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
                 </li>)}
               </ul>
-              <Button type="button" variant="outline" className="h-11 w-full justify-between" onClick={() => floorInputRef.current?.click()}>
-                <span>Add another floor</span><Plus />
+              <Button type="button" variant="outline" disabled={uploading} className="h-11 w-full justify-between" onClick={() => floorInputRef.current?.click()}>
+                <span>{uploading ? "Reading drawing…" : "Add another floor"}</span>
+                {uploading ? <LoaderCircle className="animate-spin" /> : <Plus />}
               </Button>
             </>}
       </div>}
 
       {subject === "furniture" && <div className="space-y-3">
         <input ref={furnitureInputRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp,.dxf,.dwg" className="sr-only" onChange={(e) => void onFurnitureUpload(e)} />
-        <Button type="button" variant="outline" onClick={() => furnitureInputRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
-          {furnitureUrl && furnitureUrl.startsWith("data:image/")
+        <Button type="button" variant="outline" disabled={uploading} onClick={() => furnitureInputRef.current?.click()} className="relative min-h-56 w-full overflow-hidden rounded-2xl p-0">
+          {uploading
+            ? <span className="px-6 text-center">
+                <LoaderCircle className="mx-auto size-6 animate-spin" />
+                <span className="mt-3 block text-sm font-bold">Reading drawing…</span>
+                <span className="mt-1 block text-xs text-muted-foreground">Parsing your file, please wait</span>
+              </span>
+            : furnitureUrl && furnitureUrl.startsWith("data:image/")
             ? <img src={furnitureUrl} alt="Furniture drawing" className="max-h-[70vh] w-full object-contain" />
             : <span className="px-6 text-center">
                 <Upload className="mx-auto size-6" />
