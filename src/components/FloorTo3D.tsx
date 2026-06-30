@@ -862,7 +862,41 @@ export function FloorTo3D() {
 
       {error && <p role="alert" className="mt-4 text-xs text-destructive">{error}</p>}
 
-      {subject === "building" && floors.length > 0 && <BuildAssistant
+      {subject === "building" && floors.length > 0 && <DetectionEditor
+        floors={floors.map((f, i) => ({ index: i, label: f.label || `Floor ${i}`, imageDataUrl: f.imageDataUrl }))}
+        detections={detections}
+        onDetectionsChange={(next) => {
+          setDetections(next);
+          // If the user accepted a replanned (cleaned) drawing, swap it into the
+          // floor's imageDataUrl so the 3D builder uses the simpler plan.
+          setFloors((prev) => prev.map((f, i) => {
+            const det = next[i];
+            if (det?.replannedDataUrl && det.replannedDataUrl !== f.imageDataUrl) {
+              return { ...f, imageDataUrl: det.replannedDataUrl };
+            }
+            return f;
+          }));
+        }}
+      />}
+
+      {subject === "building" && (() => {
+        const hasDetections = floors.length > 0 && floors.every((_, i) => detections[i] && detections[i].elements.length > 0);
+        const disabled = busy !== "" || floors.length === 0 || stage === "modeling" || stage === "ready" || !hasDetections;
+        const label = busy === "model"
+          ? "Building 3D from drawings…"
+          : floors.length === 0
+            ? "Add at least one floor plan"
+            : !hasDetections
+              ? "Auto-detect every floor before building"
+              : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlans.length ? ` + ${roofPlans.length} roof${roofPlans.length === 1 ? "" : "s"}` : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`;
+        return <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={disabled} onClick={() => void buildFromDrawings()}>
+          <span>{label}</span>
+          {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+        </Button>;
+      })()}
+
+      {subject === "building" && (stage === "modeling" || stage === "ready") && floors.length > 0 && <BuildAssistant
+        dockMode
         floors={floors.map((f, i) => ({ index: i, label: f.label || `Floor ${i}`, heightM: f.heightMeters, hasPlan: Boolean(f.imageDataUrl) }))}
         hasRoofPlans={roofPlans.length > 0}
         hasElevations={elevations.length > 0}
@@ -872,7 +906,6 @@ export function FloorTo3D() {
         elevationImages={elevations.filter((e) => e.imageDataUrl).map((e, i) => ({ url: e.imageDataUrl, label: e.label || e.facing || `elevation-${i}` }))}
         onSpecChange={(next) => {
           setBuildingSpec(next);
-          // Apply per-floor wall heights, then fall back to the global wallHeightM.
           setFloors((prev) => prev.map((f, i) => {
             const perFloor = next.floors.find((x) => x.index === i)?.heightM;
             const h = perFloor ?? next.wallHeightM;
@@ -880,11 +913,6 @@ export function FloorTo3D() {
           }));
         }}
       />}
-
-      {subject === "building" && <Button variant="default" className="mt-6 h-12 w-full justify-between" disabled={busy !== "" || floors.length === 0 || stage === "modeling" || stage === "ready"} onClick={() => void buildFromDrawings()}>
-        <span>{busy === "model" ? "Building 3D from drawings…" : floors.length === 0 ? "Add at least one floor plan" : `Build 3D model from ${floors.length} floor${floors.length === 1 ? "" : "s"}${roofPlans.length ? ` + ${roofPlans.length} roof${roofPlans.length === 1 ? "" : "s"}` : ""}${elevations.length ? ` + ${elevations.length} elevation${elevations.length === 1 ? "" : "s"}` : ""}`}</span>
-        {busy === "model" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
-      </Button>}
 
       {/* When the user supplies BOTH a 2D plan and a reference rendering,
           we bypass the master-prompt + approval render and go straight to
