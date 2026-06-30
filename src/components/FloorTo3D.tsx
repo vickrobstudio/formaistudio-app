@@ -1,18 +1,25 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Download, LoaderCircle, Paintbrush, Plus, Sparkles, Upload, X } from "lucide-react";
+import { Download, Eye, LoaderCircle, Plus, ScanSearch, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
-import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor } from "@/lib/floor-3d.functions";
+import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
-import { FloorAnnotator, type AnnotatorResult } from "@/components/FloorAnnotator";
+
+type RecognizedPolygon = { id: string; type: MarkLiftType; points: Array<[number, number]> };
+type Recognition = {
+  imageWidth: number;
+  imageHeight: number;
+  planWidthMeters: number;
+  polygons: RecognizedPolygon[];
+};
 
 const information: ToolInfoSection[] = [
   {
@@ -124,7 +131,15 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
 }
 
 type Stage = "upload" | "modeling" | "ready";
-type Floor = { imageDataUrl: string; label: string; heightMeters: number; fileName: string; annotation?: AnnotatorResult };
+type Floor = {
+  imageDataUrl: string;
+  label: string;
+  heightMeters: number;
+  fileName: string;
+  recognition?: Recognition;
+  recognizing?: boolean;
+  recognizeError?: string;
+};
 type FloorPart = { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string };
 
 export function FloorTo3D() {
@@ -132,6 +147,7 @@ export function FloorTo3D() {
   const generate = useServerFn(generateFloor3D);
   const fetchBounds = useServerFn(extractFurnitureBounds);
   const lift = useServerFn(liftAnnotatedFloor);
+  const detect = useServerFn(detectFloorElements);
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
   const { credits, signedIn, vip, consume } = useCredits();
@@ -164,11 +180,47 @@ export function FloorTo3D() {
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
   const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae">("fbx");
   const previewRef = useRef<HTMLDivElement>(null);
-  const [paintIndex, setPaintIndex] = useState<number | null>(null);
+  const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
 
   function reset() {
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
     setFloorParts([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
+  }
+
+  function getImageSize(src: string): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+      img.onerror = () => reject(new Error("Could not read image dimensions."));
+      img.src = src;
+    });
+  }
+
+  async function runRecognition(index: number) {
+    const f = floors[index];
+    if (!f || !f.imageDataUrl.startsWith("data:image/")) return;
+    setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: true, recognizeError: undefined } : x));
+    try {
+      const { width, height } = await getImageSize(f.imageDataUrl);
+      const result = await detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } });
+      if (!result.ok) {
+        setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: result.error } : x));
+        return;
+      }
+      const polygons: RecognizedPolygon[] = result.polygons.map((p, k) => ({
+        id: p.id ?? `det_${k}`,
+        type: p.type as MarkLiftType,
+        points: p.points as Array<[number, number]>,
+      }));
+      setFloors((p) => p.map((x, j) => j === index ? {
+        ...x,
+        recognizing: false,
+        recognition: { imageWidth: width, imageHeight: height, planWidthMeters: 12, polygons },
+      } : x));
+      setRecognitionPreview(index);
+    } catch (cause) {
+      setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: cause instanceof Error ? cause.message : "Recognition failed." } : x));
+    }
   }
 
   async function onFloorUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -253,16 +305,16 @@ export function FloorTo3D() {
         const label = f.label?.trim() || (i === 0 ? "Ground floor" : `Floor ${i}`);
         setStatus(`Building ${label} (${i + 1}/${floors.length})…`);
         try {
-          const result = f.annotation
+          const result = f.recognition
             ? await withTimeout(lift({
                 data: {
                   label,
-                  imageWidth: f.annotation.imageWidth,
-                  imageHeight: f.annotation.imageHeight,
-                  planWidthMeters: f.annotation.planWidthMeters,
+                  imageWidth: f.recognition.imageWidth,
+                  imageHeight: f.recognition.imageHeight,
+                  planWidthMeters: f.recognition.planWidthMeters,
                   outputUnits,
                   wallHeightMeters: f.heightMeters || 2.7,
-                  polygons: f.annotation.polygons.map((p) => ({ id: p.id, type: p.type, points: p.points })),
+                  polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ id: p.id, type: p.type, points: p.points })),
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`)
             : await withTimeout(generate({
@@ -390,10 +442,12 @@ export function FloorTo3D() {
                     <span className="text-[10px] font-bold uppercase text-muted-foreground">ft</span>
                   </div>
                   {f.imageDataUrl.startsWith("data:image/") && (
-                    <Button type="button" variant={f.annotation ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
-                      onClick={() => setPaintIndex(i)} title="Paint walls, doors, windows for the AI">
-                      <Paintbrush className="size-3" />
-                      <span className="text-[10px] font-bold uppercase">{f.annotation ? `${f.annotation.polygons.length}` : "Paint"}</span>
+                    <Button type="button" variant={f.recognition ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
+                      disabled={f.recognizing}
+                      onClick={() => f.recognition ? setRecognitionPreview(i) : void runRecognition(i)}
+                      title="AI recognises walls, doors, windows for the 3D build">
+                      {f.recognizing ? <LoaderCircle className="size-3 animate-spin" /> : f.recognition ? <Eye className="size-3" /> : <ScanSearch className="size-3" />}
+                      <span className="text-[10px] font-bold uppercase">{f.recognizing ? "…" : f.recognition ? `${f.recognition.polygons.length}` : "Recognise"}</span>
                     </Button>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
@@ -494,16 +548,50 @@ export function FloorTo3D() {
       <ToolInformation sections={information} />
     </section>
     <ToolTabBar />
-    {paintIndex !== null && floors[paintIndex] && (
-      <FloorAnnotator
-        imageDataUrl={floors[paintIndex].imageDataUrl}
-        initialResult={floors[paintIndex].annotation}
-        onClose={() => setPaintIndex(null)}
-        onApply={(result) => {
-          setFloors((p) => p.map((x, j) => j === paintIndex ? { ...x, annotation: result } : x));
-          setPaintIndex(null);
-        }}
-      />
+    {recognitionPreview !== null && floors[recognitionPreview]?.recognition && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setRecognitionPreview(null)}>
+        <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white text-black" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-[0.14em]">AI recognition</h2>
+              <p className="mt-0.5 text-[11px] text-neutral-600">{floors[recognitionPreview].recognition!.polygons.length} elements detected on {floors[recognitionPreview].label}</p>
+            </div>
+            <button onClick={() => setRecognitionPreview(null)} className="rounded-full p-1 text-neutral-500 hover:bg-neutral-100"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="relative flex-1 overflow-auto bg-neutral-100 p-3">
+            <div className="relative mx-auto" style={{ width: "100%", aspectRatio: String(floors[recognitionPreview].recognition!.imageWidth / floors[recognitionPreview].recognition!.imageHeight) }}>
+              <img src={floors[recognitionPreview].imageDataUrl} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
+              <svg viewBox="0 0 1 1" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+                {floors[recognitionPreview].recognition!.polygons.map((poly) => {
+                  const spec = MARK_LIFT_SPECS[poly.type];
+                  return (
+                    <polygon key={poly.id} points={poly.points.map(([x, y]) => `${x},${y}`).join(" ")}
+                      fill={spec.hex} fillOpacity={0.45} stroke={spec.hex} strokeOpacity={0.95}
+                      strokeWidth={0.003} vectorEffect="non-scaling-stroke" />
+                  );
+                })}
+              </svg>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 border-t border-neutral-200 px-4 py-3">
+            {MARK_LIFT_TYPES.map((t) => {
+              const spec = MARK_LIFT_SPECS[t];
+              const count = floors[recognitionPreview]!.recognition!.polygons.filter((p) => p.type === t).length;
+              if (count === 0) return null;
+              return (
+                <span key={t} className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium">
+                  <span className="h-3 w-3 rounded" style={{ background: spec.hex }} />
+                  {spec.label} · {count}
+                </span>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 border-t border-neutral-200 p-3">
+            <Button variant="outline" className="flex-1 rounded-full" onClick={() => { const i = recognitionPreview; setRecognitionPreview(null); void runRecognition(i); }}>Re-recognise</Button>
+            <Button className="flex-1 rounded-full" onClick={() => setRecognitionPreview(null)}>Use for 3D build</Button>
+          </div>
+        </div>
+      </div>
     )}
   </main>;
 }
