@@ -21,6 +21,94 @@ export type RoomRegion = {
 };
 
 /**
+ * Virtual door closure (pipeline step 2).
+ *
+ * Door openings, archways, and small drafting gaps leave the wall mask
+ * non-watertight, so flood-fill would leak from a room into the corridor
+ * and merge them into one giant blob. We seal these holes BEFORE the
+ * fill by running a binary morphological closing (dilate → erode) on
+ * the line mask.
+ *
+ *   - dilate(r) grows every wall pixel by `r` in every direction, which
+ *     bridges any gap up to roughly 2·r pixels (the typical door is
+ *     ~80–100 cm; at a 2400-px wide plan that's ~10–14 px, so r ≈ 6–8
+ *     closes most openings without fattening real walls beyond
+ *     recognition).
+ *   - erode(r) then shrinks every wall back to its original thickness,
+ *     so the only pixels that survive in the closed mask are: real
+ *     walls + newly-bridged door gaps.
+ *
+ * The original mask is returned unchanged; the closed mask is the one
+ * we hand to `extractRoomRegions`.
+ */
+export function closeOpenings(
+  mask: Uint8Array,
+  w: number,
+  h: number,
+  radius = 6,
+): Uint8Array {
+  const r = Math.max(1, Math.min(20, radius));
+  const dilated = dilate(mask, w, h, r);
+  return erode(dilated, w, h, r);
+}
+
+function dilate(src: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  // Two-pass (horizontal then vertical) max filter — separable, so O(N·r)
+  // instead of O(N·r²). For a binary mask "max" is just "any neighbour is 1".
+  const tmp = new Uint8Array(w * h);
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      let v = 0;
+      const xMin = Math.max(0, x - r), xMax = Math.min(w - 1, x + r);
+      for (let k = xMin; k <= xMax; k++) {
+        if (src[row + k]) { v = 1; break; }
+      }
+      tmp[row + x] = v;
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      let v = 0;
+      const yMin = Math.max(0, y - r), yMax = Math.min(h - 1, y + r);
+      for (let k = yMin; k <= yMax; k++) {
+        if (tmp[k * w + x]) { v = 1; break; }
+      }
+      out[y * w + x] = v;
+    }
+  }
+  return out;
+}
+
+function erode(src: Uint8Array, w: number, h: number, r: number): Uint8Array {
+  const tmp = new Uint8Array(w * h);
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      let v = 1;
+      const xMin = Math.max(0, x - r), xMax = Math.min(w - 1, x + r);
+      for (let k = xMin; k <= xMax; k++) {
+        if (!src[row + k]) { v = 0; break; }
+      }
+      tmp[row + x] = v;
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      let v = 1;
+      const yMin = Math.max(0, y - r), yMax = Math.min(h - 1, y + r);
+      for (let k = yMin; k <= yMax; k++) {
+        if (!tmp[k * w + x]) { v = 0; break; }
+      }
+      out[y * w + x] = v;
+    }
+  }
+  return out;
+}
+
+/**
  * Walk the line mask once and return every enclosed background region
  * (connected component of 0-pixels that does not touch the image edge)
  * as a traced + simplified polygon.
