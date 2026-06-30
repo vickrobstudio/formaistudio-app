@@ -46,7 +46,7 @@ const information: ToolInfoSection[] = [
   {
     title: "What to upload",
     items: [
-      "Building: one floor plan per level — PDF ONLY (vector lines so the AI can trace walls, doors and windows accurately). Optional site plan, roof plans and elevations are also PDF only.",
+      "Building: upload ONE complete architectural PDF set. The AI walks the pages, keeps only architectural plan views (floors, roof, site, elevations), and automatically skips M.E.P., structural notes and schedules so the 3D model is built from architecture only.",
       "Furniture: orthographic views (top + front + side) with printed dimensions, plus an optional reference photo or render.",
       "Each file up to 40 MB.",
     ],
