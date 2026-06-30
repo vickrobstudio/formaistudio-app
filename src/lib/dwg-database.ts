@@ -355,12 +355,13 @@ export function rasterizeDatabase(
   //    grid / hatch / north / title / notes.
   // The result is a clean solid-line wireframe of just the architecture.
   const DASHED_LT = /(dash|hidden|center|phantom|dot|break|gap|divide)/i;
-  const NOISE_LAYER = /(text|dim|annot|note|tag|label|title|grid|hatch|north|symbol|legend|scale|reference|axis|center)/i;
+  const NOISE_LAYER = /(text|txt|dim|annot|note|tag|label|title|grid|hatch|north|symbol|symb|legend|scale|reference|ref|axis|center|arrow|leader|callout|number|num|mark|stamp|key|sched|table)/i;
   const layerByName = new Map(db.layers.map((l) => [l.name, l] as const));
   function shouldDraw(e: DwgEntityLite): boolean {
     const layer = layerByName.get(e.layer);
     if (layer?.frozen || layer?.on === false) return false;
     if (layer?.lineType && DASHED_LT.test(layer.lineType)) return false;
+    if (e.lineType && DASHED_LT.test(e.lineType)) return false;
     if (NOISE_LAYER.test(e.layer)) return false;
     return true;
   }
