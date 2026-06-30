@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Paintbrush, Redo2, Sparkles, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { DetectedCategory, DetectedElement } from "@/lib/floor-detect.functions";
-import { extractRoomRegions, buildClassifierThumbnail, buildRegionMaskDataUrl } from "@/lib/floor-pipeline";
+import { extractRoomRegions, buildClassifierThumbnail } from "@/lib/floor-pipeline";
 import { classifyFloorRegions } from "@/lib/floor-classify.functions";
 
 // pdf.js + tesseract.js are loaded lazily inside prepare() so they don't
@@ -514,12 +514,6 @@ export function DetectionEditor({
             // to label by number — no free-form spatial detection.
             try {
               pushLog(`${floor.label}: asking AI to label each room…`);
-              const thumb = buildClassifierThumbnail(
-                Object.assign(document.createElement("canvas"), { width: work.width, height: work.height }),
-                regions,
-              );
-              // Re-render: the helper draws on top of an existing canvas
-              // copy, so we need the actual cleaned image for context.
               const baseImg = new Image();
               await new Promise<void>((res, rej) => {
                 baseImg.onload = () => res();
@@ -545,7 +539,6 @@ export function DetectionEditor({
                 ] as [number, number, number, number],
                 areaFraction: reg.pixels.length / (work.width * work.height),
               }));
-              void thumb; // (silences the placeholder canvas above)
               const result = await classifyFloorRegions({
                 data: { imageDataUrl: overlay.dataUrl, regions: regionInput, hint: floor.label },
               });
