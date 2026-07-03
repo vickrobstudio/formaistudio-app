@@ -33,26 +33,39 @@ export const generateFurniture3D = createServerFn({ method: "POST" })
       "Content-Type": "application/json",
       Prefer: "wait=60",
     };
-    const created = await fetch(`${gateway}/models/tencent/hunyuan-3d-3.1/predictions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ input: { image: data.imageDataUrl, enable_pbr: true, face_count: 500000, generate_type: "Normal" } }),
-    });
-    if (!created.ok) {
-      const detail = await created.text();
-      console.error("3D prediction failed", created.status, detail);
+    let created: Response | null = null;
+    let createDetail = "";
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      created = await fetch(`${gateway}/models/tencent/hunyuan-3d-3.1/predictions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ input: { image: data.imageDataUrl, enable_pbr: true, face_count: 500000, generate_type: "Normal" } }),
+      });
+      if (created.ok) break;
+      createDetail = await created.text();
+      console.error("3D prediction failed", created.status, createDetail);
       if (created.status === 402) {
         return { ok: false, error: "The 3D generation service needs more credit before it can create another model." };
       }
-      return { ok: false, error: "The furniture could not be converted to 3D." };
+      if (created.status !== 502 && created.status !== 503 && created.status !== 504) break;
+      await new Promise((resolve) => setTimeout(resolve, 3_000 * (attempt + 1)));
+    }
+    if (!created || !created.ok) {
+      return { ok: false, error: "The 3D generation service is temporarily unavailable. Please try again in a moment." };
     }
 
     let prediction = await created.json() as Prediction;
+    let pollFailures = 0;
     for (let attempt = 0; prediction.status === "starting" || prediction.status === "processing"; attempt += 1) {
-      if (!prediction.id || attempt >= 36) return { ok: false, error: "The 3D model is taking longer than expected. Please retry." };
+      if (!prediction.id || attempt >= 72) return { ok: false, error: "The 3D model is taking longer than expected. Please retry." };
       await new Promise((resolve) => setTimeout(resolve, 5_000));
       const polled = await fetch(`${gateway}/predictions/${prediction.id}`, { headers });
-      if (!polled.ok) return { ok: false, error: "The 3D model status could not be checked." };
+      if (!polled.ok) {
+        pollFailures += 1;
+        if (pollFailures >= 3) return { ok: false, error: "The 3D model status could not be checked." };
+        continue;
+      }
+      pollFailures = 0;
       prediction = await polled.json() as Prediction;
     }
     if (prediction.status !== "succeeded" || !prediction.output) {
