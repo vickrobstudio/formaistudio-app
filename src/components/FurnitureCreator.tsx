@@ -18,6 +18,7 @@ const materialOptions = ["Solid wood", "Stone", "Metal", "Glass", "Upholstery", 
 
 export function FurnitureCreator() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const modelPreviewRef = useRef<HTMLDivElement>(null);
   const [references, setReferences] = useState<string[]>([]);
   const [materials, setMaterials] = useState<string[]>([]);
   const [location, setLocation] = useState("");
@@ -102,6 +103,9 @@ export function FurnitureCreator() {
       setModelUsdzPath(null);
       setSaved(null);
       setModelProgress(100);
+      window.setTimeout(() => {
+        modelPreviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 60);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The 3D furniture model could not be created.");
     } finally {
