@@ -21,7 +21,9 @@ const config: CapacitorConfig = {
     allowNavigation: ["formaistudio.app", "www.formaistudio.app"],
   },
   ios: {
-    contentInset: "always",
+    // Edge-to-edge: the web app handles safe areas itself via
+    // viewport-fit=cover + env(safe-area-inset-*) paddings.
+    contentInset: "never",
     // App-bound-domain limiting is OFF: the UI ships inside the .ipa and
     // WKAppBoundDomains is intentionally absent from Info.plist — with the
     // flag on and no bound-domain list, WebKit terminates the content
