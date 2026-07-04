@@ -10,7 +10,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * the bridge in `src/lib/ios-server-fn-bridge.ts`.
  */
 const config: CapacitorConfig = {
-  appId: "app.formaistudio",
+  appId: "app.formaistudio.formai",
   appName: "FormAI Studio",
   webDir: "dist/client",
   // Production hosts the SPA bundle reaches cross-origin for server fns/api.
