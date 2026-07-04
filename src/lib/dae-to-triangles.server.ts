@@ -34,7 +34,8 @@ export function parseDaeToTriangles(dae: string): TriGroup[] {
     const name = gm[2] || gm[1];
     const mesh = gm[3];
     // Positions: the first <source> with id ending -pos
-    const posMatch = mesh.match(/<source\s+id="[^"]*-pos"[\s\S]*?<float_array[^>]*>([\s\S]*?)<\/float_array>/);
+    // Both emitters must parse: glb-to-dae writes `…-pos`, buildDae writes `…_pos`.
+    const posMatch = mesh.match(/<source\s+id="[^"]*[-_]pos"[\s\S]*?<float_array[^>]*>([\s\S]*?)<\/float_array>/);
     if (!posMatch) continue;
     const positions = posMatch[1].trim().split(/\s+/).map(Number);
 

@@ -127,7 +127,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
   }
 
   const counts = useMemo(() => {
-    const m: Record<MarkLiftType, number> = { wall: 0, door: 0, window: 0, floor: 0, roof: 0, fixture: 0 };
+    const m = Object.fromEntries(MARK_LIFT_TYPES.map((t) => [t, 0])) as Record<MarkLiftType, number>;
     for (const p of polygons) m[p.type] += 1;
     return m;
   }, [polygons]);

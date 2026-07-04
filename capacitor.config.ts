@@ -11,7 +11,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  */
 const config: CapacitorConfig = {
   appId: "app.formaistudio.formai",
-  appName: "FormAI",
+  appName: "FormAI Studio",
   webDir: "dist/client",
   // Production hosts the SPA bundle reaches cross-origin for server fns/api.
   server: {
@@ -22,9 +22,11 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: "always",
-    // Keeps all navigation inside WKWebView instead of handing the URL off
-    // to Safari. Requires WKAppBoundDomains in Info.plist (set in codemagic.yaml).
-    limitsNavigationsToAppBoundDomains: true,
+    // App-bound-domain limiting is OFF: the UI ships inside the .ipa and
+    // WKAppBoundDomains is intentionally absent from Info.plist — with the
+    // flag on and no bound-domain list, WebKit terminates the content
+    // process on launch (black screen).
+    limitsNavigationsToAppBoundDomains: false,
     // Disable WebKit's rubber-band bounce so the app does not feel like a browser.
     scrollEnabled: true,
     backgroundColor: "#FBF5E7",

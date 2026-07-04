@@ -2,7 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls, OrthographicCamera, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
-import { ChevronRight, ChevronDown, Eye, EyeOff, Lock, Unlock, Download, Move3D, RotateCw, MousePointer2, Rotate3D, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronDown, Eye, EyeOff, Grid3X3, Lock, Unlock, Download, Move3D, RotateCw, MousePointer2, Rotate3D, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -28,6 +28,7 @@ type RawPart = {
   daeDataUrl: string;
   objDataUrl: string;
   fbxDataUrl: string;
+  glbDataUrl?: string;
 };
 
 type GeoEntry = { gid: string; positions: Float32Array; indices: Uint32Array };
@@ -368,8 +369,9 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [gizmoMode, setGizmoMode] = useState<GizmoMode>("select");
+  const [wireframe, setWireframe] = useState(false);
   const [orbitEnabled, setOrbitEnabled] = useState(true);
-  const [downloadFormat, setDownloadFormat] = useState<"dae" | "obj" | "fbx">("dae");
+  const [downloadFormat, setDownloadFormat] = useState<"dae" | "obj" | "fbx" | "glb">("dae");
   const [loadError, setLoadError] = useState("");
   const orbitRef = useRef<unknown>(null);
 
@@ -401,7 +403,9 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
         const ov = overrides.get(`${part.index}:${mesh.userData.key}`);
         const base = part.baseColors.get(gid) ?? [0.78, 0.78, 0.78];
         const [r, g, b] = ov?.color ?? base;
-        (mesh.material as THREE.MeshStandardMaterial).color.setRGB(r, g, b);
+        const material = mesh.material as THREE.MeshStandardMaterial;
+        material.color.setRGB(r, g, b);
+        material.wireframe = wireframe;
       });
       part.objects.forEach((obj, key) => {
         const ov = overrides.get(`${part.index}:${key}`);
@@ -410,7 +414,7 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
         if (ov?.rotation) obj.rotation.set(ov.rotation[0], ov.rotation[1], ov.rotation[2]);
       });
     }
-  }, [overrides, loaded]);
+  }, [overrides, loaded, wireframe]);
 
   const setOv = (partIndex: number, key: string, patch: Override) => {
     setOverrides((prev) => {
@@ -476,6 +480,8 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
       href = URL.createObjectURL(new Blob([text], { type: "model/vnd.collada+xml" }));
     } else if (downloadFormat === "obj") {
       href = raw.objDataUrl;
+    } else if (downloadFormat === "glb") {
+      href = raw.glbDataUrl ?? "";
     } else {
       href = raw.fbxDataUrl;
     }
@@ -502,6 +508,9 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
           </Button>
           <Button type="button" size="sm" variant={gizmoMode === "rotate" ? "default" : "ghost"} onClick={() => setGizmoMode("rotate")} className="h-8 gap-1 px-2 text-xs">
             <RotateCw className="size-3.5" /> Rotate
+          </Button>
+          <Button type="button" size="sm" variant={wireframe ? "default" : "ghost"} onClick={() => setWireframe((w) => !w)} className="h-8 gap-1 px-2 text-xs">
+            <Grid3X3 className="size-3.5" /> Wireframe
           </Button>
           {selectedObject && selectedKey && selectedPart != null && (
             <>
@@ -621,6 +630,7 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
             <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" onClick={() => setDownloadFormat("dae")}>.dae</Button>
             <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" onClick={() => setDownloadFormat("obj")}>.obj</Button>
             <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
+            <Button type="button" size="sm" variant={downloadFormat === "glb" ? "default" : "ghost"} className="flex-1" disabled={!parts.some((p) => p.glbDataUrl)} onClick={() => setDownloadFormat("glb")}>.glb</Button>
           </div>
           <div className="mt-3 space-y-2">
             {loaded.map((part) => {

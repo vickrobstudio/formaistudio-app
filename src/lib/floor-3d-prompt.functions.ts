@@ -38,9 +38,6 @@ Return ONLY the paragraph as plain text — no JSON, no Markdown, no headings, n
 export const buildMasterPrompt = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) return { ok: false, error: "The rendering service is unavailable." };
-
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
     const userContent: Array<Record<string, unknown>> = [{ type: "text", text: SYSTEM }];
     if (isPdf) {
@@ -59,25 +56,11 @@ export const buildMasterPrompt = createServerFn({ method: "POST" })
       }
     }
 
-    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [{ role: "user", content: userContent }],
-      }),
-    });
-
-    if (!upstream.ok) {
-      const detail = await upstream.text().catch(() => "");
-      console.error("master-prompt failed", upstream.status, detail.slice(0, 400));
-      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
-      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      return { ok: false, error: "The master prompt could not be created." };
+    const { claudeExtractJson } = await import("./claude.server");
+    const extraction = await claudeExtractJson({ parts: userContent, maxTokens: 4000 });
+    if (!extraction.ok) {
+      console.error("master-prompt failed", extraction.status, extraction.error.slice(0, 400));
+      return { ok: false, error: extraction.error };
     }
-
-    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const prompt = payload.choices?.[0]?.message?.content?.trim();
-    if (!prompt) return { ok: false, error: "The AI did not return a prompt." };
-    return { ok: true, prompt };
+    return { ok: true, prompt: extraction.text };
   });

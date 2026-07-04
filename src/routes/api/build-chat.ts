@@ -11,9 +11,8 @@ export const Route = createFileRoute("/api/build-chat")({
         if (!body || !Array.isArray(body.messages) || body.messages.length > 80) {
           return new Response("Messages are required", { status: 400 });
         }
-        const key = process.env.LOVABLE_API_KEY;
-        if (!key) return new Response("AI is unavailable.", { status: 500 });
-        const { createLovableAiGatewayProvider } = await import("@/lib/ai-gateway.server");
+        if (!process.env.ANTHROPIC_API_KEY) return new Response("AI is unavailable.", { status: 500 });
+        const { anthropic } = await import("@ai-sdk/anthropic");
         const { ARCH_DIMENSIONS_REFERENCE } = await import("@/lib/arch-dimensions");
 
         const ctx = (body.context ?? {}) as Record<string, unknown>;
@@ -100,7 +99,7 @@ CURRENT PROJECT STATE (JSON):
 ${ctxJson}`;
 
         const result = streamText({
-          model: createLovableAiGatewayProvider(key)("google/gemini-3-flash-preview"),
+          model: anthropic("claude-opus-4-8"),
           system,
           messages: await convertToModelMessages(body.messages as UIMessage[]),
         });

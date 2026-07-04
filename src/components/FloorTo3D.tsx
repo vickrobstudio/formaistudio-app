@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Download, Eye, LoaderCircle, Plus, ScanSearch, Sparkles, Upload, X } from "lucide-react";
+import { Download, Eye, LoaderCircle, Plus, Ruler, ScanSearch, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
@@ -11,7 +11,9 @@ import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloo
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
+import { ScaleCalibrator } from "@/components/ScaleCalibrator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
+import type { VectorRecognition } from "@/lib/dwg-vector-plan";
 
 type RecognizedPolygon = { id: string; type: MarkLiftType; points: Array<[number, number]> };
 type Recognition = {
@@ -98,13 +100,29 @@ async function readDrawing(file: File): Promise<string> {
  * etc.) — never the Model space view. Layouts are classified by tab name so
  * we can label them "Ground floor", "Roof", "Site plan"…
  */
-async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; label: string }>> {
+async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; label: string; vector?: VectorRecognition }>> {
   if (isDwg(file) || isDxf(file)) {
     const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
+    const { buildVectorRecognition } = await import("@/lib/dwg-vector-plan");
     const db = await parseDrawing(file);
+    const out: Array<{ dataUrl: string; label: string; vector?: VectorRecognition }> = [];
+
+    // Vector-first: Model space carries the real-world coordinates, so it
+    // yields a deterministic no-AI extraction (boundaries + rooms + true
+    // scale from CAD units). Paper-space sheets follow as plain rasters.
+    if (db.entities.length > 0) {
+      try {
+        const vector = await buildVectorRecognition(db);
+        if (vector) {
+          out.push({ dataUrl: vector.dataUrl, label: "Ground floor", vector });
+        }
+      } catch (cause) {
+        console.warn("vector extraction failed — falling back to raster sheets", cause);
+      }
+    }
+
     const layouts = (db.layouts ?? []).filter((l) => !l.isModelSpace && l.entities.length > 0);
-    if (layouts.length === 0) throw new Error("This DWG/DXF has no paper-space layouts to import. Open the file in CAD and publish each sheet to a layout tab first.");
-    const out: Array<{ dataUrl: string; label: string }> = [];
+    if (out.length === 0 && layouts.length === 0) throw new Error("This DWG/DXF has no plan linework in Model space and no paper-space layouts to import.");
     let floorOrder = 0;
     for (const layout of layouts) {
       const { dataUrl, drawableCount } = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: layout.entities, projectViewports: false });
@@ -138,8 +156,22 @@ type Floor = {
   recognition?: Recognition;
   recognizing?: boolean;
   recognizeError?: string;
+  planWidthMetersOverride?: number;
+  /** Room boundaries + names read from CAD TEXT entities (vector path). */
+  vectorRooms?: Array<{ name?: string; points: Array<[number, number]> }>;
+  /** How the plan scale was determined — drives the report's scale method. */
+  scaleSource?: "cad" | "user";
 };
-type FloorPart = { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string };
+type FloorPart = { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string; glbDataUrl?: string };
+type BuildReport = {
+  label: string;
+  counts: { confirmed: number; inferred: number; assumed: number };
+  assumptions: string[];
+  missing: string[];
+  conflicts: string[];
+  geometryJsonDataUrl?: string;
+  reportMarkdownDataUrl?: string;
+};
 
 export function FloorTo3D() {
   const navigate = useNavigate();
@@ -172,6 +204,7 @@ export function FloorTo3D() {
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [floorParts, setFloorParts] = useState<FloorPart[]>([]);
+  const [buildReports, setBuildReports] = useState<BuildReport[]>([]);
   const [dae, setDae] = useState<string | null>(null);
   const [obj, setObj] = useState<string | null>(null);
   const [fbx, setFbx] = useState<string | null>(null);
@@ -180,10 +213,11 @@ export function FloorTo3D() {
   const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae">("fbx");
   const previewRef = useRef<HTMLDivElement>(null);
   const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
+  const [calibrating, setCalibrating] = useState<number | null>(null);
 
   function reset() {
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
-    setFloorParts([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
+    setFloorParts([]); setBuildReports([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
   }
 
   function getImageSize(src: string): Promise<{ width: number; height: number }> {
@@ -214,7 +248,7 @@ export function FloorTo3D() {
       setFloors((p) => p.map((x, j) => j === index ? {
         ...x,
         recognizing: false,
-        recognition: { imageWidth: width, imageHeight: height, planWidthMeters: 12, polygons },
+        recognition: { imageWidth: width, imageHeight: height, planWidthMeters: x.planWidthMetersOverride ?? 12, polygons },
       } : x));
       setRecognitionPreview(index);
     } catch (cause) {
@@ -243,6 +277,15 @@ export function FloorTo3D() {
             label,
             heightMeters: 2.7,
             fileName: sheets.length > 1 ? `${file.name} — ${label}` : file.name,
+            ...(sheet.vector
+              ? {
+                  recognition: sheet.vector.recognition,
+                  vectorRooms: sheet.vector.rooms,
+                  ...(sheet.vector.needsCalibration
+                    ? {}
+                    : { planWidthMetersOverride: sheet.vector.planWidthMeters, scaleSource: "cad" as const }),
+                }
+              : {}),
           });
         }
       }
@@ -290,7 +333,7 @@ export function FloorTo3D() {
 
   async function buildBuilding() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
-    setBusy(true); setError(""); setFloorParts([]); setStage("modeling");
+    setBusy(true); setError(""); setFloorParts([]); setBuildReports([]); setStage("modeling");
     if (!(await consume())) {
       setBusy(false); setStage("upload");
       if (!signedIn) { void navigate({ to: "/auth" }); return; }
@@ -310,10 +353,12 @@ export function FloorTo3D() {
                   label,
                   imageWidth: f.recognition.imageWidth,
                   imageHeight: f.recognition.imageHeight,
-                  planWidthMeters: f.recognition.planWidthMeters,
+                  planWidthMeters: f.planWidthMetersOverride ?? f.recognition.planWidthMeters,
                   outputUnits,
                   wallHeightMeters: f.heightMeters || 2.7,
                   polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ id: p.id, type: p.type, points: p.points })),
+                  rooms: f.vectorRooms ?? [],
+                  scaleMethod: f.scaleSource === "cad" ? "cad_units" as const : "user_calibration" as const,
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`)
             : await withTimeout(generate({
@@ -322,7 +367,7 @@ export function FloorTo3D() {
                   planUnits, outputUnits, subject: "building",
                   building: {
                     scope: "floor",
-                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 2.7 }],
+                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 2.7, planWidthMeters: f.planWidthMetersOverride }],
                   },
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`);
@@ -331,6 +376,18 @@ export function FloorTo3D() {
           if (!got) { firstError ||= `${label} returned no model.`; continue; }
           parts.push(got);
           setFloorParts([...parts]);
+          if ("report" in result && result.report) {
+            const r = result.report;
+            setBuildReports((prev) => [...prev, {
+              label,
+              counts: r.counts,
+              assumptions: r.assumptions,
+              missing: r.missing,
+              conflicts: r.conflicts,
+              geometryJsonDataUrl: result.geometryJsonDataUrl,
+              reportMarkdownDataUrl: result.reportMarkdownDataUrl,
+            }]);
+          }
         } catch (cause) {
           firstError ||= cause instanceof Error ? cause.message : `${label} failed.`;
         }
@@ -386,6 +443,12 @@ export function FloorTo3D() {
       setError(cause instanceof Error ? cause.message : "Mesh reconstruction failed.");
       setStage("upload");
     } finally { setBusy(false); }
+  }
+
+  function downloadDataUrl(href: string, filename: string) {
+    const a = document.createElement("a");
+    a.href = href; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
   }
 
   function download(format: "dae" | "obj" | "fbx" | "glb") {
@@ -447,6 +510,14 @@ export function FloorTo3D() {
                       title="AI recognises walls, doors, windows for the 3D build">
                       {f.recognizing ? <LoaderCircle className="size-3 animate-spin" /> : f.recognition ? <Eye className="size-3" /> : <ScanSearch className="size-3" />}
                       <span className="text-[10px] font-bold uppercase">{f.recognizing ? "…" : f.recognition ? `${f.recognition.polygons.length}` : "Recognise"}</span>
+                    </Button>
+                  )}
+                  {f.imageDataUrl.startsWith("data:image/") && (
+                    <Button type="button" variant={f.planWidthMetersOverride ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
+                      onClick={() => setCalibrating(i)}
+                      title="Calibrate scale — click two points with a known distance">
+                      <Ruler className="size-3" />
+                      <span className="text-[10px] font-bold uppercase">{f.planWidthMetersOverride ? `${f.planWidthMetersOverride.toFixed(1)}m` : "Scale"}</span>
                     </Button>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
@@ -527,6 +598,51 @@ export function FloorTo3D() {
         </div>}
 
         {subject === "building" && floorParts.length > 0 && <div className="mt-3"><Building3DViewer parts={floorParts} outputUnits={outputUnits} /></div>}
+
+        {subject === "building" && buildReports.length > 0 && <div className="mt-4 rounded-2xl border border-border p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.14em]">Extraction report</p>
+          {(() => {
+            const totals = buildReports.reduce(
+              (acc, r) => ({ confirmed: acc.confirmed + r.counts.confirmed, inferred: acc.inferred + r.counts.inferred, assumed: acc.assumed + r.counts.assumed }),
+              { confirmed: 0, inferred: 0, assumed: 0 },
+            );
+            const tag = (label: string, items: string[]) => items.map((s) => buildReports.length > 1 ? `${label}: ${s}` : s);
+            const assumptions = buildReports.flatMap((r) => tag(r.label, r.assumptions));
+            const missing = buildReports.flatMap((r) => tag(r.label, r.missing));
+            const conflicts = buildReports.flatMap((r) => tag(r.label, r.conflicts));
+            const list = (title: string, items: string[]) => items.length > 0 && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-[0.2em]">{title} ({items.length})</summary>
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {items.map((item, i) => <li key={i}>• {item}</li>)}
+                </ul>
+              </details>
+            );
+            return <>
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em]">
+                <span className="rounded-full border border-border px-3 py-1">Confirmed {totals.confirmed}</span>
+                <span className="rounded-full border border-border px-3 py-1">Inferred {totals.inferred}</span>
+                <span className="rounded-full border border-border px-3 py-1">Assumed {totals.assumed}</span>
+              </div>
+              {list("Assumptions", assumptions)}
+              {list("Missing information", missing)}
+              {list("Conflicts", conflicts)}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {buildReports.map((r, i) => {
+                  const suffix = buildReports.length > 1 ? `_${r.label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}` : "";
+                  return <div key={i} className="contents">
+                    {r.geometryJsonDataUrl && <Button variant="outline" size="sm" className="justify-between" onClick={() => downloadDataUrl(r.geometryJsonDataUrl!, `floorplan_geometry${suffix}.json`)}>
+                      <span>Geometry JSON{buildReports.length > 1 ? ` — ${r.label}` : ""}</span><Download />
+                    </Button>}
+                    {r.reportMarkdownDataUrl && <Button variant="outline" size="sm" className="justify-between" onClick={() => downloadDataUrl(r.reportMarkdownDataUrl!, `floorplan_report${suffix}.md`)}>
+                      <span>Report{buildReports.length > 1 ? ` — ${r.label}` : ""}</span><Download />
+                    </Button>}
+                  </div>;
+                })}
+              </div>
+            </>;
+          })()}
+        </div>}
         {subject === "furniture" && (glb || dae) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
 
         {subject === "furniture" && (dae || glb || obj || fbx) && <div className="mt-4 rounded-2xl border border-border p-4">
@@ -547,6 +663,24 @@ export function FloorTo3D() {
       <ToolInformation sections={information} />
     </section>
     <ToolTabBar />
+    {calibrating !== null && floors[calibrating] && (
+      <ScaleCalibrator
+        imageDataUrl={floors[calibrating].imageDataUrl}
+        label={floors[calibrating].label || "this floor"}
+        planUnits={planUnits}
+        onCalibrated={(planWidthMeters) => {
+          setFloors((p) => p.map((x, j) => j === calibrating
+            ? {
+                ...x,
+                planWidthMetersOverride: planWidthMeters,
+                scaleSource: "user" as const,
+                recognition: x.recognition ? { ...x.recognition, planWidthMeters } : x.recognition,
+              }
+            : x));
+        }}
+        onClose={() => setCalibrating(null)}
+      />
+    )}
     {recognitionPreview !== null && floors[recognitionPreview]?.recognition && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setRecognitionPreview(null)}>
         <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white text-black" onClick={(e) => e.stopPropagation()}>

@@ -32,7 +32,7 @@ export const Route = createFileRoute("/api/generate-image")({
           );
         }
 
-        const key = process.env.LOVABLE_API_KEY;
+        const key = process.env.GEMINI_API_KEY;
         if (!key) return new Response("Rendering service is unavailable.", { status: 500 });
 
         const isTechnicalDrawing = /2D (floor plan|orthographic)|architectural drafting/i.test(
@@ -45,61 +45,49 @@ export const Route = createFileRoute("/api/generate-image")({
         const fidelityLock = hasSource
           ? " ABSOLUTE PERSPECTIVE & LAYOUT FIDELITY (NON-NEGOTIABLE): the FIRST attached image is the binding spatial reference. Lock the camera position, focal length, framing, viewing angle, horizon line and every vanishing point to that image exactly. Reproduce every perspective line, wall edge, floor edge, ceiling edge, window opening, door opening, structural element and architectural line in the same direction, length, slope and convergence as the source — do not redraw, straighten, re-angle, re-scale or re-compose them. Preserve the exact shape, silhouette, proportions, footprint and orientation of every piece of furniture, fixture, accessory and object visible in the source, and keep each one in the SAME location, on the same wall and at the same depth as in the source. Do not add, remove, move, rotate, resize, swap or restyle any object. Only upgrade materials, lighting and finish quality to photoreal — geometry, layout and perspective stay 100% identical to the source." : "";
         const renderPrompt = `${result.data.prompt}. ${editorialStandard} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.${fidelityLock}`;
-        let endpoint = "https://ai.gateway.lovable.dev/v1/images/generations";
-        let body: BodyInit;
-        let contentType: string | undefined = "application/json";
+        // Google Gemini direct — NATIVE generateContent endpoint, which is
+        // the only surface exposing the image-quality controls. Renders are
+        // produced at maximum quality: 4K output, 3:2 editorial landscape.
+        const endpoint =
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent";
 
         const references = [result.data.sourceImage, ...(result.data.sourceImages ?? [])].filter(
           (image): image is string => Boolean(image),
         );
-        if (references.length > 0) {
-          // The Lovable AI gateway has no /v1/images/edits route. For
-          // reference-image-conditioned renders, use Gemini's image model via
-          // the chat-completions endpoint, which accepts image_url parts and
-          // returns a generated image inline.
-          for (const reference of references) {
-            if (!/^data:image\/(?:png|jpeg|webp);base64,/.test(reference)) {
-              return new Response("A reference image format is not supported.", {
-                status: 400,
-              });
-            }
+        const referenceParts: Array<{ inline_data: { mime_type: string; data: string } }> = [];
+        for (const reference of references) {
+          const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/s.exec(reference);
+          if (!match) {
+            return new Response("A reference image format is not supported.", {
+              status: 400,
+            });
           }
-          endpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
-          body = JSON.stringify({
-            model: "google/gemini-3-pro-image-preview",
-            modalities: ["image", "text"],
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: renderPrompt },
-                  ...references.map((image) => ({
-                    type: "image_url" as const,
-                    image_url: { url: image },
-                  })),
-                ],
-              },
-            ],
-          });
-        } else {
-          body = JSON.stringify({
-            model: "openai/gpt-image-2",
-            prompt: renderPrompt,
-            quality: "medium",
-            size: "1536x1024",
-            stream: true,
-            partial_images: 1,
+          referenceParts.push({
+            inline_data: { mime_type: match[1], data: match[2].replace(/\s+/g, "") },
           });
         }
+        const body = JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: renderPrompt }, ...referenceParts],
+            },
+          ],
+          generationConfig: {
+            responseModalities: ["TEXT", "IMAGE"],
+            imageConfig: {
+              imageSize: "4K",
+              aspectRatio: "3:2",
+            },
+          },
+        });
 
-        const headers: Record<string, string> = {
-          "Lovable-API-Key": key,
-          Accept: "text/event-stream",
-        };
-        if (contentType) headers["Content-Type"] = contentType;
         const upstream = await fetch(endpoint, {
           method: "POST",
-          headers,
+          headers: {
+            "x-goog-api-key": key,
+            "Content-Type": "application/json",
+          },
           body,
         });
 
@@ -120,39 +108,39 @@ export const Route = createFileRoute("/api/generate-image")({
           return new Response(message, { status });
         }
 
-        // Chat-completions returns JSON, not SSE. Extract the generated image
-        // and return it as { image } so the client's JSON branch can pick it up.
-        if (endpoint.endsWith("/chat/completions")) {
-          const payload = (await upstream.json().catch(() => null)) as
-            | {
-                choices?: Array<{
-                  message?: {
-                    images?: Array<{ image_url?: { url?: string } }>;
-                    content?: string;
-                  };
-                }>;
-              }
-            | null;
-          const image =
-            payload?.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
-          if (!image) {
-            console.error("generate-image gemini response missing image", payload);
-            return new Response(
-              "The rendering response did not include an image.",
-              { status: 502 },
-            );
+        // Extract the generated image from the native response shape and
+        // return it as { image } so the client's JSON branch picks it up.
+        const payload = (await upstream.json().catch(() => null)) as
+          | {
+              candidates?: Array<{
+                content?: {
+                  parts?: Array<{
+                    inlineData?: { mimeType?: string; data?: string };
+                    inline_data?: { mime_type?: string; data?: string };
+                    text?: string;
+                  }>;
+                };
+              }>;
+            }
+          | null;
+        let image: string | null = null;
+        for (const part of payload?.candidates?.[0]?.content?.parts ?? []) {
+          const mime = part.inlineData?.mimeType ?? part.inline_data?.mime_type;
+          const data = part.inlineData?.data ?? part.inline_data?.data;
+          if (mime?.startsWith("image/") && data) {
+            image = `data:${mime};base64,${data}`;
+            break;
           }
-          return new Response(JSON.stringify({ image }), {
-            headers: { "Content-Type": "application/json" },
-          });
         }
-
-        return new Response(upstream.body, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache, no-transform",
-            Connection: "keep-alive",
-          },
+        if (!image) {
+          console.error("generate-image gemini response missing image", payload);
+          return new Response(
+            "The rendering response did not include an image.",
+            { status: 502 },
+          );
+        }
+        return new Response(JSON.stringify({ image }), {
+          headers: { "Content-Type": "application/json" },
         });
       },
     },
