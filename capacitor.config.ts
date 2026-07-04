@@ -31,14 +31,14 @@ const config: CapacitorConfig = {
     limitsNavigationsToAppBoundDomains: false,
     // Disable WebKit's rubber-band bounce so the app does not feel like a browser.
     scrollEnabled: true,
-    backgroundColor: "#FBF5E7",
+    backgroundColor: "#CECECE",
     preferredContentMode: "mobile",
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 600,
       launchAutoHide: true,
-      backgroundColor: "#FBF5E7",
+      backgroundColor: "#CECECE",
       iosSpinnerStyle: "small",
       showSpinner: false,
       splashFullScreen: true,
@@ -46,7 +46,7 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: "DARK",
-      backgroundColor: "#FBF5E7",
+      backgroundColor: "#CECECE",
       overlaysWebView: true,
     },
     Keyboard: {

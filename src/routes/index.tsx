@@ -6,7 +6,7 @@ export const Route = createFileRoute("/")({
   head: () => ({ meta: [
     { title: "FormAI STUDIO — For the architects of the world" },
     { name: "description", content: "The creative app for architects, interior and furniture designers — build 3D worlds and photorealistic renderings to showcase your ideas. For human and god creators." },
-    { name: "theme-color", content: "#ffffff" },
+    { name: "theme-color", content: "#CECECE" },
     { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     { property: "og:title", content: "FormAI STUDIO — For the architects of the world" },
     { property: "og:description", content: "Build 3D worlds and photorealistic renderings. For architects, interior and furniture designers — and every creator." },
@@ -15,8 +15,8 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen overflow-hidden overscroll-none bg-white">
-    <section className="relative flex h-full w-full items-center justify-center overflow-hidden bg-white">
+  return <main className="landing-screen fixed inset-0 h-[100dvh] min-h-[100svh] w-screen overflow-hidden overscroll-none bg-background">
+    <section className="relative flex h-full w-full items-center justify-center overflow-hidden bg-background">
       <LandingBackgroundPaint />
       <h1 className="sr-only">FormAI Studio</h1>
       <LandingPaintLogo />
