@@ -84,7 +84,9 @@ html.keyboard-open {
 
 @font-face {
   font-family: "SF Pro";
-  src: url("/assets/SF-Pro.ttf") format("truetype");
+  /* Latin subset — only a fallback for non-Apple devices; Apple platforms
+   * use the built-in San Francisco via -apple-system and never fetch this. */
+  src: url("/assets/SF-Pro-latin.woff2") format("woff2");
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
@@ -107,8 +109,8 @@ html.keyboard-open {
  */
 
 @theme inline {
-  --font-sans: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
   --font-weight-thin: 700;
   --font-weight-light: 700;
   --font-weight-normal: 700;

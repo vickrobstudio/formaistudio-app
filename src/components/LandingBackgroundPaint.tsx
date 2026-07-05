@@ -1,6 +1,6 @@
-const edenMobile = "/backgrounds/eden-mobile.png";
-const edenIpad = "/backgrounds/eden-ipad.png";
-const edenDesktop = "/backgrounds/eden-desktop.png";
+const edenMobile = "/backgrounds/eden-mobile.jpg";
+const edenIpad = "/backgrounds/eden-ipad.jpg";
+const edenDesktop = "/backgrounds/eden-desktop.jpg";
 
 export function LandingBackgroundPaint() {
   return (

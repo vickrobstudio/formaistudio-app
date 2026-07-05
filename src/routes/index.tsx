@@ -10,6 +10,11 @@ export const Route = createFileRoute("/")({
     { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     { property: "og:title", content: "FormAI STUDIO — For the architects of the world" },
     { property: "og:description", content: "Build 3D worlds and photorealistic renderings. For architects, interior and furniture designers — and every creator." },
+  ],
+  links: [
+    { rel: "preload", as: "image", href: "/backgrounds/eden-mobile.jpg", media: "(max-width: 639px)" },
+    { rel: "preload", as: "image", href: "/backgrounds/eden-ipad.jpg", media: "(min-width: 640px) and (max-width: 1023px)" },
+    { rel: "preload", as: "image", href: "/backgrounds/eden-desktop.jpg", media: "(min-width: 1024px)" },
   ] }),
   component: HomePage,
 });

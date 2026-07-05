@@ -82,7 +82,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" },
       { title: "FormAI STUDIO — For the architects of the world" },
       { name: "description", content: "FormAI STUDIO is the creative platform for architects, interior and furniture designers — build 3D worlds and photorealistic renderings of your ideas. For human and god creators." },
       { name: "author", content: "Forma Studio" },
