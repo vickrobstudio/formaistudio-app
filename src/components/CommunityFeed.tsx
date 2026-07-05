@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Bookmark, Box, Heart, ImageIcon, MessageCircle, Send, Share } from "lucide-react";
 import { useState } from "react";
-import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { addCreationComment, getPublicFeed, toggleCreationFavorite, toggleCreationLike } from "@/lib/feed.functions";
@@ -16,7 +16,7 @@ export function CommunityFeed() {
   const like = useServerFn(toggleCreationLike);
   const favorite = useServerFn(toggleCreationFavorite);
   const comment = useServerFn(addCreationComment);
-  const { data: creations = [], isLoading } = useQuery({ queryKey: ["public-feed"], queryFn: () => getPublicFeed() });
+  const { data: creations = [], isLoading, isError, refetch } = useQuery({ queryKey: ["public-feed"], queryFn: () => getPublicFeed() });
   const [commentFor, setCommentFor] = useState<string | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [message, setMessage] = useState("");
@@ -41,10 +41,11 @@ export function CommunityFeed() {
 
   return <main className="min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Community" title="Architects of the world" description="3D worlds, photorealistic renderings, interiors and original furniture shared by architects, interior and furniture designers — human and god creators." />
     {message && <p role="status" className="mx-5 mb-4 rounded-xl border border-border px-4 py-3 text-xs">{message}</p>}
-    <section className="mx-auto max-w-2xl pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      {isLoading && <p className="px-5 py-12 text-center text-sm text-muted-foreground">Loading the community…</p>}
-      {!isLoading && creations.length === 0 && <div className="px-5 py-12 text-center"><p className="text-xl font-light">The feed is ready</p><p className="mt-2 text-sm text-muted-foreground">Public creations shared by members will appear here.</p><Button asChild className="mt-6"><Link to="/create">Create the first piece</Link></Button></div>}
-      {creations.map((creation) => <article key={creation.id} className="border-b border-border pb-7 mb-7">
+    <section className={`${PAGE_SHELL} max-w-2xl pb-[calc(6rem+env(safe-area-inset-bottom))] md:grid md:max-w-[1600px] md:grid-cols-2 md:items-start md:gap-6 md:px-8 xl:grid-cols-3 xl:px-14`}>
+      {isLoading && <p className="px-5 py-12 text-center text-sm text-muted-foreground md:col-span-full">Loading the community…</p>}
+      {isError && !isLoading && <div className="px-5 py-12 text-center md:col-span-full"><p className="text-xl font-light">The community feed couldn't load</p><p className="mt-2 text-sm text-muted-foreground">Check your connection and try again.</p><Button className="mt-6" onClick={() => void refetch()}>Retry</Button></div>}
+      {!isLoading && !isError && creations.length === 0 && <div className="px-5 py-12 text-center md:col-span-full"><p className="text-xl font-light">The feed is ready</p><p className="mt-2 text-sm text-muted-foreground">Public creations shared by members will appear here.</p><Button asChild className="mt-6"><Link to="/create">Create the first piece</Link></Button></div>}
+      {creations.map((creation) => <article key={creation.id} className="mb-7 border-b border-border pb-7 md:mb-0 md:overflow-hidden md:rounded-2xl md:border md:bg-card md:pb-5">
         <div className="flex items-center gap-3 px-5 pb-3">
           <Avatar><AvatarImage src={creation.creatorAvatarUrl ?? undefined} alt={`${creation.creatorName} profile photo`} className="object-cover" /><AvatarFallback>{creation.creatorName.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
           <div className="min-w-0 flex-1">

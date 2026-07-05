@@ -36,7 +36,7 @@ Never simplify or omit a unique trait. If the drawing shows it, it MUST be in th
 Return ONLY the paragraph as plain text — no JSON, no Markdown, no headings, no bullet points.`;
 
 export const buildMasterPrompt = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => Input.parse(input))
+  .validator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { ok: false, error: "The rendering service is unavailable." };

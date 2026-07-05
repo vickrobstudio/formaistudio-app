@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Cloud, History, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { useCredits } from "@/hooks/use-credits";
 
 const dashboardItems = [
@@ -14,8 +14,8 @@ export const Route = createFileRoute("/dashboard")({ head: () => ({ meta: [{ tit
 
 function Dashboard() {
   const { credits, signedIn, vip } = useCredits();
-  return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Profile dashboard" title="Your account" description="Manage account details, saved images and projects, and recent activity."><p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "VIP · Unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p></PageIntro><section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">{signedIn && dashboardItems.map(({ icon: Icon, name, description, ...item }) => {
+  return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Profile dashboard" title="Your account" description="Manage account details, saved images and projects, and recent activity."><p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "VIP · Unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p></PageIntro><section className={`${PAGE_SHELL} px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]`}><div className="md:grid md:grid-cols-3 md:gap-4">{signedIn && dashboardItems.map(({ icon: Icon, name, description, ...item }) => {
     const content = <><div className="grid size-11 place-items-center text-foreground"><Icon className="size-6" /></div><div><h2 className="text-base font-semibold">{name}</h2><p className="mt-1 text-xs text-muted-foreground">{description}</p></div><ArrowRight className="size-4 text-muted-foreground" /></>;
-    return <Link key={name} to={item.to} className="organic-divider grid min-h-20 grid-cols-[2.75rem_1fr_auto] items-center gap-4 py-4">{content}</Link>;
-  })}{!signedIn && <Button asChild variant="outline" className="mt-6 w-full"><Link to="/auth"><UserRound />Sign in or create account</Link></Button>}</section><ToolTabBar /></main>;
+    return <Link key={name} to={item.to} className="organic-divider grid min-h-20 grid-cols-[2.75rem_1fr_auto] items-center gap-4 py-4 md:rounded-2xl md:border md:border-border md:bg-card md:p-6 md:after:hidden">{content}</Link>;
+  })}</div>{!signedIn && <Button asChild variant="outline" className="mt-6 w-full md:max-w-sm"><Link to="/auth"><UserRound />Sign in or create account</Link></Button>}</section><ToolTabBar /></main>;
 }

@@ -54,7 +54,7 @@ async function uploadImageToReplicate(imageDataUrl: string): Promise<string> {
 const TRELLIS_VERSION = "e8f6c45206993f297372f5436b90350817bd9b4a0d52d2a76df50c1c8afa2b3c";
 
 export const startMeshReconstruction = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         imageDataUrl: z
@@ -142,7 +142,7 @@ function pickGlbUrl(output: unknown): string | null {
 }
 
 export const pollMeshReconstruction = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         predictionId: z.string().min(1).max(200),

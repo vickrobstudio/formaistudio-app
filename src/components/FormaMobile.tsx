@@ -11,12 +11,29 @@ const tools = [
   { to: "/dashboard", label: "Profile", icon: UserRound },
 ] as const;
 
+function isToolActive(path: string, label: string, to: string) {
+  if (label === "Tools") return ["/tools", "/studio", "/model-to-ai", "/2d-to-3d", "/ai-edits", "/photo-to-ai", "/ai-to-video"].includes(path);
+  if (label === "Profile") return ["/dashboard", "/account", "/cloud", "/history", "/settings", "/wallet", "/about", "/terms", "/privacy", "/contact"].includes(path);
+  return path === to;
+}
+
+/* Shared page container: full-bleed phone column below md; on tablet and
+ * desktop the content spans the whole screen with wider gutters (capped only
+ * on very large monitors so lines don't stretch forever). */
+export const PAGE_SHELL = "mx-auto w-full max-w-[1600px] md:px-8 xl:px-14";
+
 export function FormAILogo({ inverse = false, className = "w-16" }: { inverse?: boolean; className?: string }) {
   return (
     <img
       src={inverse ? formaiLogoWhite.url : formaiLogo.url}
       alt="FormAI logo"
       className={`${className} h-auto object-contain`}
+      onError={(event) => {
+        // CDN unreachable (offline iOS, asset host down) — fall back to the
+        // bundled app icon instead of a broken-image glyph in every header.
+        event.currentTarget.onerror = null;
+        event.currentTarget.src = "/app-icon.png";
+      }}
     />
   );
 }
@@ -25,10 +42,24 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   const path = useRouterState({ select: (state) => state.location.pathname });
   return (
     <>
-      <header className={`fixed inset-x-0 top-0 z-50 mx-auto flex h-[calc(3.25rem+env(safe-area-inset-top))] w-full max-w-full md:max-w-[520px] transform-gpu items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/90 text-foreground shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"}`}>
+      <header className={`fixed inset-x-0 top-0 z-50 flex h-[calc(3.25rem+env(safe-area-inset-top))] w-full transform-gpu items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] md:justify-between md:px-8 ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/90 text-foreground shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"}`}>
         <Link to="/" aria-label="Return to FormAI STUDIO landing page" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
           <FormAILogo inverse className="w-12" />
         </Link>
+        {/* Tablet/desktop navigation — the phone tab bar is hidden at md+. */}
+        <nav aria-label="Creative tools" className="hidden items-center gap-1 md:flex">
+          {tools.map(({ to, label, icon: Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              aria-current={isToolActive(path, label, to) ? "page" : undefined}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs uppercase tracking-[0.14em] transition-colors ${isToolActive(path, label, to) ? "font-bold text-foreground" : "font-normal text-muted-foreground hover:text-foreground"}`}
+            >
+              <Icon className="size-4" strokeWidth={isToolActive(path, label, to) ? 2.4 : 1.7} />
+              {label}
+            </Link>
+          ))}
+        </nav>
       </header>
       {path !== "/" && <div className="h-[calc(3.25rem+env(safe-area-inset-top))]" />}
     </>
@@ -36,18 +67,14 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
 }
 
 export function PageIntro({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children?: ReactNode }) {
-  return <section className="px-5 pb-8 pt-9"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-primary">{eyebrow}</p><h1 className="mt-3 max-w-sm text-4xl font-light leading-[1.05] tracking-tight">{title}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>{children}</section>;
+  return <section className={`${PAGE_SHELL} px-5 pb-8 pt-9`}><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-primary">{eyebrow}</p><h1 className="mt-3 max-w-sm text-4xl font-light leading-[1.05] tracking-tight md:text-5xl">{title}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>{children}</section>;
 }
 
 export function ToolTabBar() {
   const path = useRouterState({ select: (state) => state.location.pathname });
-  const isActive = (label: string, to: string) => {
-    if (label === "Tools") return ["/tools", "/studio", "/model-to-ai", "/2d-to-3d", "/ai-edits", "/photo-to-ai", "/ai-to-video"].includes(path);
-    if (label === "Profile") return ["/dashboard", "/account", "/cloud", "/history", "/settings", "/wallet", "/about", "/terms", "/privacy", "/contact"].includes(path);
-    return path === to;
-  };
+  const isActive = (label: string, to: string) => isToolActive(path, label, to);
   return (
-    <nav aria-label="Creative tools" className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-full md:max-w-[520px] border-t border-border bg-background/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+    <nav aria-label="Creative tools" className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-full border-t border-border bg-background/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
       <div className="mx-auto grid h-16 max-w-xl grid-cols-4">
         {tools.map(({ to, label, icon: Icon }) => (
           <Link
@@ -55,11 +82,11 @@ export function ToolTabBar() {
             to={to}
             activeOptions={{ exact: true }}
             aria-current={isActive(label, to) ? "page" : undefined}
-            className={`relative flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl transition-[color,transform] active:scale-[0.96] ${isActive(label, to) ? "font-bold text-[oklch(0.65_0_0)]" : "font-normal text-muted-foreground"}`}
+            className={`relative flex min-h-11 flex-col items-center justify-center gap-1 rounded-xl transition-[color,transform] active:scale-[0.96] ${isActive(label, to) ? "font-bold text-foreground" : "font-normal text-muted-foreground"}`}
           >
             <Icon className="size-[22px]" strokeWidth={isActive(label, to) ? 2.4 : 1.7} />
             <span className={`text-[10px] leading-none ${isActive(label, to) ? "font-bold" : "font-normal"}`}>{label}</span>
-            {isActive(label, to) && <span aria-hidden="true" className="absolute bottom-0 h-0.5 w-5 rounded-full bg-[oklch(0.65_0_0)]" />}
+            {isActive(label, to) && <span aria-hidden="true" className="absolute bottom-0 h-0.5 w-5 rounded-full bg-foreground" />}
           </Link>
         ))}
       </div>

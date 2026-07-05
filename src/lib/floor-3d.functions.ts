@@ -1914,7 +1914,7 @@ function validateMeshGeometry(
 }
 
 export const generateFloor3D = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => FloorTo3DInput.parse(input))
+  .validator((input: unknown) => FloorTo3DInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
@@ -2513,7 +2513,7 @@ const FurnitureBoundsSchema = z.object({
 });
 
 export const extractFurnitureBounds = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => FurnitureBoundsInput.parse(input))
+  .validator((input: unknown) => FurnitureBoundsInput.parse(input))
   .handler(async ({ data }): Promise<
     | { ok: true; width: number; depth: number; height: number }
     | { ok: false; error: string }
@@ -2618,7 +2618,7 @@ const DetectedSchema = z.object({ polygons: z.array(DetectedPolygon).max(400) })
 export type DetectedFloorPolygon = z.infer<typeof DetectedPolygon> & { id: string };
 
 export const detectFloorElements = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => DetectInput.parse(input))
+  .validator((input: unknown) => DetectInput.parse(input))
   .handler(async ({ data }): Promise<
     | { ok: true; polygons: DetectedFloorPolygon[] }
     | { ok: false; error: string }
@@ -2737,7 +2737,7 @@ function extrudePolygonIntoGroup(
 }
 
 export const liftAnnotatedFloor = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => LiftInput.parse(input))
+  .validator((input: unknown) => LiftInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
     const outputScale = data.outputUnits === "feet" ? 1 / 0.3048 : 1;
     // Image px → metres, longer side maps to planWidthMeters.

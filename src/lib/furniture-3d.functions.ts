@@ -21,7 +21,7 @@ const gateway = "https://connector-gateway.lovable.dev/replicate/v1";
 
 export const generateFurniture3D = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => GenerateFurniture3DInput.parse(input))
+  .validator((input: unknown) => GenerateFurniture3DInput.parse(input))
   .handler(async ({ data, context }): Promise<GenerateFurniture3DResult> => {
     const lovableKey = process.env.LOVABLE_API_KEY;
     const replicateKey = process.env.REPLICATE_API_KEY;
@@ -88,7 +88,7 @@ const SignModelInput = z.object({ path: z.string().min(1).max(500) });
 
 export const getFurnitureModelDownload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SignModelInput.parse(input))
+  .validator((input: unknown) => SignModelInput.parse(input))
   .handler(async ({ data, context }) => {
     if (!data.path.startsWith(`${context.userId}/`)) throw new Error("This model is not in your library.");
     const { data: signed, error } = await context.supabase.storage.from("user-outputs").createSignedUrl(data.path, 300, { download: true });

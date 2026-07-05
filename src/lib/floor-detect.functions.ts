@@ -50,7 +50,7 @@ RULES:
 - All polygon coordinates must be numbers in [0,1]. Skip anything you cannot place spatially.`;
 
 export const detectFloorElements = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => Input.parse(input))
+  .validator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { ok: false, error: "The detection service is unavailable." };
