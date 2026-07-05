@@ -161,3 +161,29 @@ export const saveFurnitureCreation = createServerFn({ method: "POST" })
     if (error) throw new Error("Unable to save this furniture piece.");
     return creation;
   });
+
+const ShareCreationInput = FurnitureCreationInput.extend({
+  creationType: z.enum(["furniture", "interior", "render", "building"]),
+});
+
+/** Publish any studio creation to the community gallery (or keep it private in the library). */
+export const sharePublicCreation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ShareCreationInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
+    const creatorName = profile?.username || "FormAI member";
+    const { data: creation, error } = await context.supabase.from("public_creations").insert({
+      user_id: context.userId,
+      creator_name: creatorName.slice(0, 80),
+      title: data.title,
+      description: data.description,
+      image_url: data.imageUrl,
+      model_glb_path: data.modelGlbPath,
+      model_usdz_path: data.modelUsdzPath,
+      creation_type: data.creationType,
+      is_public: data.isPublic,
+    }).select("id").single();
+    if (error) throw new Error("Unable to publish this creation.");
+    return creation;
+  });
