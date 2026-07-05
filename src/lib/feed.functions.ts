@@ -83,7 +83,7 @@ export const getPublicFeed = createServerFn({ method: "GET" }).handler(async () 
 
 export const toggleCreationLike = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => CreationIdInput.parse(input))
+  .validator((input: unknown) => CreationIdInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: existing } = await context.supabase.from("creation_likes").select("creation_id").eq("creation_id", data.creationId).eq("user_id", context.userId).maybeSingle();
     const result = existing
@@ -95,7 +95,7 @@ export const toggleCreationLike = createServerFn({ method: "POST" })
 
 export const toggleCreationFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => CreationIdInput.parse(input))
+  .validator((input: unknown) => CreationIdInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: existing } = await context.supabase.from("creation_favorites").select("creation_id").eq("creation_id", data.creationId).eq("user_id", context.userId).maybeSingle();
     const result = existing
@@ -107,7 +107,7 @@ export const toggleCreationFavorite = createServerFn({ method: "POST" })
 
 export const addCreationComment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => CommentInput.parse(input))
+  .validator((input: unknown) => CommentInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
     const authorName = profile?.username || "FormAI member";
@@ -143,7 +143,7 @@ export const listReusableFurniture = createServerFn({ method: "GET" })
 
 export const saveFurnitureCreation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => FurnitureCreationInput.parse(input))
+  .validator((input: unknown) => FurnitureCreationInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
     const creatorName = profile?.username || "FormAI member";

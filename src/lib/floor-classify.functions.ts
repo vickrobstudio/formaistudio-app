@@ -61,7 +61,7 @@ RULES:
 - Confidence in [0,1].`;
 
 export const classifyFloorRegions = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => Input.parse(input))
+  .validator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { ok: false, error: "The classification service is unavailable." };

@@ -26,7 +26,7 @@ export const listProjects = createServerFn({ method: "GET" })
 
 export const saveProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => SaveProjectInput.parse(input))
+  .validator((input: unknown) => SaveProjectInput.parse(input))
   .handler(async ({ data, context }) => {
     const record = {
       user_id: context.userId,

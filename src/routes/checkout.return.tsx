@@ -22,7 +22,7 @@ function CheckoutReturn() {
             : "We couldn't locate your checkout session."}
         </p>
         <div className="mt-8 flex justify-center gap-3">
-          <Link to="/studio" className="rounded-full bg-black px-6 py-3 text-sm font-medium text-white hover:bg-black/85">
+          <Link to="/studio" className="rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/85">
             Open Studio
           </Link>
           <Link to="/settings" className="rounded-full border px-6 py-3 text-sm font-medium hover:bg-muted">

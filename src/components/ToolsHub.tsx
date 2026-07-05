@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Box, Boxes, Camera, Film, ImagePlus, Sparkles } from "lucide-react";
-import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 
 const tools = [
   { icon: Boxes, name: "2D to 3D", tagline: "Plan → 3D model", to: "/2d-to-3d" },
@@ -12,8 +12,8 @@ const tools = [
 ] as const;
 
 export function ToolsHub() {
-  return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Tools" title="Pick a tool" description="One workflow per tool. Tap to start." /><section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+  return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Tools" title="Pick a tool" description="One workflow per tool. Tap to start." /><section className={`${PAGE_SHELL} px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]`}>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 xl:grid-cols-6">
       {tools.map(({ icon: Icon, name, tagline, to }) => <Link key={to} to={to} className="group relative flex aspect-square flex-col justify-between rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-accent">
         <Icon className="size-6" />
         <span className="block">

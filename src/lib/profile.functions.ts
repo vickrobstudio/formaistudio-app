@@ -21,7 +21,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
 
 export const updateMyProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => UsernameInput.parse(input))
+  .validator((input: unknown) => UsernameInput.parse(input))
   .handler(async ({ data, context }) => {
     const username = data.username.trim();
     const { error } = await context.supabase.from("profiles").update({ username, updated_at: new Date().toISOString() }).eq("id", context.userId);
@@ -35,7 +35,7 @@ export const updateMyProfile = createServerFn({ method: "POST" })
 
 export const setMyAvatarPath = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ avatarPath: z.string().max(200) }).parse(input))
+  .validator((input: unknown) => z.object({ avatarPath: z.string().max(200) }).parse(input))
   .handler(async ({ data, context }) => {
     const expectedPath = `${context.userId}/profile/avatar`;
     if (data.avatarPath !== expectedPath) throw new Error("Invalid profile photo location.");
@@ -62,7 +62,7 @@ async function listStorageFiles(bucket: string, userId: string) {
 
 export const deleteMyAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ confirmation: z.literal("DELETE") }).parse(input))
+  .validator((input: unknown) => z.object({ confirmation: z.literal("DELETE") }).parse(input))
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     for (const bucket of ["plan-uploads", "sketchup-uploads", "tearsheet-uploads", "user-outputs"]) {

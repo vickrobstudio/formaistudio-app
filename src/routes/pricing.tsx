@@ -74,7 +74,7 @@ function PricingPage() {
           </div>
         ) : (
           <>
-            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 sm:grid-cols-2">
+            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
               {PLANS.map((plan) => {
                 const isPro = plan.id === "pro_monthly";
                 const owned = sub.activePlans.has(plan.id);
@@ -84,22 +84,25 @@ function PricingPage() {
                     type="button"
                     onClick={() => void handleSubscribe(plan.id)}
                     disabled={iapBusy === plan.id || owned}
-                    className={`group relative flex aspect-square flex-col justify-between rounded-3xl border bg-card p-7 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-90 ${isPro ? "ring-2 ring-black" : ""}`}
+                    className={`group relative flex min-h-64 flex-col rounded-3xl border bg-card p-7 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-90 ${isPro ? "ring-2 ring-foreground" : ""}`}
                   >
                     <span className="flex items-start justify-between gap-2">
                       <span className="text-lg font-semibold leading-tight">{plan.name}</span>
-                      {isPro && <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Best</span>}
+                      {isPro && <span className="rounded-full bg-foreground px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-background">Best</span>}
                     </span>
-                    <span className="block">
-                      <span className="block text-5xl font-semibold leading-none">${plan.priceUsd}<span className="text-base font-normal text-muted-foreground">/mo</span></span>
+                    <span className="mt-3 block text-sm leading-6 text-muted-foreground">{plan.blurb}</span>
+                    <span className="mt-2 block text-sm text-muted-foreground"><span className="font-semibold tabular-nums text-foreground">{plan.credits.toLocaleString()}</span> credits / month{isPro && " · all six tools"}</span>
+                    <span className="mt-auto block pt-6">
+                      <span className="block text-5xl font-semibold leading-none tabular-nums">${plan.priceUsd}<span className="text-base font-normal text-muted-foreground">/mo</span></span>
                       <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : signedIn === false ? "Sign in to subscribe" : "Subscribe"}</span>
                     </span>
                   </button>
                 );
               })}
-              <Link to="/photo-to-ai" className="flex aspect-square flex-col justify-between rounded-3xl border border-dashed bg-muted/30 p-7 transition-colors hover:bg-accent">
+              <Link to="/photo-to-ai" className="flex min-h-64 flex-col rounded-3xl border border-dashed bg-muted/30 p-7 transition-colors hover:bg-accent">
                 <span className="text-lg font-semibold leading-tight">Photo to AI</span>
-                <span className="block">
+                <span className="mt-3 block text-sm leading-6 text-muted-foreground">Chat with a photo of any space. No account or credits required.</span>
+                <span className="mt-auto block pt-6">
                   <span className="block text-5xl font-semibold leading-none">Free</span>
                   <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Open</span>
                 </span>
