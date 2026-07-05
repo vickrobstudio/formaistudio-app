@@ -44,6 +44,31 @@ export function ShareCreationDialog({
   const [done, setDone] = useState<"public" | "private" | null>(null);
   const [error, setError] = useState("");
 
+  // Feed posts must stay light: 4K studio renders can exceed the API's
+  // payload limit as data URLs and would bloat the feed for every reader.
+  // Long side ≤1600px, JPEG — falls back to the original on any failure.
+  async function compressForFeed(dataUrl: string): Promise<string> {
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("Could not read the image."));
+        el.src = dataUrl;
+      });
+      const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return dataUrl;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const out = canvas.toDataURL("image/jpeg", 0.85);
+      return out.length < dataUrl.length ? out : dataUrl;
+    } catch {
+      return dataUrl;
+    }
+  }
+
   async function submit(isPublic: boolean) {
     if (!title.trim()) {
       setError("Give your piece a title.");
@@ -56,7 +81,7 @@ export function ShareCreationDialog({
         data: {
           title: title.trim().slice(0, 120),
           description: story.trim().slice(0, 1000),
-          imageUrl: image,
+          imageUrl: await compressForFeed(image),
           modelGlbPath,
           modelUsdzPath,
           isPublic,

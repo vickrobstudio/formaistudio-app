@@ -103,7 +103,7 @@ ${ctxJson}`;
           system,
           messages: await convertToModelMessages(body.messages as UIMessage[]),
         });
-        return result.toUIMessageStreamResponse({ originalMessages: body.messages as UIMessage[] });
+        return result.toUIMessageStreamResponse({ originalMessages: body.messages as UIMessage[], onError: () => "The studio assistant is momentarily unavailable. Please try again in a bit." });
       },
     },
   },

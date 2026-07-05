@@ -136,8 +136,18 @@ export async function parseDrawing(file: File): Promise<DwgDatabaseLite> {
     // DXF is ASCII; libredwg accepts the text payload.
     const text = await file.text();
     dwgHandle = libredwg.dwg_read_data(text, Dwg_File_Type.DXF);
-    if (!dwgHandle) throw new Error("Could not parse DXF file.");
+    // libredwg's DXF importer is strict and rejects many simple or
+    // loosely-written DXF exports (online converters, hand exports).
+    // Fall back to the tolerant dxf-parser adapter for those.
+    if (!dwgHandle) return await parseDxfTolerant(text);
     db = libredwg.convert(dwgHandle);
+    try {
+      const normalized = normalize(db, kind);
+      if (normalized.entities.length > 0) return normalized;
+      return await parseDxfTolerant(text);
+    } finally {
+      try { libredwg.dwg_free(dwgHandle); } catch { /* noop */ }
+    }
   } else {
     const buf = await file.arrayBuffer();
     dwgHandle = libredwg.dwg_read_data(buf, Dwg_File_Type.DWG);
@@ -152,6 +162,93 @@ export async function parseDrawing(file: File): Promise<DwgDatabaseLite> {
       try { libredwg.dwg_free(dwgHandle); } catch { /* noop */ }
     }
   }
+}
+
+/**
+ * Tolerant DXF fallback. Adapts `dxf-parser` output (which accepts files
+ * libredwg rejects) to the same lite database, so the entire downstream
+ * pipeline — rasterization, vector recognition, 3D lift — works unchanged.
+ * Files that rely on blocks/INSERTs still need the strict parser.
+ */
+async function parseDxfTolerant(text: string): Promise<DwgDatabaseLite> {
+  const { default: DxfParser } = await import("dxf-parser");
+  const parser = new DxfParser();
+  type ParsedDxf = { header?: Record<string, unknown>; entities?: Array<Record<string, unknown>> };
+  let dxf: ParsedDxf | null = null;
+  try {
+    dxf = parser.parseSync(text) as ParsedDxf | null;
+  } catch {
+    throw new Error("Could not parse DXF file.");
+  }
+  if (!dxf || !Array.isArray(dxf.entities) || dxf.entities.length === 0) {
+    throw new Error("Could not parse DXF file.");
+  }
+  const insunits = Number(dxf.header?.["$INSUNITS"] ?? 0);
+  const units = UNIT_MAP[insunits] ?? "unitless";
+
+  type P = { x: number; y: number; bulge?: number };
+  const entities: DwgEntityLite[] = [];
+  let id = 0;
+  for (const raw of dxf.entities) {
+    const e = raw as Record<string, any>;
+    const type = String(e.type ?? "").toUpperCase();
+    const layer = typeof e.layer === "string" ? e.layer : "0";
+    if (type === "LINE") {
+      const v: P[] = Array.isArray(e.vertices) ? e.vertices : [];
+      const start = v[0] ?? e.start;
+      const end = v[1] ?? e.end;
+      if (!start || !end) continue;
+      entities.push({ id: id++, type, layer, start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } });
+    } else if (type === "LWPOLYLINE" || type === "POLYLINE") {
+      const v: P[] = Array.isArray(e.vertices) ? e.vertices : [];
+      if (v.length < 2) continue;
+      entities.push({ id: id++, type: "LWPOLYLINE", layer, vertices: v.map((p) => ({ x: p.x, y: p.y, bulge: p.bulge })), closed: Boolean(e.shape ?? e.closed) });
+    } else if (type === "CIRCLE" || type === "ARC") {
+      if (!e.center || typeof e.radius !== "number") continue;
+      entities.push({ id: id++, type, layer, center: { x: e.center.x, y: e.center.y }, radius: e.radius, startAngle: e.startAngle, endAngle: e.endAngle });
+    } else if (type === "ELLIPSE") {
+      if (!e.center) continue;
+      entities.push({ id: id++, type, layer, center: { x: e.center.x, y: e.center.y }, majorAxisEndPoint: e.majorAxisEndPoint, axisRatio: e.axisRatio, startAngle: e.startAngle, endAngle: e.endAngle });
+    } else if (type === "TEXT" || type === "MTEXT") {
+      const p = e.startPoint ?? e.position;
+      const textValue = typeof e.text === "string" ? e.text : "";
+      if (!p || !textValue) continue;
+      entities.push({ id: id++, type, layer, text: textValue, insertionPoint: { x: p.x, y: p.y }, height: e.textHeight ?? e.height });
+    }
+  }
+  if (!entities.length) throw new Error("Could not parse DXF file.");
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const seen = (p?: { x: number; y: number }) => {
+    if (!p) return;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  };
+  for (const e of entities) {
+    seen(e.start); seen(e.end); seen(e.insertionPoint);
+    if (e.center && typeof e.radius === "number") {
+      seen({ x: e.center.x - e.radius, y: e.center.y - e.radius });
+      seen({ x: e.center.x + e.radius, y: e.center.y + e.radius });
+    } else {
+      seen(e.center);
+    }
+    for (const v of e.vertices ?? []) seen(v);
+  }
+  if (!Number.isFinite(minX)) { minX = 0; minY = 0; maxX = 1; maxY = 1; }
+
+  return {
+    source: "dxf",
+    units,
+    unitToMeters: UNIT_TO_METERS[units] ?? 1,
+    extents: { min: { x: minX, y: minY }, max: { x: maxX, y: maxY } },
+    layers: [],
+    blocks: [],
+    entities,
+    layouts: [{ name: "Model", isModelSpace: true, entities }],
+    raw: dxf as unknown as DwgDatabase,
+  };
 }
 
 function pt(p: unknown): { x: number; y: number; z?: number } | undefined {
