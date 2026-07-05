@@ -32,7 +32,7 @@ export const Route = createFileRoute("/ai-rendering")({
 
 function AiRenderingLanding() {
   return (
-    <main className="min-h-screen bg-background px-5 py-16">
+    <main className="mx-auto min-h-screen w-full max-w-3xl bg-background px-5 py-16">
       <article className="mx-auto max-w-3xl">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">AI Rendering Studio</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">AI rendering, in editorial 8K quality</h1>

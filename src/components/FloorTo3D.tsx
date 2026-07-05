@@ -466,12 +466,12 @@ export function FloorTo3D() {
 
   return <main className="min-h-screen bg-background">
     <FormaHeader />
-    <div className="px-5 pt-7"><BackLink /></div>
+    <div className="px-5 pt-7 md:mx-auto md:w-full md:max-w-5xl"><BackLink /></div>
     <PageIntro eyebrow="2D to 3D" title="Plan to 3D model" description="Upload a floor plan or furniture drawing. Tap Build. Download the 3D file.">
       <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "VIP · Unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p>
     </PageIntro>
 
-    <section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+    <section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-5xl">
       {/* Subject toggle */}
       <div className="mb-5 grid grid-cols-2 gap-3">
         <Button type="button" variant={subject === "building" ? "default" : "outline"} onClick={() => { setSubject("building"); reset(); }}>Building</Button>

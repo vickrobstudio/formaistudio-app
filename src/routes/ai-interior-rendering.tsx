@@ -32,7 +32,7 @@ export const Route = createFileRoute("/ai-interior-rendering")({
 
 function AiInteriorRenderingLanding() {
   return (
-    <main className="min-h-screen bg-background px-5 py-16">
+    <main className="mx-auto min-h-screen w-full max-w-3xl bg-background px-5 py-16">
       <article className="mx-auto max-w-3xl">
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">AI Interior Rendering</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">AI interior rendering, editorial quality</h1>
