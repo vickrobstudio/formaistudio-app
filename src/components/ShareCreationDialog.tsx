@@ -86,7 +86,7 @@ export function ShareCreationDialog({
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.24em] text-muted-foreground">The community gallery</p>
-            <p className="mt-1 font-serif text-lg font-light tracking-tight">Showcase your piece</p>
+            <p className="mt-1 text-lg font-light tracking-tight">Showcase your piece</p>
           </div>
           <Button type="button" size="icon" variant="ghost" aria-label="Close" onClick={onClose}><X className="size-4" /></Button>
         </div>
@@ -94,7 +94,7 @@ export function ShareCreationDialog({
         {done ? (
           <div className="flex flex-col items-center px-6 py-10 text-center">
             <span className="grid size-12 place-items-center rounded-full bg-foreground text-background"><Check className="size-6" /></span>
-            <p className="mt-5 font-serif text-xl font-light">
+            <p className="mt-5 text-xl font-light">
               {done === "public" ? "Published to the community" : "Saved to your private library"}
             </p>
             <p className="mt-2 max-w-xs text-xs leading-5 text-muted-foreground">
@@ -120,7 +120,7 @@ export function ShareCreationDialog({
                 onChange={(event) => setTitle(event.target.value)}
                 maxLength={120}
                 placeholder="Name it like a work in a gallery…"
-                className="mt-2 h-12 font-serif text-base"
+                className="mt-2 h-12 text-base"
               />
             </label>
 
@@ -131,7 +131,7 @@ export function ShareCreationDialog({
                 onChange={(event) => setStory(event.target.value)}
                 maxLength={1000}
                 placeholder="Materials, inspiration, the idea behind it…"
-                className="mt-2 min-h-24 resize-none font-serif text-sm leading-6"
+                className="mt-2 min-h-24 resize-none text-sm leading-6"
               />
             </label>
 
