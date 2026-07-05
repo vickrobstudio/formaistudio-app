@@ -12,7 +12,7 @@ const tools = [
 ] as const;
 
 export function ToolsHub() {
-  return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Tools" title="Pick a tool" description="One workflow per tool. Tap to start." /><section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-3xl">
+  return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Tools" title="Pick a tool" description="One workflow per tool. Tap to start." /><section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-3xl lg:max-w-4xl">
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {tools.map(({ icon: Icon, name, tagline, to }) => <Link key={to} to={to} className="group relative flex aspect-square flex-col justify-between rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-accent">
         <Icon className="size-6" />

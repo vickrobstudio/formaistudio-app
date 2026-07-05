@@ -35,7 +35,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
 }
 
 export function PageIntro({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children?: ReactNode }) {
-  return <section className="px-5 pb-8 pt-9 md:mx-auto md:w-full md:max-w-3xl"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-primary">{eyebrow}</p><h1 className="mt-3 max-w-sm text-4xl font-light leading-[1.05] tracking-tight">{title}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>{children}</section>;
+  return <section className="px-5 pb-8 pt-9 md:mx-auto md:w-full md:max-w-3xl lg:max-w-4xl"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-primary">{eyebrow}</p><h1 className="mt-3 max-w-sm text-4xl md:text-5xl font-light leading-[1.05] tracking-tight">{title}</h1><p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>{children}</section>;
 }
 
 export function ToolTabBar() {

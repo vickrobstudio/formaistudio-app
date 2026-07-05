@@ -41,7 +41,7 @@ export function CommunityFeed() {
 
   return <main className="min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Community" title="Architects of the world" description="3D worlds, photorealistic renderings, interiors and original furniture shared by architects, interior and furniture designers — human and god creators." />
     {message && <p role="status" className="mx-5 mb-4 rounded-xl border border-border px-4 py-3 text-xs">{message}</p>}
-    <section className="mx-auto max-w-2xl pb-[calc(6rem+env(safe-area-inset-bottom))]">
+    <section className="mx-auto max-w-2xl pb-[calc(6rem+env(safe-area-inset-bottom))] lg:grid lg:max-w-5xl lg:grid-cols-2 lg:items-start lg:gap-x-10">
       {isLoading && <p className="px-5 py-12 text-center text-sm text-muted-foreground">Loading the community…</p>}
       {!isLoading && creations.length === 0 && <div className="px-5 py-12 text-center"><p className="text-xl font-light">The feed is ready</p><p className="mt-2 text-sm text-muted-foreground">Public creations shared by members will appear here.</p><Button asChild className="mt-6"><Link to="/create">Create the first piece</Link></Button></div>}
       {creations.map((creation) => <article key={creation.id} className="border-b border-border pb-7 mb-7">
