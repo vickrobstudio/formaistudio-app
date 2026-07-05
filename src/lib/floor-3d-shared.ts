@@ -9,6 +9,25 @@
  * one named material per layer in SketchUp / Blender.
  */
 
+/**
+ * Numbered layer scheme for every export format (DAE node names, OBJ groups,
+ * FBX models, GLB nodes) and the viewer layer tree. Group ids never change —
+ * only these display names.
+ */
+export const LAYER_NAMES = {
+  site: "01_SITE",
+  slab: "02_FLOORS_AND_SLABS",
+  wallsExterior: "03_EXTERIOR_WALLS",
+  wallsInterior: "04_INTERIOR_WALLS",
+  doors: "05_DOORS",
+  windows: "06_WINDOWS_AND_GLAZING",
+  ceilings: "07_CEILINGS_AND_SOFFITS",
+  stairs: "08_STAIRS_AND_RAMPS",
+  roof: "09_ROOF_AND_PARAPETS",
+  millwork: "10_MILLWORK_AND_BUILT_INS",
+  columns: "11_COLUMNS_AND_STRUCTURE",
+} as const;
+
 export const MATERIAL_IDS = [
   // --- Stone / masonry ---
   "stone_white", "stone_dark",

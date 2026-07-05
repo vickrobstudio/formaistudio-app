@@ -85,7 +85,7 @@ workflows:
           # Skips the App Store Connect export-compliance question on every upload.
           set_bool ITSAppUsesNonExemptEncryption false
           # Display name shown under the icon on the home screen.
-          set_str CFBundleDisplayName "FormAI"
+          set_str CFBundleDisplayName "FormAI Studio"
           # The app no longer loads remote pages as its main document — the
           # UI is bundled into the .ipa — so WKAppBoundDomains is removed.
           $PB -c "Delete :WKAppBoundDomains" "$PLIST" 2>/dev/null || true

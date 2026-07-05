@@ -1,8 +1,7 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { ArrowLeft, Grid2X2, House, Sparkles, UserRound } from "lucide-react";
 import type { ReactNode } from "react";
-import formaiLogo from "@/assets/formai-logo-mark.png.asset.json";
-import formaiLogoWhite from "@/assets/formai-logo-white.png.asset.json";
+const formaiLogoWhite = "/formai-logo-white.png";
 
 const tools = [
   { to: "/feed", label: "Home", icon: House },
@@ -11,10 +10,10 @@ const tools = [
   { to: "/dashboard", label: "Profile", icon: UserRound },
 ] as const;
 
-export function FormAILogo({ inverse = false, className = "w-16" }: { inverse?: boolean; className?: string }) {
+export function FormAILogo({ className = "w-16" }: { inverse?: boolean; className?: string }) {
   return (
     <img
-      src={inverse ? formaiLogoWhite.url : formaiLogo.url}
+      src={formaiLogoWhite}
       alt="FormAI logo"
       className={`${className} h-auto object-contain`}
     />
@@ -25,7 +24,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   const path = useRouterState({ select: (state) => state.location.pathname });
   return (
     <>
-      <header className={`fixed inset-x-0 top-0 z-50 mx-auto flex h-[calc(3.25rem+env(safe-area-inset-top))] w-full max-w-full md:max-w-[520px] transform-gpu items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/90 text-foreground shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"}`}>
+      <header className={`fixed inset-x-0 top-0 z-50 mx-auto flex h-[calc(3.25rem+env(safe-area-inset-top))] w-full max-w-full md:max-w-[520px] transform-gpu items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/90 text-foreground shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:border-b-0 md:shadow-none"}`}>
         <Link to="/" aria-label="Return to FormAI STUDIO landing page" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
           <FormAILogo inverse className="w-12" />
         </Link>

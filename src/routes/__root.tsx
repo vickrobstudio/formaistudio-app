@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { GlobalAssistant } from "@/components/GlobalAssistant";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { installIosServerFnBridge } from "../lib/ios-server-fn-bridge";
 
 // Install the iOS server-fn fetch bridge as a side effect at module load —
@@ -46,7 +45,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    console.error("[root-error-boundary]", error);
   }, [error]);
 
   return (

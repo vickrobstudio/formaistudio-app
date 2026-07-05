@@ -10,15 +10,13 @@ import { z } from "zod";
  * server fn (Workers have short request budgets).
  */
 
-const GATEWAY = "https://connector-gateway.lovable.dev/replicate/v1";
+const GATEWAY = "https://api.replicate.com/v1";
 
 function authHeaders() {
-  const lov = process.env.LOVABLE_API_KEY;
-  const rep = process.env.REPLICATE_API_KEY ?? process.env.LOVABLE_CONNECTOR_REPLICATE_API_KEY;
-  if (!lov || !rep) throw new Error("Replicate connector is not linked to this project.");
+  const token = process.env.REPLICATE_API_TOKEN ?? process.env.REPLICATE_API_KEY;
+  if (!token) throw new Error("Replicate is not configured — set REPLICATE_API_TOKEN.");
   return {
-    Authorization: `Bearer ${lov}`,
-    "X-Connection-Api-Key": rep,
+    Authorization: `Bearer ${token}`,
   } as const;
 }
 

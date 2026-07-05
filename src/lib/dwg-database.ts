@@ -593,7 +593,7 @@ export function rasterizeDatabase(
   return { dataUrl: canvas.toDataURL("image/png"), width: W, height: H, bounds: { min, max }, drawableCount: drawableEntities.length };
 }
 
-function expandRenderableEntities(
+export function expandRenderableEntities(
   db: DwgDatabaseLite,
   entities: DwgEntityLite[],
   opts: { projectViewports?: boolean } = {},
