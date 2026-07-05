@@ -51,7 +51,7 @@ export function GlobalAssistant() {
       </svg>
     </button>}
 
-    {open && <div className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-h-[min(78vh,calc(100dvh-10rem-env(safe-area-inset-bottom)))] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-foreground/30 bg-background shadow-2xl sm:right-5 sm:left-auto sm:inset-x-auto">
+    {open && <div className="fixed inset-x-3 bottom-[max(calc(5.5rem+env(safe-area-inset-bottom)),calc(var(--kb-inset,0px)+0.75rem))] z-50 mx-auto flex max-h-[min(78vh,calc(100dvh-10rem-env(safe-area-inset-bottom)-var(--kb-inset,0px)))] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-foreground/30 bg-background shadow-2xl sm:right-5 sm:left-auto sm:inset-x-auto">
       <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-4 py-3">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em]">AI Architect · Construction Assistant</p>

@@ -141,6 +141,7 @@ function RootComponent() {
 
   useEffect(() => {
     void import("../lib/native-ios").then((m) => m.initNativeIOS());
+    void import("../lib/keyboard-inset").then((m) => m.installKeyboardInsetTracker());
   }, []);
 
   return (
