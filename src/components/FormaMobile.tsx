@@ -24,7 +24,7 @@ export function FormaHeader({ transparent = false }: { transparent?: boolean }) 
   const path = useRouterState({ select: (state) => state.location.pathname });
   return (
     <>
-      <header className={`fixed inset-x-0 top-0 z-50 mx-auto flex h-[calc(3.25rem+env(safe-area-inset-top))] w-full max-w-full md:max-w-[520px] transform-gpu items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/90 text-foreground shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:border-b-0 md:shadow-none"}`}>
+      <header className={`fixed inset-x-0 top-0 z-50 mx-auto flex h-[calc(3.25rem+env(safe-area-inset-top))] w-full max-w-full transform-gpu items-center justify-center px-[max(1rem,env(safe-area-inset-left))] pb-0 pt-[env(safe-area-inset-top)] ${transparent ? "text-primary-foreground" : "border-b border-border bg-background/90 text-foreground shadow-sm backdrop-blur-xl supports-[backdrop-filter]:bg-background/80 md:border-b-0 md:shadow-none"}`}>
         <Link to="/" aria-label="Return to FormAI STUDIO landing page" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
           <FormAILogo inverse className="w-12" />
         </Link>
@@ -46,7 +46,7 @@ export function ToolTabBar() {
     return path === to;
   };
   return (
-    <nav aria-label="Creative tools" className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-full md:max-w-[520px] border-t border-border bg-background/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
+    <nav aria-label="Creative tools" className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-full border-t border-border bg-background/95 px-[max(0.5rem,env(safe-area-inset-left))] pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:border-t-0">
       <div className="mx-auto grid h-16 max-w-xl grid-cols-4">
         {tools.map(({ to, label, icon: Icon }) => (
           <Link
