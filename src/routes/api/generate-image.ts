@@ -51,9 +51,17 @@ export const Route = createFileRoute("/api/generate-image")({
         // fine 35mm film grain) is added without altering geometry or materials.
         const fidelityLock =
           " ABSOLUTE SOURCE FIDELITY — DO NOT INVENT: the FIRST attached image is the binding reference. Reproduce its camera position, focal length, framing, viewing angle, horizon line and every vanishing point EXACTLY — do not straighten, re-angle, re-scale or re-compose. Reproduce every wall, floor and ceiling edge, opening and structural element, and the exact shape, proportions, position and orientation of every surface and object, EXACTLY as in the source. PRESERVE THE ACTUAL MATERIALS, COLOURS AND FINISHES of every surface exactly as shown — same wood species, stone, metal, paint colour and fabric — only resolving them to true photographic detail. Change ONLY what the instructions above explicitly asked to change; INVENT, add, remove, move, recolour or restyle NOTHING else. Render at true 4K photographic quality and overlay a fine, even analogue 35mm film grain so the result reads as a real camera photograph.";
+        // Long-exposure people: a signature of high-end architectural /
+        // interiors magazine photography — the architecture stays razor sharp
+        // while any human figures are softly motion-blurred, as in a long
+        // exposure, emphasising the stillness of the space. Only styles people
+        // IF they appear; never forces adding them, and never blurs anything
+        // that is not a person.
+        const peopleMotion =
+          " If any people or human figures appear, render them with gentle directional MOTION BLUR — soft, semi-transparent, ghosted as in a long-exposure architectural photograph — while keeping ALL architecture, furniture and objects perfectly sharp and static. This is the professional architectural / interior-design photographer look; do not motion-blur anything except the moving people.";
         const renderPrompt = hasSource
-          ? `${result.data.prompt}.${fidelityLock} No text, no logos, no watermarks.`
-          : `${result.data.prompt}. ${editorialStandard} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.`;
+          ? `${result.data.prompt}.${fidelityLock}${peopleMotion} No text, no logos, no watermarks.`
+          : `${result.data.prompt}. ${editorialStandard}${peopleMotion} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.`;
         // Google Gemini direct — NATIVE generateContent endpoint, which is
         // the only surface exposing the image-quality controls. Renders are
         // produced at maximum quality: 4K output, 3:2 editorial landscape.
