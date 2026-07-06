@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Download, Eye, LoaderCircle, Plus, Ruler, ScanSearch, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
@@ -36,6 +37,8 @@ const information: ToolInfoSection[] = [
     ],
   },
 ];
+
+const FURNITURE_MATERIALS = ["Solid wood", "Walnut", "Oak", "Metal", "Steel", "Brass", "Glass", "Marble", "Stone", "Leather", "Fabric", "Rattan", "Concrete"];
 
 const CLIENT_TIMEOUT_MS = 1_800_000;
 const MAX_DIMENSION = 2000;
@@ -217,6 +220,8 @@ export function FloorTo3D() {
   // Furniture state
   const [furnitureUrl, setFurnitureUrl] = useState<string | null>(null);
   const [furnitureName, setFurnitureName] = useState("");
+  const [furnitureDesc, setFurnitureDesc] = useState("");
+  const [furnitureMaterials, setFurnitureMaterials] = useState<string[]>([]);
   const furnitureInputRef = useRef<HTMLInputElement>(null);
 
   // Result state
@@ -509,11 +514,19 @@ export function FloorTo3D() {
       // renders ONE complete solid furniture piece — a clean product photo,
       // NOT extruded linework. Mesh reconstruction then runs on that solid
       // render, so the 3D model is a real object, not a flattened drawing.
-      setStatus("Understanding your reference and designing the solid piece…");
+      setStatus("Isolating the furniture and designing the solid piece…");
       let solidRender = furnitureUrl;
       try {
+        const materialLine = furnitureMaterials.length
+          ? ` Make it out of these materials: ${furnitureMaterials.join(", ")} — apply them faithfully to the correct parts (frame, legs, seat, top, upholstery) with realistic grain, weave, veining and reflectance.`
+          : "";
+        const descLine = furnitureDesc.trim()
+          ? ` The user describes it as: "${furnitureDesc.trim()}". Honour that description for style, function and details while keeping the shape of the reference.`
+          : "";
         const renderPrompt =
-          "Study this reference image of a single piece of furniture and reproduce it as ONE complete, solid, manufacturable furniture object. Keep the exact shape, silhouette, proportions and design intent of the reference. Render it as a clean studio product photograph on a plain neutral background, three-quarter view, fully solid with realistic materials, thickness and volume — NOT a line drawing, NOT a wireframe, NOT a technical sketch, no outlines, no dimension lines, no annotations, no text. A real physical object ready to be turned into a 3D model.";
+          "This is a raw reference PHOTOGRAPH. Find the SINGLE main piece of furniture in it and IGNORE everything else — remove the background completely, and remove any people, walls, floor, other furniture, clutter, plants and props. Reconstruct ONLY that one furniture piece as accurately as possible: keep its exact shape, silhouette, proportions, structure and design details. Render it as ONE complete, solid, manufacturable object — a clean studio product photograph on a plain seamless neutral background, isolated with generous margins, three-quarter view, fully solid with real thickness and volume, evenly lit, sharp, no shadows cast on other objects."
+          + materialLine + descLine
+          + " Strictly photoreal — NOT a line drawing, NOT a wireframe, no outlines, no annotations, no text, no extra objects. A single real physical object ready to be turned into a 3D model.";
         let out: string | null = null;
         await streamImage(renderPrompt, furnitureUrl, (image, isFinal) => { if (isFinal || !out) out = image; });
         if (out) solidRender = out;
@@ -645,7 +658,20 @@ export function FloorTo3D() {
                 <span className="mt-1 block text-xs text-muted-foreground">PDF · DWG · DXF · JPG · PNG</span>
               </span>}
         </Button>
-        {furnitureName && <Button type="button" variant="ghost" size="sm" onClick={() => { setFurnitureUrl(null); setFurnitureName(""); reset(); }}><X />Remove</Button>}
+        {furnitureName && <Button type="button" variant="ghost" size="sm" onClick={() => { setFurnitureUrl(null); setFurnitureName(""); setFurnitureDesc(""); setFurnitureMaterials([]); reset(); }}><X />Remove</Button>}
+        {furnitureUrl && <div className="space-y-3 rounded-2xl border border-border p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Guide the model (optional)</p>
+          <label className="block text-xs">
+            <span className="font-bold uppercase tracking-[0.14em]">Describe the piece</span>
+            <Textarea value={furnitureDesc} onChange={(e) => setFurnitureDesc(e.target.value)} maxLength={500} placeholder="e.g. mid-century lounge chair, curved back, tapered legs…" className="mt-2 min-h-20 resize-none" />
+          </label>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em]">Materials</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {FURNITURE_MATERIALS.map((m) => <Button key={m} type="button" size="sm" variant={furnitureMaterials.includes(m) ? "default" : "outline"} onClick={() => setFurnitureMaterials((cur) => cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m])}>{m}</Button>)}
+            </div>
+          </div>
+        </div>}
       </div>}
 
       {/* Units */}
