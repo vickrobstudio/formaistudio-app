@@ -1,8 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Cloud, History, UserRound } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, Cloud, History, LogOut, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { useCredits } from "@/hooks/use-credits";
+import { supabase } from "@/integrations/supabase/client";
 
 const dashboardItems = [
   { icon: UserRound, name: "Account", description: "Profile and account details", to: "/account" },
@@ -14,8 +16,16 @@ export const Route = createFileRoute("/dashboard")({ head: () => ({ meta: [{ tit
 
 function Dashboard() {
   const { credits, signedIn, vip } = useCredits();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  async function signOut() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    await navigate({ to: "/auth", replace: true });
+  }
   return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Profile dashboard" title="Your account" description="Manage account details, saved images and projects, and recent activity."><p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "VIP · Unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p></PageIntro><section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-3xl lg:max-w-4xl md:grid md:grid-cols-2 md:gap-x-12">{signedIn && dashboardItems.map(({ icon: Icon, name, description, ...item }) => {
     const content = <><div className="grid size-11 place-items-center text-foreground"><Icon className="size-6" /></div><div><h2 className="text-base font-semibold">{name}</h2><p className="mt-1 text-xs text-muted-foreground">{description}</p></div><ArrowRight className="size-4 text-muted-foreground" /></>;
     return <Link key={name} to={item.to} className="organic-divider grid min-h-20 grid-cols-[2.75rem_1fr_auto] items-center gap-4 py-4">{content}</Link>;
-  })}{!signedIn && <Button asChild variant="outline" className="mt-6 w-full md:col-span-2"><Link to="/auth"><UserRound />Sign in or create account</Link></Button>}</section><ToolTabBar /></main>;
+  })}{signedIn && <Button type="button" variant="outline" className="mt-6 h-12 w-full md:col-span-2" onClick={() => void signOut()}><LogOut className="size-4" />Log out</Button>}{!signedIn && <Button asChild variant="outline" className="mt-6 w-full md:col-span-2"><Link to="/auth"><UserRound />Sign in or create account</Link></Button>}</section><ToolTabBar /></main>;
 }
