@@ -13,6 +13,7 @@ import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-reco
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import { ScaleCalibrator } from "@/components/ScaleCalibrator";
+import { FloorAnnotator } from "@/components/FloorAnnotator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import type { VectorRecognition } from "@/lib/dwg-vector-plan";
 
@@ -215,6 +216,7 @@ export function FloorTo3D() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
   const [calibrating, setCalibrating] = useState<number | null>(null);
+  const [annotating, setAnnotating] = useState<number | null>(null);
 
   function reset() {
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
@@ -521,6 +523,14 @@ export function FloorTo3D() {
                       <span className="text-[10px] font-bold uppercase">{f.planWidthMetersOverride ? `${f.planWidthMetersOverride.toFixed(1)}m` : "Scale"}</span>
                     </Button>
                   )}
+                  {f.imageDataUrl.startsWith("data:image/") && (
+                    <Button type="button" variant={f.recognition ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
+                      onClick={() => setAnnotating(i)}
+                      title="Review and correct the detected walls, doors, windows and rooms before building">
+                      <ScanSearch className="size-3" />
+                      <span className="text-[10px] font-bold uppercase">Elements</span>
+                    </Button>
+                  )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
                 </li>)}
               </ul>
@@ -680,6 +690,20 @@ export function FloorTo3D() {
             : x));
         }}
         onClose={() => setCalibrating(null)}
+      />
+    )}
+    {annotating !== null && floors[annotating] && (
+      <FloorAnnotator
+        imageDataUrl={floors[annotating].imageDataUrl}
+        initialResult={floors[annotating].recognition}
+        defaultPlanWidth={floors[annotating].planWidthMetersOverride ?? floors[annotating].recognition?.planWidthMeters ?? 12}
+        onClose={() => setAnnotating(null)}
+        onApply={(result) => {
+          setFloors((p) => p.map((x, j) => j === annotating
+            ? { ...x, recognition: result, planWidthMetersOverride: result.planWidthMeters }
+            : x));
+          setAnnotating(null);
+        }}
       />
     )}
     {recognitionPreview !== null && floors[recognitionPreview]?.recognition && (
