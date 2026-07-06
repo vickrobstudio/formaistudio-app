@@ -552,7 +552,7 @@ export function describePrecheckIssues(issues: DwgPrecheckIssue[]): string {
  */
 export function rasterizeDatabase(
   db: DwgDatabaseLite,
-  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[]; projectViewports?: boolean } = {},
+  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[]; projectViewports?: boolean; permissive?: boolean } = {},
 ): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"]; drawableCount: number } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
@@ -599,8 +599,15 @@ export function rasterizeDatabase(
       || t === "LEADER" || t === "MLEADER" || t === "MULTILEADER"
       || t === "HATCH" || t === "SOLID" || t === "INSERT" || t === "VIEWPORT");
   }
-  const visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
-  const strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
+  // Permissive mode: grab EVERY vector line regardless of layer naming or
+  // linetype (annotation entity types still stay out) — used when strict
+  // filtering leaves too little linework to enclose areas.
+  const visibleSolidEntities = opts.permissive
+    ? sourceEntities.filter((e) => isDrawableType(e))
+    : sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
+  const strictEntities = opts.permissive
+    ? visibleSolidEntities
+    : visibleSolidEntities.filter((e) => !isNoiseLayer(e));
   // If a CAD author put real plan linework on a badly named layer, keep the
   // preview from going blank. Entity types still remove text/dimensions/arrows,
   // and dashed/hidden/center linetypes still stay out.

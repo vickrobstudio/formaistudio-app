@@ -80,6 +80,22 @@ export async function buildVectorRecognition(
   db: DwgDatabaseLite,
   entities?: DwgEntityLite[],
 ): Promise<VectorRecognition | null> {
+  // Strict layer/linetype filtering first (clean plans); if that fails to
+  // enclose at least two areas, retry grabbing EVERY vector line — real
+  // DWGs often keep walls on unconventionally named layers or linetypes.
+  const strict = await buildVectorRecognitionPass(db, entities, false);
+  if (strict && strict.rooms.length >= 2) return strict;
+  const relaxed = await buildVectorRecognitionPass(db, entities, true);
+  if (!relaxed) return strict;
+  if (!strict) return relaxed;
+  return relaxed.rooms.length > strict.rooms.length ? relaxed : strict;
+}
+
+async function buildVectorRecognitionPass(
+  db: DwgDatabaseLite,
+  entities: DwgEntityLite[] | undefined,
+  permissive: boolean,
+): Promise<VectorRecognition | null> {
   const source = entities ?? db.entities;
   if (!source.length) return null;
 
@@ -87,6 +103,7 @@ export async function buildVectorRecognition(
     maxDimension: RASTER_MAX,
     entities: source,
     projectViewports: false,
+    permissive,
   });
   if (raster.drawableCount === 0) return null;
   const { dataUrl, width: W, height: H, bounds } = raster;
@@ -119,6 +136,7 @@ export async function buildVectorRecognition(
     padding: 8,
     entities: source,
     projectViewports: false,
+    permissive,
   });
   const wA = analysis.width;
   const hA = analysis.height;
