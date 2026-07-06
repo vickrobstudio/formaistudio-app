@@ -2780,7 +2780,7 @@ type MarkLiftSpec = {
 };
 
 export const MARK_LIFT_SPECS: Record<MarkLiftType, MarkLiftSpec> = {
-  wall:    { label: "Walls",    layerName: LAYER_NAMES.wallsExterior, height: 2.7,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#C8C8C8", material: "concrete_smooth" },
+  wall:    { label: "Walls",    layerName: LAYER_NAMES.wallsExterior, height: 2.7,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#334155", material: "concrete_smooth" },
   door:    { label: "Doors",    layerName: LAYER_NAMES.doors,         height: 2.1,  baseZ: 0,    color: [0.627, 0.322, 0.176], hex: "#A0522D", material: "wood_oak" },
   window:  { label: "Windows",  layerName: LAYER_NAMES.windows,       height: 1.2,  baseZ: 0.9,  color: [0.529, 0.808, 0.922], hex: "#87CEEB", material: "glass_clear" },
   column:  { label: "Columns",  layerName: LAYER_NAMES.columns,       height: 2.7,  baseZ: 0,    color: [0.561, 0.561, 0.561], hex: "#8F8F8F", material: "concrete_smooth" },
