@@ -61,11 +61,19 @@ function PricingPage() {
           <Link to="/" aria-label="Back to FormAI home" className="mx-auto mb-8 inline-block">
             <img src="/app-icon.png" alt="FormAI" className="h-14 w-14 rounded-2xl" />
           </Link>
-          <h1 className="text-4xl font-semibold tracking-tight">Pricing</h1>
-          <p className="mt-3 text-muted-foreground">Subscribe to a single tool, or unlock everything with Pro. Photo to AI is free.</p>
+          <h1 className="text-4xl font-semibold tracking-tight">{onIOS ? "Your tools" : "Pricing"}</h1>
+          <p className="mt-3 text-muted-foreground">{onIOS ? "Every creative tool is available in the app. Start creating from the Tools tab." : "Subscribe to a single tool, or unlock everything with Pro. Photo to AI is free."}</p>
         </header>
 
-        {selected ? (
+        {onIOS ? (
+          <div className="mx-auto max-w-md text-center">
+            <div className="rounded-3xl border bg-card p-8">
+              <p className="text-lg font-semibold">All tools included</p>
+              <p className="mt-2 text-sm text-muted-foreground">2D to 3D, Studio AI, 3D to AI, AI Edits, Photo to AI and Custom Furniture are ready to use.</p>
+              <Link to="/tools" className="mt-6 inline-flex h-12 items-center justify-center rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground">Open the tools</Link>
+            </div>
+          </div>
+        ) : selected ? (
           <div className="rounded-2xl border bg-card p-4">
             <button onClick={() => setSelected(null)} className="mb-4 text-sm text-muted-foreground hover:underline">
               ← Back to pricing

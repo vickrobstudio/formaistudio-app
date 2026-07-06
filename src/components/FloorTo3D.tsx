@@ -348,7 +348,7 @@ export function FloorTo3D() {
           next.push({
             imageDataUrl: sheet.dataUrl,
             label,
-            heightMeters: 2.7,
+            heightMeters: 3.0,
             fileName: sheets.length > 1 ? `${file.name} — ${label}` : file.name,
             ...(sheet.vector
               ? {
@@ -428,7 +428,7 @@ export function FloorTo3D() {
                   imageHeight: f.recognition.imageHeight,
                   planWidthMeters: f.planWidthMetersOverride ?? f.recognition.planWidthMeters,
                   outputUnits,
-                  wallHeightMeters: f.heightMeters || 2.7,
+                  wallHeightMeters: f.heightMeters || 3.0,
                   polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ id: p.id, type: p.type, points: p.points })),
                   rooms: f.vectorRooms ?? [],
                   scaleMethod: f.scaleSource === "cad" ? "cad_units" as const : "user_calibration" as const,
@@ -436,11 +436,11 @@ export function FloorTo3D() {
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`)
             : await withTimeout(generate({
                 data: {
-                  wallHeightMeters: f.heightMeters || 2.7,
+                  wallHeightMeters: f.heightMeters || 3.0,
                   planUnits, outputUnits, subject: "building",
                   building: {
                     scope: "floor",
-                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 2.7, planWidthMeters: f.planWidthMetersOverride }],
+                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 3.0, planWidthMeters: f.planWidthMetersOverride }],
                   },
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`);

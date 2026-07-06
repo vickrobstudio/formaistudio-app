@@ -2780,10 +2780,10 @@ type MarkLiftSpec = {
 };
 
 export const MARK_LIFT_SPECS: Record<MarkLiftType, MarkLiftSpec> = {
-  wall:    { label: "Walls",    layerName: LAYER_NAMES.wallsExterior, height: 2.7,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#334155", material: "concrete_smooth" },
+  wall:    { label: "Walls",    layerName: LAYER_NAMES.wallsExterior, height: 3.0,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#334155", material: "concrete_smooth" },
   door:    { label: "Doors",    layerName: LAYER_NAMES.doors,         height: 2.1,  baseZ: 0,    color: [0.627, 0.322, 0.176], hex: "#A0522D", material: "wood_oak" },
   window:  { label: "Windows",  layerName: LAYER_NAMES.windows,       height: 1.2,  baseZ: 0.9,  color: [0.529, 0.808, 0.922], hex: "#87CEEB", material: "glass_clear" },
-  column:  { label: "Columns",  layerName: LAYER_NAMES.columns,       height: 2.7,  baseZ: 0,    color: [0.561, 0.561, 0.561], hex: "#8F8F8F", material: "concrete_smooth" },
+  column:  { label: "Columns",  layerName: LAYER_NAMES.columns,       height: 3.0,  baseZ: 0,    color: [0.561, 0.561, 0.561], hex: "#8F8F8F", material: "concrete_smooth" },
   stair:   { label: "Stairs",   layerName: LAYER_NAMES.stairs,        height: 1.5,  baseZ: 0,    color: [0.855, 0.647, 0.125], hex: "#DAA520", material: "concrete_polished" },
   cabinet: { label: "Cabinets", layerName: LAYER_NAMES.millwork,      height: 0.9,  baseZ: 0,    color: [0.871, 0.722, 0.529], hex: "#DEB887", material: "wood_oak" },
   floor:   { label: "Floor",    layerName: LAYER_NAMES.slab,          height: 0.15, baseZ: -0.15, color: [0.545, 0.451, 0.333], hex: "#8B7355", material: "concrete_polished" },
