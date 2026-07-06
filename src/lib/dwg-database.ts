@@ -641,23 +641,39 @@ export function rasterizeDatabase(
     if (shell.length >= Math.max(4, drawableEntities.length * 0.1)) drawableEntities = shell;
   }
 
-  // Fall back to entity-bounding-box if extents are empty.
+  // Zoom-to-fit bounds. The header EXTMIN/EXTMAX are often stale or inflated
+  // by a stray far-away entity (a leftover point, a construction line), which
+  // makes the real drawing render as tiny micro-lines in a blank ocean. So we
+  // recompute from the drawn geometry using a ROBUST bounding box: gather all
+  // point coordinates and trim the extreme 0.5% on each axis, discarding
+  // outliers so the frame fits the bulk of the linework (the building).
   let { min, max } = db.extents;
-  // If a specific entity set was supplied (per-layout), recompute bounds
-  // from those entities so the layout fills the page.
   if (opts.entities || max.x - min.x <= 0 || max.y - min.y <= 0) {
-    let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+    const xs: number[] = [];
+    const ys: number[] = [];
     for (const e of drawableEntities) {
       for (const p of pointsOf(e)) {
-        if (p.x < mnX) mnX = p.x; if (p.y < mnY) mnY = p.y;
-        if (p.x > mxX) mxX = p.x; if (p.y > mxY) mxY = p.y;
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) { xs.push(p.x); ys.push(p.y); }
       }
     }
-    if (!isFinite(mnX) || !isFinite(mxX)) {
-      mnX = 0; mnY = 0; mxX = 1000; mxY = 1000;
+    if (xs.length === 0) {
+      min = { x: 0, y: 0 };
+      max = { x: 1000, y: 1000 };
+    } else {
+      xs.sort((a, b) => a - b);
+      ys.sort((a, b) => a - b);
+      const trim = xs.length >= 50 ? 0.005 : 0; // only trim when there's enough data
+      const lo = (arr: number[]) => arr[Math.floor(arr.length * trim)];
+      const hi = (arr: number[]) => arr[Math.min(arr.length - 1, Math.ceil(arr.length * (1 - trim)))];
+      let mnX = lo(xs), mxX = hi(xs), mnY = lo(ys), mxY = hi(ys);
+      // Safety: if trimming collapsed the box (degenerate), fall back to the
+      // full absolute extent so nothing is ever lost on sparse drawings.
+      if (mxX - mnX < 1e-6 || mxY - mnY < 1e-6) {
+        mnX = xs[0]; mxX = xs[xs.length - 1]; mnY = ys[0]; mxY = ys[ys.length - 1];
+      }
+      min = { x: mnX, y: mnY };
+      max = { x: mxX, y: mxY };
     }
-    min = { x: mnX, y: mnY };
-    max = { x: mxX, y: mxY };
   }
 
   const w = Math.max(1, max.x - min.x);
