@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { postToStudioInstagram } from "@/lib/instagram-publish.server";
 
 const CreationIdInput = z.object({ creationId: z.string().uuid() });
 const CommentInput = CreationIdInput.extend({ body: z.string().trim().min(1).max(500) });
@@ -185,5 +186,15 @@ export const sharePublicCreation = createServerFn({ method: "POST" })
       is_public: data.isPublic,
     }).select("id").single();
     if (error) throw new Error("Unable to publish this creation.");
+    if (data.isPublic) {
+      // Cross-posting to Instagram is best-effort and must never block
+      // publishing to the community feed.
+      try {
+        await postToStudioInstagram(
+          data.imageUrl,
+          `${data.title}${data.description ? `\n\n${data.description}` : ""}\n\nBy ${creatorName} on FormAI Studio.`,
+        );
+      } catch { /* ignore */ }
+    }
     return creation;
   });
