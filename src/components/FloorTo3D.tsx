@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { shrinkImageDataUrl } from "@/lib/shrink-image";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Download, Eye, LoaderCircle, Plus, Ruler, ScanSearch, Sparkles, Upload, X } from "lucide-react";
@@ -36,8 +37,8 @@ const information: ToolInfoSection[] = [
 ];
 
 const CLIENT_TIMEOUT_MS = 1_800_000;
-const MAX_DIMENSION = 2400;
-const JPEG_QUALITY = 0.88;
+const MAX_DIMENSION = 2000;
+const JPEG_QUALITY = 0.85;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   let id: ReturnType<typeof setTimeout> | undefined;
@@ -114,7 +115,7 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
       try {
         const vector = await buildVectorRecognition(db);
         if (vector) {
-          out.push({ dataUrl: vector.dataUrl, label: "Ground floor", vector });
+          out.push({ dataUrl: await shrinkImageDataUrl(vector.dataUrl, 2400, 0.85), label: "Ground floor", vector });
         }
       } catch (cause) {
         console.warn("vector extraction failed — falling back to raster sheets", cause);

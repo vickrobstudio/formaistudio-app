@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { streamImage } from "@/lib/stream-image";
 import { ShareCreationDialog } from "@/components/ShareCreationDialog";
+import { shrinkImageDataUrl } from "@/lib/shrink-image";
 import { useCredits } from "@/hooks/use-credits";
 import { FurnitureSketchBoard } from "@/components/FurnitureSketchBoard";
 import { AiPlanGenerator } from "@/components/AiPlanGenerator";
@@ -40,7 +41,7 @@ export function FurnitureCreator() {
   function attach(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).slice(0, 4);
     if (files.some((file) => file.size > 10_000_000)) return setError("Each reference must be smaller than 10 MB.");
-    Promise.all(files.map((file) => new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : ""); reader.readAsDataURL(file); }))).then((images) => setReferences(images.filter(Boolean)));
+    Promise.all(files.map((file) => new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : ""); reader.readAsDataURL(file); }))).then(async (images) => setReferences(await Promise.all(images.filter(Boolean).map((image) => shrinkImageDataUrl(image, 1600)))));
   }
 
   async function create() {

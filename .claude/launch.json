@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "prod-bundle-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "5544", "-d", "dist/client"],
+      "port": 5544
     }
   ]
 }

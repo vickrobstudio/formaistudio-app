@@ -12,6 +12,7 @@ import { photoInformation } from "@/lib/tool-information";
 import { streamImage } from "@/lib/stream-image";
 import { FurnitureLibraryPicker } from "@/components/FurnitureLibraryPicker";
 import { useCredits } from "@/hooks/use-credits";
+import { shrinkImageDataUrl } from "@/lib/shrink-image";
 import { SceneComposer } from "@/components/SceneComposer";
 import { AiPlanGenerator } from "@/components/AiPlanGenerator";
 import { saveMediaToDevice } from "@/lib/save-to-device";
@@ -100,9 +101,19 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
       setFileError("Image must be 10 MB or smaller.");
       return;
     }
-    setFiles(selected);
     const reader = new FileReader();
-    reader.onload = () => setPreview(typeof reader.result === "string" ? reader.result : null);
+    reader.onload = async () => {
+      const raw = typeof reader.result === "string" ? reader.result : null;
+      if (!raw) return;
+      // Shrink before sending — full-size photos exceed the server's
+      // request-size limit and the chat would fail silently.
+      const shrunk = await shrinkImageDataUrl(raw, 1600);
+      const blob = await (await fetch(shrunk)).blob();
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([blob], "photo.jpg", { type: blob.type || "image/jpeg" }));
+      setFiles(transfer.files);
+      setPreview(shrunk);
+    };
     reader.readAsDataURL(file);
   }
 

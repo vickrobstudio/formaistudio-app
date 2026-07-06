@@ -39,7 +39,12 @@ export default defineConfig(async ({ command }) => {
   // the iOS static shell (which prerenders via a plain Vite preview server).
   if (command === "build" && !isIosBuild) {
     const { nitro } = await import("nitro/vite");
-    plugins.push(nitro({ preset: "vercel" }));
+    plugins.push(nitro({
+      preset: "vercel",
+      // Claude floor-plan analyses can run for minutes; without this Vercel
+      // kills the function at its short default and the 2D→3D tool fails.
+      vercel: { functions: { maxDuration: 300 } },
+    } as Parameters<typeof nitro>[0]));
   }
 
   return {
