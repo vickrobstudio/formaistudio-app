@@ -82,7 +82,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
         type: p.type as MarkLiftType,
         points: p.points as Array<[number, number]>,
       }));
-      const traced = (shapes ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      const traced = (shapes?.polygons ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
       const useTraced = traced.some((p) => p.type === "floor");
       const merged = useTraced
         ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]

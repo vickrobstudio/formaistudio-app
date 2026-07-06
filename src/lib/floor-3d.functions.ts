@@ -2806,18 +2806,27 @@ const DetectedPolygon = z.object({
   points: z.array(z.tuple([z.number(), z.number()])).min(3).max(200),
   confidence: z.number().min(0).max(1).optional(),
 });
-const DetectedSchema = z.object({ polygons: z.array(DetectedPolygon).max(400) });
+const RoomLabelSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  at: z.tuple([z.number(), z.number()]),
+});
+const DetectedSchema = z.object({
+  polygons: z.array(DetectedPolygon).max(400),
+  roomLabels: z.array(RoomLabelSchema).max(80).default([]),
+});
 
 export type DetectedFloorPolygon = z.infer<typeof DetectedPolygon> & { id: string };
+export type DetectedRoomLabel = z.infer<typeof RoomLabelSchema>;
 
 export const detectFloorElements = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => DetectInput.parse(input))
   .handler(async ({ data }): Promise<
-    | { ok: true; polygons: DetectedFloorPolygon[] }
+    | { ok: true; polygons: DetectedFloorPolygon[]; roomLabels: DetectedRoomLabel[] }
     | { ok: false; error: string }
   > => {
     const instruction = `You are an architectural drawing recognition AI. Read the uploaded 2D black-line architectural plan and identify each building element correctly. Look at the black lines, shapes, symbols, thicknesses, and enclosed areas — understand what each line represents in real architecture. The goal: only the black-lined boundaries remain, classified and ready to lift into a clean 3D model.
-Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|column|stair|cabinet|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...]}.
+Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|column|stair|cabinet|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...], "roomLabels":[{"name":"<room name exactly as printed>","at":[x,y]}, ...]}.
+- "roomLabels": READ THE WORDS PRINTED ON THE PLAN. Every room name written on the drawing (LIVING, DINING, KITCHEN, M. BEDROOM, M. BATH, FOYER, LANAI, DEN/OFFICE, LAUNDRY, W.C., POOL BATH…) becomes one entry with the normalized [x,y] center of that printed text. Copy the printed wording exactly; never invent names; skip dimensions, notes and title-block text.
 
 HOW TO RECOGNISE EACH ELEMENT:
 - "wall" — thick black lines, double lines, closed wall shapes, long continuous boundaries that form rooms. Trace the filled body of the wall as a thin strip along its thickness, one polygon per wall segment.
@@ -2840,26 +2849,41 @@ CLASSIFICATION RULES:
 - Return ONLY the JSON object, no comments, no markdown.`;
 
     const { claudeExtractJson } = await import("./claude.server");
-    const extraction = await claudeExtractJson({
-      parts: [
-        { type: "text", text: instruction },
-        { type: "image_url", image_url: { url: data.imageDataUrl } },
-      ],
-      timeoutMs: 5 * 60 * 1000,
-    });
-    if (!extraction.ok) {
-      console.error("[mark-lift] detect failed", extraction.status, extraction.error.slice(0, 300));
-      return { ok: false, error: extraction.error };
+    // Model output is occasionally malformed — one retry rescues those runs.
+    let lastError = "The AI response was not valid JSON.";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const extraction = await claudeExtractJson({
+        parts: [
+          { type: "text", text: instruction },
+          { type: "image_url", image_url: { url: data.imageDataUrl } },
+        ],
+        timeoutMs: 5 * 60 * 1000,
+      });
+      if (!extraction.ok) {
+        console.error("[mark-lift] detect failed", extraction.status, extraction.error.slice(0, 300));
+        if (extraction.status === 401 || extraction.status === 402 || extraction.status === 403) {
+          return { ok: false, error: extraction.error };
+        }
+        lastError = extraction.error;
+        continue;
+      }
+      let parsed: unknown;
+      try {
+        parsed = parseJsonFromModelText(extraction.text);
+      } catch {
+        lastError = "The AI response was not valid JSON.";
+        continue;
+      }
+      const result = DetectedSchema.safeParse(parsed);
+      if (!result.success) {
+        console.error("[mark-lift] detect schema invalid", result.error.issues.slice(0, 5));
+        lastError = "Detection returned an invalid shape. Try a clearer image.";
+        continue;
+      }
+      const polygons: DetectedFloorPolygon[] = result.data.polygons.map((p, i) => ({ ...p, id: `det_${i}` }));
+      return { ok: true, polygons, roomLabels: result.data.roomLabels };
     }
-    let parsed: unknown;
-    try { parsed = parseJsonFromModelText(extraction.text); } catch { return { ok: false, error: "The AI response was not valid JSON." }; }
-    const result = DetectedSchema.safeParse(parsed);
-    if (!result.success) {
-      console.error("[mark-lift] detect schema invalid", result.error.issues.slice(0, 5));
-      return { ok: false, error: "Detection returned an invalid shape. Try a clearer image." };
-    }
-    const polygons: DetectedFloorPolygon[] = result.data.polygons.map((p, i) => ({ ...p, id: `det_${i}` }));
-    return { ok: true, polygons };
+    return { ok: false, error: lastError };
   });
 
 // ── Lift annotated polygons into a per-type grouped 3D model ────────────────

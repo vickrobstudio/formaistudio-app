@@ -244,7 +244,7 @@ export function FloorTo3D() {
         import("@/lib/image-plan-shapes").then((m) => m.extractPlanShapes(f.imageDataUrl)).catch(() => null),
         detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } }).catch(() => null),
       ]);
-      const traced: RecognizedPolygon[] = (shapes ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      const traced: RecognizedPolygon[] = (shapes?.polygons ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
       const ai: RecognizedPolygon[] = (result && result.ok ? result.polygons : []).map((p, k) => ({
         id: p.id ?? `det_${k}`,
         type: p.type as MarkLiftType,
@@ -254,6 +254,15 @@ export function FloorTo3D() {
       const polygons: RecognizedPolygon[] = useTraced
         ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
         : ai;
+      // Name the traced rooms from the labels the AI read off the plan.
+      const labels = result && result.ok ? (result.roomLabels ?? []) : [];
+      const { pointInPolygon } = await import("@/lib/image-plan-shapes");
+      const namedRooms = useTraced && shapes
+        ? shapes.roomOutlines.map((points) => ({
+            points,
+            name: labels.find((l) => pointInPolygon(l.at[0], l.at[1], points))?.name,
+          }))
+        : undefined;
       if (!polygons.length) {
         const message = result && !result.ok ? result.error : "No enclosed shapes found. Open Elements to draw the outline, or upload a sharper plan.";
         setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: message } : x));
@@ -263,6 +272,7 @@ export function FloorTo3D() {
         ...x,
         recognizing: false,
         recognition: { imageWidth: width, imageHeight: height, planWidthMeters: x.planWidthMetersOverride ?? 12, polygons },
+        vectorRooms: namedRooms ?? x.vectorRooms,
       } : x));
       setRecognitionPreview(index);
     } catch (cause) {
