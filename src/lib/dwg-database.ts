@@ -308,9 +308,16 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
     };
   });
 
-  const entities: DwgEntityLite[] = (db.entities ?? []).map((e, i) =>
+  let entities: DwgEntityLite[] = (db.entities ?? []).map((e, i) =>
     normalizeEntity(e as unknown as Record<string, unknown>, i),
   );
+  // DWG files frequently keep ALL model-space entities inside the
+  // `*Model_Space` block record and leave the top-level list empty —
+  // without this harvest the whole drawing looks blank.
+  if (entities.length === 0) {
+    const modelBlock = blocks.find((b) => /^\*model[_ ]?space$/i.test(b.name));
+    if (modelBlock?.entities?.length) entities = modelBlock.entities;
+  }
 
   // Extract per-layout entity buckets. Model space is `db.entities`;
   // every other layout lives inside a BLOCK_RECORD whose `layout` handle

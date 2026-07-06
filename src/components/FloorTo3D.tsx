@@ -112,14 +112,32 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
     // Vector-first: Model space carries the real-world coordinates, so it
     // yields a deterministic no-AI extraction (boundaries + rooms + true
     // scale from CAD units). Paper-space sheets follow as plain rasters.
-    if (db.entities.length > 0) {
+    const modelEntities = (() => {
+      const model = (db.layouts ?? []).find((l) => l.isModelSpace)?.entities ?? [];
+      return model.length >= db.entities.length ? model : db.entities;
+    })();
+    if (modelEntities.length > 0) {
+      let vectorOk = false;
       try {
-        const vector = await buildVectorRecognition(db);
+        const vector = await buildVectorRecognition(db, modelEntities);
         if (vector) {
           out.push({ dataUrl: await shrinkImageDataUrl(vector.dataUrl, 2400, 0.85), label: "Ground floor", vector });
+          vectorOk = true;
         }
       } catch (cause) {
-        console.warn("vector extraction failed — falling back to raster sheets", cause);
+        console.warn("vector extraction failed — falling back to model-space raster", cause);
+      }
+      if (!vectorOk) {
+        // Vector polygonization couldn't cope — rasterize model space and
+        // let the image pipeline (shape tracer + tiled AI) take over.
+        try {
+          const raster = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: modelEntities, projectViewports: false });
+          if (raster.drawableCount > 0) {
+            out.push({ dataUrl: await shrinkImageDataUrl(raster.dataUrl, 2400, 0.85), label: "Ground floor" });
+          }
+        } catch (cause) {
+          console.warn("model-space raster failed", cause);
+        }
       }
     }
 
