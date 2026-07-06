@@ -550,9 +550,26 @@ export function describePrecheckIssues(issues: DwgPrecheckIssue[]): string {
  * this helper is opt-in for callers that still need an image, e.g. the
  * room-segmentation step.
  */
+// Layers that are NOT the building shell — furniture, fixtures, MEP, site,
+// people/cars. In architectural-only mode these are stripped so only walls,
+// doors, windows, floors and roof survive.
+const NON_ARCH_TOKENS = [
+  "furn", "furniture", "furnishing", "fixture", "fixtures", "casework", "cabinet",
+  "cabinets", "millwork", "appliance", "appliances", "equip", "equipment",
+  "plumb", "plumbing", "sanitary", "elec", "electric", "electrical", "power",
+  "data", "comm", "lighting", "light", "lite", "lites", "hvac", "mech", "mechanical", "duct",
+  "fire", "sprinkler", "landscape", "planting", "plant", "plants", "tree",
+  "trees", "shrub", "car", "cars", "vehicle", "vehicles", "people", "person",
+  "furniture", "rcp", "reflected", "detail", "section",
+];
+const NON_ARCH_LAYER = new RegExp(
+  `(^|[\\s\\-_.])(${NON_ARCH_TOKENS.join("|")})($|[\\s\\-_.])`,
+  "i",
+);
+
 export function rasterizeDatabase(
   db: DwgDatabaseLite,
-  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[]; projectViewports?: boolean; permissive?: boolean } = {},
+  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[]; projectViewports?: boolean; permissive?: boolean; architecturalOnly?: boolean } = {},
 ): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"]; drawableCount: number } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
@@ -611,7 +628,18 @@ export function rasterizeDatabase(
   // If a CAD author put real plan linework on a badly named layer, keep the
   // preview from going blank. Entity types still remove text/dimensions/arrows,
   // and dashed/hidden/center linetypes still stay out.
-  const drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
+  let drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
+
+  // Architectural-only cleaning (Building mode): drop furniture, fixtures,
+  // MEP, casework and site layers so only the building shell — walls, doors,
+  // windows, floors and roof — is rasterized. Skipped if it would remove
+  // everything (unconventional layer naming), so a plan never goes blank.
+  if (opts.architecturalOnly) {
+    const shell = drawableEntities.filter((e) => !NON_ARCH_LAYER.test(e.layer));
+    // Keep the cleaned set unless it stripped almost everything (which would
+    // mean layers aren't named conventionally — then don't risk a blank plan).
+    if (shell.length >= Math.max(4, drawableEntities.length * 0.1)) drawableEntities = shell;
+  }
 
   // Fall back to entity-bounding-box if extents are empty.
   let { min, max } = db.extents;

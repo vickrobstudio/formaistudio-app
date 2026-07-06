@@ -118,9 +118,12 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
       return model.length >= db.entities.length ? model : db.entities;
     })();
     if (modelEntities.length > 0) {
+      // Building mode: clean the DWG to the building shell — keep walls,
+      // doors, windows, floors and roof; strip furniture, fixtures, MEP and
+      // site layers.
       let vectorOk = false;
       try {
-        const vector = await buildVectorRecognition(db, modelEntities);
+        const vector = await buildVectorRecognition(db, modelEntities, { architecturalOnly: true });
         if (vector) {
           out.push({ dataUrl: await shrinkImageDataUrl(vector.dataUrl, 2400, 0.85), label: "Ground floor", vector });
           vectorOk = true;
@@ -129,10 +132,10 @@ async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; l
         console.warn("vector extraction failed — falling back to model-space raster", cause);
       }
       if (!vectorOk) {
-        // Vector polygonization couldn't cope — rasterize model space and
-        // let the image pipeline (shape tracer + tiled AI) take over.
+        // Vector polygonization couldn't cope — rasterize the cleaned model
+        // space and let the image pipeline (shape tracer + tiled AI) take over.
         try {
-          const raster = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: modelEntities, projectViewports: false });
+          const raster = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: modelEntities, projectViewports: false, architecturalOnly: true });
           if (raster.drawableCount > 0) {
             out.push({ dataUrl: await shrinkImageDataUrl(raster.dataUrl, 2400, 0.85), label: "Ground floor" });
           }

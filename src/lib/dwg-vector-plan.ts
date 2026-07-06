@@ -79,13 +79,14 @@ function isRoomLabel(text: string): boolean {
 export async function buildVectorRecognition(
   db: DwgDatabaseLite,
   entities?: DwgEntityLite[],
+  opts: { architecturalOnly?: boolean } = {},
 ): Promise<VectorRecognition | null> {
   // Strict layer/linetype filtering first (clean plans); if that fails to
   // enclose at least two areas, retry grabbing EVERY vector line — real
   // DWGs often keep walls on unconventionally named layers or linetypes.
-  const strict = await buildVectorRecognitionPass(db, entities, false);
+  const strict = await buildVectorRecognitionPass(db, entities, false, opts.architecturalOnly);
   if (strict && strict.rooms.length >= 2) return strict;
-  const relaxed = await buildVectorRecognitionPass(db, entities, true);
+  const relaxed = await buildVectorRecognitionPass(db, entities, true, opts.architecturalOnly);
   if (!relaxed) return strict;
   if (!strict) return relaxed;
   return relaxed.rooms.length > strict.rooms.length ? relaxed : strict;
@@ -95,6 +96,7 @@ async function buildVectorRecognitionPass(
   db: DwgDatabaseLite,
   entities: DwgEntityLite[] | undefined,
   permissive: boolean,
+  architecturalOnly?: boolean,
 ): Promise<VectorRecognition | null> {
   const source = entities ?? db.entities;
   if (!source.length) return null;
@@ -104,6 +106,7 @@ async function buildVectorRecognitionPass(
     entities: source,
     projectViewports: false,
     permissive,
+    architecturalOnly,
   });
   if (raster.drawableCount === 0) return null;
   const { dataUrl, width: W, height: H, bounds } = raster;
@@ -137,6 +140,7 @@ async function buildVectorRecognitionPass(
     entities: source,
     projectViewports: false,
     permissive,
+    architecturalOnly,
   });
   const wA = analysis.width;
   const hA = analysis.height;
