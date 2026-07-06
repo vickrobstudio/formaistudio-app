@@ -19,20 +19,20 @@ import { closeOpenings, extractRoomRegions, type RoomRegion } from "./floor-pipe
 
 export type PlanShapePolygon = {
   id: string;
-  type: "wall" | "floor";
+  type: "wall" | "floor" | "door" | "window";
   points: Array<[number, number]>;
 };
 
 export type PlanShapes = {
   polygons: PlanShapePolygon[];
   /**
-   * Traced regions with their wall-boundedness score (0..1 — how much of
-   * the outline runs along thick wall strokes). The caller arbitrates:
-   * a region is a real room if it contains a printed room label OR its
-   * wallScore is high; everything else (dimension slivers, title blocks,
-   * site cells) gets dropped together with its wall bands.
+   * Traced regions with their wall-boundedness score (0..1) and text
+   * density (how much of the interior was removed as text — title blocks
+   * and note boxes are text-stuffed). The caller arbitrates: a region is
+   * a real room if a printed ROOM label sits inside it, or its wallScore
+   * is high and it isn't full of text.
    */
-  rooms: Array<{ index: number; points: Array<[number, number]>; wallScore: number }>;
+  rooms: Array<{ index: number; points: Array<[number, number]>; wallScore: number; textScore: number }>;
 };
 
 export function pointInPolygon(x: number, y: number, poly: Array<[number, number]>): boolean {
@@ -167,14 +167,72 @@ function strokeStats(mask: Uint8Array, w: number, h: number): { p25: number; p75
 }
 
 type TraceAttempt = {
-  rooms: Array<{ region: RoomRegion; wallScore: number }>;
+  rooms: Array<{ region: RoomRegion; wallScore: number; textScore: number }>;
   /** Whether the wall mask was dense enough to score regions against. */
   usable: boolean;
   w: number;
   h: number;
   wallMask: Uint8Array;
   p75: number;
+  closeRadius: number;
 };
+
+/**
+ * The door-sealing closing rounds every room corner into a diagonal chamfer
+ * (which then reads as a fake door). Square them back: a short edge flanked
+ * by two long edges is replaced with the intersection of the flanking lines.
+ */
+function squareCorners(pts: Array<[number, number]>, closeRadius: number): Array<[number, number]> {
+  const n = pts.length;
+  if (n < 4) return pts;
+  const longMin = closeRadius * 2.2;
+  const maxDetour = closeRadius * 5;
+  const edgeLen = (i: number) => {
+    const a = pts[i], b = pts[(i + 1) % n];
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  };
+  const longEdges: number[] = [];
+  for (let i = 0; i < n; i++) if (edgeLen(i) >= longMin) longEdges.push(i);
+  if (longEdges.length < 2) return pts;
+
+  const out: Array<[number, number]> = [];
+  for (let li = 0; li < longEdges.length; li++) {
+    const e1 = longEdges[li];
+    const e2 = longEdges[(li + 1) % longEdges.length];
+    // The long edge itself starts where the previous corner ended.
+    out.push(pts[e1], pts[(e1 + 1) % n]);
+    // Chain between end of e1 and start of e2 (the rounded corner steps).
+    const chain: Array<[number, number]> = [];
+    for (let j = (e1 + 1) % n; j !== e2; j = (j + 1) % n) {
+      if (j !== (e1 + 1) % n) chain.push(pts[j]);
+    }
+    const b1 = pts[(e1 + 1) % n];
+    const a2 = pts[e2];
+    const gap = Math.hypot(a2[0] - b1[0], a2[1] - b1[1]);
+    const a1 = pts[e1];
+    const b2 = pts[(e2 + 1) % n];
+    const r = [b1[0] - a1[0], b1[1] - a1[1]];
+    const s = [b2[0] - a2[0], b2[1] - a2[1]];
+    const denom = r[0] * s[1] - r[1] * s[0];
+    let squared = false;
+    if (gap <= maxDetour && Math.abs(denom) > 1e-9) {
+      const t = ((a2[0] - a1[0]) * s[1] - (a2[1] - a1[1]) * s[0]) / denom;
+      const px = a1[0] + t * r[0];
+      const py = a1[1] + t * r[1];
+      if (Math.hypot(px - b1[0], py - b1[1]) <= closeRadius * 4.5) {
+        // Replace the whole rounded chain with the true corner point.
+        out[out.length - 1] = [px, py];
+        squared = true;
+      }
+    }
+    if (!squared) out.push(...chain);
+  }
+  // Remove immediate duplicates.
+  return out.filter((p, i) => {
+    const q = out[(i - 1 + out.length) % out.length];
+    return Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.5;
+  });
+}
 
 function traceAtScale(img: HTMLImageElement, srcW: number, srcH: number, longSide: number): TraceAttempt | null {
   const scale = Math.min(1, longSide / Math.max(srcW, srcH));
@@ -243,16 +301,40 @@ function traceAtScale(img: HTMLImageElement, srcW: number, srcH: number, longSid
     }
     return sampled > 0 ? touched / sampled : 0;
   };
-  const rooms: Array<{ region: RoomRegion; wallScore: number }> = [];
+  // Text density inside a region: title blocks and note boxes are stuffed
+  // with removed-text pixels; rooms carry only a sparse label.
+  const textScoreOf = (region: RoomRegion): number => {
+    let minX = 1, maxX = 0, minY = 1, maxY = 0;
+    for (const [px, py] of region.polygon) {
+      if (px < minX) minX = px; if (px > maxX) maxX = px;
+      if (py < minY) minY = py; if (py > maxY) maxY = py;
+    }
+    let inside = 0, text = 0;
+    for (let gy = 0; gy < 16; gy++) {
+      for (let gx = 0; gx < 16; gx++) {
+        const nx = minX + ((gx + 0.5) / 16) * (maxX - minX);
+        const ny = minY + ((gy + 0.5) / 16) * (maxY - minY);
+        if (!pointInPolygon(nx, ny, region.polygon)) continue;
+        inside++;
+        const px = Math.min(w - 1, Math.round(nx * w));
+        const py = Math.min(h - 1, Math.round(ny * h));
+        const i = py * w + px;
+        if (mask[i] && !clean[i]) text++;
+      }
+    }
+    return inside > 0 ? text / inside : 0;
+  };
+
+  const rooms: Array<{ region: RoomRegion; wallScore: number; textScore: number }> = [];
   for (const region of regions) {
     const area = polygonArea(region.polygon);
     if (area < 0.003 || area > 0.55) continue;
     const wallScore = scoreRegion(region);
     if (wallScore < 0.2) continue; // pure hairline cells never qualify
-    rooms.push({ region, wallScore });
+    rooms.push({ region, wallScore, textScore: textScoreOf(region) });
   }
 
-  return { rooms, usable: wallMaskUsable, w, h, wallMask, p75 };
+  return { rooms, usable: wallMaskUsable, w, h, wallMask, p75, closeRadius };
 }
 
 /** Measure the drawn wall depth outward from a room edge via the wall mask. */
@@ -260,16 +342,17 @@ function probeWallDepth(
   wallMask: Uint8Array, w: number, h: number,
   x: number, y: number, nx: number, ny: number,
   maxT: number,
+  startGap: number,
 ): number {
   let started = -1;
   let depth = 0;
-  for (let s = 1; s <= maxT; s++) {
+  for (let s = 1; s <= maxT + startGap; s++) {
     const px = Math.round(x + nx * s), py = Math.round(y + ny * s);
     if (px < 0 || py < 0 || px >= w || py >= h) break;
     const on = wallMask[py * w + px] === 1;
     if (on) { if (started < 0) started = s; depth = s - started + 1; }
     else if (started >= 0) break;
-    else if (s > 6) break; // no wall within reach
+    else if (s > startGap) break; // no wall within reach
   }
   return started >= 0 ? depth : 0;
 }
@@ -290,34 +373,43 @@ export async function extractPlanShapes(imageDataUrl: string): Promise<PlanShape
     if (attempt && quality(attempt) > (best ? quality(best) : 0)) best = attempt;
   }
   if (!best || !best.rooms.length) return null;
-  const { rooms, w, h, wallMask, p75 } = best;
+  const { rooms, w, h, wallMask, p75, closeRadius } = best;
 
   const L = Math.max(w, h);
   const minT = Math.max(3, Math.round(L * 0.008));
   const maxT = Math.round(L * 0.045);
+  // Contours can sit a few px off the wall face (door-seal bridges) and
+  // window lines a wall-gap away — let the probe reach across both.
+  const startGap = Math.max(8, Math.round(p75 * 3));
   const defaultT = Math.round(Math.min(maxT, Math.max(L * 0.012, p75 * 1.6)));
   const polygons: PlanShapePolygon[] = [];
   const roomsOut: PlanShapes["rooms"] = [];
 
-  rooms.forEach(({ region, wallScore }, ri) => {
-    polygons.push({ id: `shape_floor_${ri}`, type: "floor", points: region.polygon });
-    roomsOut.push({ index: ri, points: region.polygon, wallScore });
-
+  rooms.forEach(({ region, wallScore, textScore }, ri) => {
     // Merge near-collinear contour steps into long clean wall runs.
     const raw = region.contourPx;
-    const pts: Array<[number, number]> = [];
+    const merged: Array<[number, number]> = [];
     for (const p of raw) {
-      if (pts.length >= 2) {
-        const a = pts[pts.length - 2];
-        const b = pts[pts.length - 1];
+      if (merged.length >= 2) {
+        const a = merged[merged.length - 2];
+        const b = merged[merged.length - 1];
         const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]);
         const l2 = Math.hypot(p[0] - b[0], p[1] - b[1]);
         const dot = l1 && l2 ? ((b[0] - a[0]) * (p[0] - b[0]) + (b[1] - a[1]) * (p[1] - b[1])) / (l1 * l2) : 0;
-        if (dot > 0.995) { pts[pts.length - 1] = p; continue; }
+        if (dot > 0.995) { merged[merged.length - 1] = p; continue; }
       }
-      pts.push(p);
+      merged.push(p);
     }
+    // Square the door-seal corner chamfers back to true corners so floors
+    // are rectangular and no phantom door bands appear on the diagonals.
+    const pts = squareCorners(merged, closeRadius);
+    const floorPts = pts.map(([px, py]) => [px / w, py / h] as [number, number]);
+    polygons.push({ id: `shape_floor_${ri}`, type: "floor", points: floorPts });
+    roomsOut.push({ index: ri, points: floorPts, wallScore, textScore });
 
+    // Pass 1: measure the drawn wall depth along every boundary segment.
+    type Seg = { x0: number; y0: number; dx: number; dy: number; len: number; nx: number; ny: number; depth: number };
+    const segs: Seg[] = [];
     for (let i = 0; i < pts.length; i++) {
       const [x0, y0] = pts[i];
       const [x1, y1] = pts[(i + 1) % pts.length];
@@ -332,24 +424,63 @@ export async function extractPlanShapes(imageDataUrl: string): Promise<PlanShape
         nx = -nx;
         ny = -ny;
       }
-      // True drawn thickness: median of three probes along the segment.
       const depths = [0.25, 0.5, 0.75]
-        .map((f) => probeWallDepth(wallMask, w, h, x0 + dx * f, y0 + dy * f, nx, ny, maxT))
+        .map((f) => probeWallDepth(wallMask, w, h, x0 + dx * f, y0 + dy * f, nx, ny, maxT, startGap))
         .filter((d) => d > 0)
         .sort((a, b) => a - b);
-      const measured = depths.length ? depths[Math.floor(depths.length / 2)] : defaultT;
-      const t = Math.max(minT, Math.min(maxT, measured));
-      polygons.push({
-        id: `shape_wall_${ri}_${i}`,
-        type: "wall",
-        points: [
-          [x0 / w, y0 / h],
-          [x1 / w, y1 / h],
-          [(x1 + nx * t) / w, (y1 + ny * t) / h],
-          [(x0 + nx * t) / w, (y0 + ny * t) / h],
-        ],
-      });
+      const depth = depths.length ? depths[Math.floor(depths.length / 2)] : 0;
+      segs.push({ x0, y0, dx, dy, len, nx, ny, depth });
     }
+    const positives = segs.filter((s) => s.depth > 0).map((s) => s.depth).sort((a, b) => a - b);
+    const medT = positives.length ? positives[Math.floor(positives.length / 2)] : defaultT;
+
+    // Pass 2: walk each boundary run sampling the drawn wall depth, and
+    // split it where the wall character changes: no wall → door (if door
+    // sized) or open passage; much thinner than the room's median → window
+    // symbol; otherwise wall at its drawn (tamed) thickness.
+    const classOf = (d: number): 0 | 1 | 2 => (d === 0 ? 0 : medT >= 4 && d <= medT * 0.5 ? 1 : 2);
+    segs.forEach((s, i) => {
+      const steps = Math.max(3, Math.round(s.len / (L * 0.012)));
+      const samples: number[] = [];
+      for (let k = 0; k < steps; k++) {
+        const f = (k + 0.5) / steps;
+        samples.push(probeWallDepth(wallMask, w, h, s.x0 + s.dx * f, s.y0 + s.dy * f, s.nx, s.ny, maxT, startGap));
+      }
+      let runStart = 0;
+      for (let k = 1; k <= steps; k++) {
+        if (k !== steps && classOf(samples[k]) === classOf(samples[runStart])) continue;
+        const f0 = runStart / steps;
+        const f1 = k / steps;
+        const cl = classOf(samples[runStart]);
+        const frac = (s.len * (f1 - f0)) / L;
+        const runDepths = samples.slice(runStart, k).filter((d) => d > 0).sort((a, b) => a - b);
+        const depth = runDepths.length ? runDepths[Math.floor(runDepths.length / 2)] : 0;
+        runStart = k;
+        // Walls only: where the drawing has a wall, a band at its drawn
+        // (tamed) thickness; where it has none, NOTHING — no fabricated
+        // band over doorways and passages. Doors/windows come from the
+        // tiled AI pass, which sees the actual symbols.
+        let type: "wall" | null = null;
+        let t = 0;
+        if (cl !== 0 && frac >= 0.004) {
+          type = "wall";
+          t = Math.max(minT, Math.min(maxT, Math.min(depth || medT, Math.round(medT * 1.8))));
+        }
+        if (!type) continue;
+        const ax = s.x0 + s.dx * f0, ay = s.y0 + s.dy * f0;
+        const bx = s.x0 + s.dx * f1, by = s.y0 + s.dy * f1;
+        polygons.push({
+          id: `shape_${type}_${ri}_${i}_${k}`,
+          type,
+          points: [
+            [ax / w, ay / h],
+            [bx / w, by / h],
+            [(bx + s.nx * t) / w, (by + s.ny * t) / h],
+            [(ax + s.nx * t) / w, (ay + s.ny * t) / h],
+          ],
+        });
+      }
+    });
   });
 
   // The lift endpoint caps polygons — keep all floors, trim excess walls.

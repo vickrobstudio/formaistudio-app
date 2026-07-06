@@ -72,9 +72,10 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
       // Walls and floors come from deterministic shape tracing — enclosed
       // regions of the black linework itself, so geometry hugs the plan.
       // The AI supplies the semantic extras (doors, windows, stairs, …).
-      const [shapes, result] = await Promise.all([
+      const [shapes, result, tiled] = await Promise.all([
         extractPlanShapes(imageDataUrl).catch(() => null),
         detectFn({ data: { imageDataUrl, imageWidth, imageHeight } }).catch(() => null),
+        import("@/lib/tiled-openings").then((m) => m.detectOpeningsTiled(imageDataUrl, (input) => detectFn(input))).catch(() => []),
       ]);
       const manual = polygons.filter((p) => p.id.startsWith("man_"));
       const ai = (result && result.ok ? result.polygons : []).map((p, i) => ({
@@ -85,21 +86,31 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
       // Same arbitration as the main flow: keep regions with a printed room
       // label inside or a firmly wall-bounded outline.
       const labels = result && result.ok ? (result.roomLabels ?? []) : [];
+      const OUTDOOR_LABEL = /\b(pool|spa|sun\s?deck|deck|planter|port\s?cochere|driveway|patio|terrace|garden|yard|equipment)\b/i;
       const keptIndex = new Set(
         (shapes?.rooms ?? [])
-          .filter((room) => room.wallScore >= 0.7 || labels.some((l) => pointInPolygon(l.at[0], l.at[1], room.points)))
+          .filter((room) => {
+            const label = labels.find((l) => pointInPolygon(l.at[0], l.at[1], room.points));
+            if (label && !OUTDOOR_LABEL.test(label.name)) return true;
+            return room.wallScore >= 0.7 && room.textScore < 0.06 && !(label && OUTDOOR_LABEL.test(label.name));
+          })
           .map((room) => room.index),
       );
       const traced = (shapes?.polygons ?? [])
         .filter((p) => {
-          const m = p.id.match(/^shape_(?:floor|wall)_(\d+)/);
+          const m = p.id.match(/^shape_(?:floor|wall|door|window)_(\d+)/);
           return !m || keptIndex.has(Number(m[1]));
         })
         .map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      const tiledOpenings = tiled.map((p, i) => ({
+        id: `tile_${Date.now()}_${i}`,
+        type: p.type as MarkLiftType,
+        points: p.points,
+      }));
       const useTraced = traced.some((p) => p.type === "floor");
       const merged = useTraced
-        ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
-        : ai;
+        ? [...traced, ...tiledOpenings, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
+        : [...ai, ...tiledOpenings];
       if (!merged.length) {
         setError(result && !result.ok ? result.error : "No enclosed shapes found — draw the outline manually or try a sharper image.");
         return;

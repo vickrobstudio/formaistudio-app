@@ -240,9 +240,12 @@ export function FloorTo3D() {
       const { width, height } = await getImageSize(f.imageDataUrl);
       // Deterministic shape tracing supplies walls + floors that hug the
       // black linework; the AI adds doors, windows, stairs and fixtures.
-      const [shapes, result] = await Promise.all([
+      const [shapes, result, tiled] = await Promise.all([
         import("@/lib/image-plan-shapes").then((m) => m.extractPlanShapes(f.imageDataUrl)).catch(() => null),
         detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } }).catch(() => null),
+        // Door/window symbols are tiny on a full sheet — a 2×2 tiled pass
+        // gives the AI 4× the resolution to actually see them.
+        import("@/lib/tiled-openings").then((m) => m.detectOpeningsTiled(f.imageDataUrl, (input) => detect(input))).catch(() => []),
       ]);
       // Arbitration: a traced region is a real room if a printed room label
       // sits inside it OR its outline runs firmly along walls. Dimension
@@ -250,13 +253,17 @@ export function FloorTo3D() {
       // together with their wall bands.
       const labels = result && result.ok ? (result.roomLabels ?? []) : [];
       const { pointInPolygon } = await import("@/lib/image-plan-shapes");
-      const keptRooms = (shapes?.rooms ?? []).filter((room) =>
-        room.wallScore >= 0.7 || labels.some((l) => pointInPolygon(l.at[0], l.at[1], room.points)),
-      );
+      // Outdoor amenities are drawn and labeled but are not rooms to lift.
+      const OUTDOOR_LABEL = /\b(pool|spa|sun\s?deck|deck|planter|port\s?cochere|driveway|patio|terrace|garden|yard|equipment)\b/i;
+      const keptRooms = (shapes?.rooms ?? []).filter((room) => {
+        const label = labels.find((l) => pointInPolygon(l.at[0], l.at[1], room.points));
+        if (label && !OUTDOOR_LABEL.test(label.name)) return true;
+        return room.wallScore >= 0.7 && room.textScore < 0.06 && !(label && OUTDOOR_LABEL.test(label.name));
+      });
       const keptIndex = new Set(keptRooms.map((room) => room.index));
       const traced: RecognizedPolygon[] = (shapes?.polygons ?? [])
         .filter((p) => {
-          const m = p.id.match(/^shape_(?:floor|wall)_(\d+)/);
+          const m = p.id.match(/^shape_(?:floor|wall|door|window)_(\d+)/);
           return !m || keptIndex.has(Number(m[1]));
         })
         .map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
@@ -265,10 +272,22 @@ export function FloorTo3D() {
         type: p.type as MarkLiftType,
         points: p.points as Array<[number, number]>,
       }));
+      // Openings: tiled detections first (sharper), full-sheet extras that
+      // aren't duplicates second.
+      const centerOf = (pts: Array<[number, number]>): [number, number] => [
+        pts.reduce((s, p) => s + p[0], 0) / pts.length,
+        pts.reduce((s, p) => s + p[1], 0) / pts.length,
+      ];
+      const openings: RecognizedPolygon[] = tiled.map((p, k) => ({ id: `tile_${k}`, type: p.type as MarkLiftType, points: p.points }));
+      for (const p of ai.filter((q) => q.type !== "wall" && q.type !== "floor")) {
+        const [cx, cy] = centerOf(p.points);
+        const dupe = openings.some((o) => o.type === p.type && (([ox, oy]) => Math.hypot(cx - ox, cy - oy) < 0.015)(centerOf(o.points)));
+        if (!dupe) openings.push(p);
+      }
       const useTraced = traced.some((p) => p.type === "floor");
       const polygons: RecognizedPolygon[] = useTraced
-        ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
-        : ai;
+        ? [...traced, ...openings]
+        : [...ai, ...openings.filter((o) => o.id.startsWith("tile_"))];
       const namedRooms = useTraced
         ? keptRooms.map((room) => ({
             points: room.points,
