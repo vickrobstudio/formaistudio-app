@@ -4,7 +4,7 @@ import { LoaderCircle, MousePointer2, PenLine, Trash2, Wand2, X } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
-import { extractPlanShapes } from "@/lib/image-plan-shapes";
+import { extractPlanShapes, pointInPolygon } from "@/lib/image-plan-shapes";
 
 export type AnnotatedPolygon = {
   id: string;
@@ -82,7 +82,20 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
         type: p.type as MarkLiftType,
         points: p.points as Array<[number, number]>,
       }));
-      const traced = (shapes?.polygons ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      // Same arbitration as the main flow: keep regions with a printed room
+      // label inside or a firmly wall-bounded outline.
+      const labels = result && result.ok ? (result.roomLabels ?? []) : [];
+      const keptIndex = new Set(
+        (shapes?.rooms ?? [])
+          .filter((room) => room.wallScore >= 0.7 || labels.some((l) => pointInPolygon(l.at[0], l.at[1], room.points)))
+          .map((room) => room.index),
+      );
+      const traced = (shapes?.polygons ?? [])
+        .filter((p) => {
+          const m = p.id.match(/^shape_(?:floor|wall)_(\d+)/);
+          return !m || keptIndex.has(Number(m[1]));
+        })
+        .map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
       const useTraced = traced.some((p) => p.type === "floor");
       const merged = useTraced
         ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]

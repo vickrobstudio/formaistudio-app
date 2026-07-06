@@ -25,8 +25,14 @@ export type PlanShapePolygon = {
 
 export type PlanShapes = {
   polygons: PlanShapePolygon[];
-  /** Normalized outlines of the traced rooms, for label matching. */
-  roomOutlines: Array<Array<[number, number]>>;
+  /**
+   * Traced regions with their wall-boundedness score (0..1 — how much of
+   * the outline runs along thick wall strokes). The caller arbitrates:
+   * a region is a real room if it contains a printed room label OR its
+   * wallScore is high; everything else (dimension slivers, title blocks,
+   * site cells) gets dropped together with its wall bands.
+   */
+  rooms: Array<{ index: number; points: Array<[number, number]>; wallScore: number }>;
 };
 
 export function pointInPolygon(x: number, y: number, poly: Array<[number, number]>): boolean {
@@ -161,7 +167,9 @@ function strokeStats(mask: Uint8Array, w: number, h: number): { p25: number; p75
 }
 
 type TraceAttempt = {
-  rooms: RoomRegion[];
+  rooms: Array<{ region: RoomRegion; wallScore: number }>;
+  /** Whether the wall mask was dense enough to score regions against. */
+  usable: boolean;
   w: number;
   h: number;
   wallMask: Uint8Array;
@@ -211,12 +219,12 @@ function traceAtScale(img: HTMLImageElement, srcW: number, srcH: number, longSid
   const closed = closeOpenings(clean, w, h, closeRadius);
   const regions = extractRoomRegions(closed, w, h);
 
-  // 4. Keep only regions genuinely bounded by walls.
+  // 4. Score each region by how much of its boundary runs along walls.
+  //    Weak regions are kept here (score attached) — the caller drops them
+  //    unless a printed room label lands inside.
   const probeR = Math.max(3, Math.min(12, Math.round(p75 * 1.5)));
-  const rooms = regions.filter((region: RoomRegion) => {
-    const area = polygonArea(region.polygon);
-    if (area < 0.004 || area > 0.55) return false;
-    if (!wallMaskUsable) return true; // wall mask too sparse to judge against
+  const scoreRegion = (region: RoomRegion): number => {
+    if (!wallMaskUsable) return 0.5;
     const pts = region.contourPx;
     const step = Math.max(1, Math.floor(pts.length / 48));
     let touched = 0, sampled = 0;
@@ -233,10 +241,18 @@ function traceAtScale(img: HTMLImageElement, srcW: number, srcH: number, longSid
       }
       if (hit) touched++;
     }
-    return sampled > 0 && touched / sampled >= 0.5;
-  });
+    return sampled > 0 ? touched / sampled : 0;
+  };
+  const rooms: Array<{ region: RoomRegion; wallScore: number }> = [];
+  for (const region of regions) {
+    const area = polygonArea(region.polygon);
+    if (area < 0.003 || area > 0.55) continue;
+    const wallScore = scoreRegion(region);
+    if (wallScore < 0.2) continue; // pure hairline cells never qualify
+    rooms.push({ region, wallScore });
+  }
 
-  return { rooms, w, h, wallMask, p75 };
+  return { rooms, usable: wallMaskUsable, w, h, wallMask, p75 };
 }
 
 /** Measure the drawn wall depth outward from a room edge via the wall mask. */
@@ -265,9 +281,13 @@ export async function extractPlanShapes(imageDataUrl: string): Promise<PlanShape
   if (!srcW || !srcH) return null;
 
   let best: TraceAttempt | null = null;
+  // A scale with a readable wall mask always beats one where every region
+  // got the blind 0.5 fallback — junk cells must be judgeable.
+  const quality = (a: TraceAttempt) =>
+    a.rooms.filter((r) => r.wallScore >= 0.5).length * (a.usable ? 100 : 30) + a.rooms.length;
   for (const longSide of [1100, 640, 380]) {
     const attempt = traceAtScale(img, srcW, srcH, longSide);
-    if (attempt && attempt.rooms.length > (best?.rooms.length ?? 0)) best = attempt;
+    if (attempt && quality(attempt) > (best ? quality(best) : 0)) best = attempt;
   }
   if (!best || !best.rooms.length) return null;
   const { rooms, w, h, wallMask, p75 } = best;
@@ -277,11 +297,11 @@ export async function extractPlanShapes(imageDataUrl: string): Promise<PlanShape
   const maxT = Math.round(L * 0.045);
   const defaultT = Math.round(Math.min(maxT, Math.max(L * 0.012, p75 * 1.6)));
   const polygons: PlanShapePolygon[] = [];
-  const roomOutlines: Array<Array<[number, number]>> = [];
+  const roomsOut: PlanShapes["rooms"] = [];
 
-  rooms.forEach((region, ri) => {
+  rooms.forEach(({ region, wallScore }, ri) => {
     polygons.push({ id: `shape_floor_${ri}`, type: "floor", points: region.polygon });
-    roomOutlines.push(region.polygon);
+    roomsOut.push({ index: ri, points: region.polygon, wallScore });
 
     // Merge near-collinear contour steps into long clean wall runs.
     const raw = region.contourPx;
@@ -336,7 +356,7 @@ export async function extractPlanShapes(imageDataUrl: string): Promise<PlanShape
   if (polygons.length > 700) {
     const floors = polygons.filter((p) => p.type === "floor");
     const walls = polygons.filter((p) => p.type === "wall").slice(0, 700 - floors.length);
-    return { polygons: [...floors, ...walls], roomOutlines };
+    return { polygons: [...floors, ...walls], rooms: roomsOut };
   }
-  return { polygons, roomOutlines };
+  return { polygons, rooms: roomsOut };
 }

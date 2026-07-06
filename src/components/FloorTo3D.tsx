@@ -244,7 +244,22 @@ export function FloorTo3D() {
         import("@/lib/image-plan-shapes").then((m) => m.extractPlanShapes(f.imageDataUrl)).catch(() => null),
         detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } }).catch(() => null),
       ]);
-      const traced: RecognizedPolygon[] = (shapes?.polygons ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      // Arbitration: a traced region is a real room if a printed room label
+      // sits inside it OR its outline runs firmly along walls. Dimension
+      // slivers, title blocks and site cells fail both and are dropped
+      // together with their wall bands.
+      const labels = result && result.ok ? (result.roomLabels ?? []) : [];
+      const { pointInPolygon } = await import("@/lib/image-plan-shapes");
+      const keptRooms = (shapes?.rooms ?? []).filter((room) =>
+        room.wallScore >= 0.7 || labels.some((l) => pointInPolygon(l.at[0], l.at[1], room.points)),
+      );
+      const keptIndex = new Set(keptRooms.map((room) => room.index));
+      const traced: RecognizedPolygon[] = (shapes?.polygons ?? [])
+        .filter((p) => {
+          const m = p.id.match(/^shape_(?:floor|wall)_(\d+)/);
+          return !m || keptIndex.has(Number(m[1]));
+        })
+        .map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
       const ai: RecognizedPolygon[] = (result && result.ok ? result.polygons : []).map((p, k) => ({
         id: p.id ?? `det_${k}`,
         type: p.type as MarkLiftType,
@@ -254,13 +269,10 @@ export function FloorTo3D() {
       const polygons: RecognizedPolygon[] = useTraced
         ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
         : ai;
-      // Name the traced rooms from the labels the AI read off the plan.
-      const labels = result && result.ok ? (result.roomLabels ?? []) : [];
-      const { pointInPolygon } = await import("@/lib/image-plan-shapes");
-      const namedRooms = useTraced && shapes
-        ? shapes.roomOutlines.map((points) => ({
-            points,
-            name: labels.find((l) => pointInPolygon(l.at[0], l.at[1], points))?.name,
+      const namedRooms = useTraced
+        ? keptRooms.map((room) => ({
+            points: room.points,
+            name: labels.find((l) => pointInPolygon(l.at[0], l.at[1], room.points))?.name,
           }))
         : undefined;
       if (!polygons.length) {
