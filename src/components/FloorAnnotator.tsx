@@ -25,6 +25,8 @@ type Props = {
   imageDataUrl: string;
   initialResult?: AnnotatorResult;
   defaultPlanWidth?: number;
+  /** Display unit for the plan-scale field; stored value stays meters. */
+  planUnits?: "feet-inches" | "meters";
   onClose: () => void;
   onApply: (result: AnnotatorResult) => void;
 };
@@ -34,7 +36,10 @@ function ratio(s: AnnotatorResult | null) {
   return s.imageWidth / Math.max(1, s.imageHeight);
 }
 
-export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth = 12, onClose, onApply }: Props) {
+export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth = 12, planUnits = "meters", onClose, onApply }: Props) {
+  const isFeet = planUnits === "feet-inches";
+  const metersToDisplay = (m: number) => (isFeet ? Math.round((m / 0.3048) * 10) / 10 : m);
+  const displayToMeters = (v: number) => (isFeet ? v * 0.3048 : v);
   const detectFn = useServerFn(detectFloorElements);
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -44,7 +49,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
   const [activeType, setActiveType] = useState<MarkLiftType>("wall");
   const [tool, setTool] = useState<Tool>("select");
   const [drawingPoints, setDrawingPoints] = useState<Array<[number, number]>>([]);
-  const [planWidth, setPlanWidth] = useState(initialResult?.planWidthMeters ?? defaultPlanWidth);
+  const [planWidth, setPlanWidth] = useState(metersToDisplay(initialResult?.planWidthMeters ?? defaultPlanWidth));
   const [busy, setBusy] = useState<"" | "detect">("");
   const [error, setError] = useState("");
 
@@ -123,7 +128,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
   function apply() {
     if (!imageWidth || !imageHeight) return;
     if (polygons.length === 0) { setError("Add at least one element before lifting."); return; }
-    onApply({ imageWidth, imageHeight, planWidthMeters: planWidth, polygons });
+    onApply({ imageWidth, imageHeight, planWidthMeters: displayToMeters(planWidth), polygons });
   }
 
   const counts = useMemo(() => {
@@ -235,7 +240,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
                     <span className="h-4 w-4 rounded" style={{ background: spec.hex }} />
                     <span className="font-medium">{spec.label}</span>
                   </span>
-                  <span className="text-xs text-neutral-500">{spec.height.toFixed(2)} m × {counts[t]}</span>
+                  <span className="text-xs text-neutral-500">{isFeet ? `${(spec.height / 0.3048).toFixed(1)} ft` : `${spec.height.toFixed(2)} m`} × {counts[t]}</span>
                 </button>
               );
             })}
@@ -253,10 +258,10 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
                 step="0.1"
                 min="1"
                 value={planWidth}
-                onChange={(e) => setPlanWidth(Math.max(1, Number(e.target.value) || defaultPlanWidth))}
+                onChange={(e) => setPlanWidth(Math.max(1, Number(e.target.value) || metersToDisplay(defaultPlanWidth)))}
                 className="h-9"
               />
-              <span className="text-xs text-neutral-600 whitespace-nowrap">m on longest side</span>
+              <span className="text-xs text-neutral-600 whitespace-nowrap">{isFeet ? "ft" : "m"} on longest side</span>
             </div>
           </div>
 

@@ -520,7 +520,7 @@ export function FloorTo3D() {
                       onClick={() => setCalibrating(i)}
                       title="Calibrate scale — click two points with a known distance">
                       <Ruler className="size-3" />
-                      <span className="text-[10px] font-bold uppercase">{f.planWidthMetersOverride ? `${f.planWidthMetersOverride.toFixed(1)}m` : "Scale"}</span>
+                      <span className="text-[10px] font-bold uppercase">{f.planWidthMetersOverride ? (planUnits === "feet-inches" ? `${(f.planWidthMetersOverride / 0.3048).toFixed(0)}ft` : `${f.planWidthMetersOverride.toFixed(1)}m`) : "Scale"}</span>
                     </Button>
                   )}
                   {f.imageDataUrl.startsWith("data:image/") && (
@@ -696,6 +696,7 @@ export function FloorTo3D() {
       <FloorAnnotator
         imageDataUrl={floors[annotating].imageDataUrl}
         initialResult={floors[annotating].recognition}
+        planUnits={planUnits}
         defaultPlanWidth={floors[annotating].planWidthMetersOverride ?? floors[annotating].recognition?.planWidthMeters ?? 12}
         onClose={() => setAnnotating(null)}
         onApply={(result) => {
