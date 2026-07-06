@@ -2824,27 +2824,44 @@ export const detectFloorElements = createServerFn({ method: "POST" })
     | { ok: true; polygons: DetectedFloorPolygon[]; roomLabels: DetectedRoomLabel[] }
     | { ok: false; error: string }
   > => {
-    const instruction = `You are an architectural drawing recognition AI. Read the uploaded 2D black-line architectural plan and identify each building element correctly. Look at the black lines, shapes, symbols, thicknesses, and enclosed areas — understand what each line represents in real architecture. The goal: only the black-lined boundaries remain, classified and ready to lift into a clean 3D model.
+    const instruction = `You are an architectural drawing recognition AI. Read the uploaded 2D plan the way an architect reads it, then report classified geometry.
 Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|column|stair|cabinet|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...], "roomLabels":[{"name":"<room name exactly as printed>","at":[x,y]}, ...]}.
-- "roomLabels": READ THE WORDS PRINTED ON THE PLAN. Every room name written on the drawing (LIVING, DINING, KITCHEN, M. BEDROOM, M. BATH, FOYER, LANAI, DEN/OFFICE, LAUNDRY, W.C., POOL BATH…) becomes one entry with the normalized [x,y] center of that printed text. Copy the printed wording exactly; never invent names; skip dimensions, notes and title-block text.
 
-HOW TO RECOGNISE EACH ELEMENT:
-- "wall" — thick black lines, double lines, closed wall shapes, long continuous boundaries that form rooms. Trace the filled body of the wall as a thin strip along its thickness, one polygon per wall segment.
-- "door" — door openings: swing arcs, door leaf lines, sliding-door symbols, gaps inside walls. Trace the opening rectangle.
-- "window" — thin openings inside walls, double-line window symbols, glass panels, repeated narrow rectangles along exterior walls.
-- "column" — square, rectangular or circular structural shapes; usually solid black or enclosed shapes inside or near walls, isolated from the wall run.
-- "stair" — repeated parallel lines, step patterns, direction arrows, stair labels. Trace the overall stair footprint.
-- "cabinet" — thin rectangles attached to walls: counters, closets, shelves, millwork, fixed furniture.
-- "floor" — every enclosed area bounded by walls gets a floor polygon; ALWAYS return at least one floor covering the habitable footprint.
-- "roof" — roof outline only if the sheet is a roof plan; otherwise omit.
-- "fixture" — fixed plumbing and built-ins that are not cabinets (tubs, sinks, WCs, kitchen appliances).
+STEP 1 — READ AND CLEAN THE PLAN (mentally):
+- Detect all black or dark linework. Separate useful architectural geometry from: text, dimensions, furniture symbols, hatch patterns, shadows, title blocks, notes, logos, annotations.
+- Prioritize continuous architectural boundaries over decorative or annotation lines.
+- Mentally straighten slightly crooked lines, connect broken wall segments, ignore tiny noise, merge duplicate lines, detect parallel wall lines, close small gaps.
 
-CLASSIFICATION RULES:
-- Do NOT treat every black line as a wall. Thick continuous lines are usually walls; thin lines may be symbols, furniture, dimension strings or detail linework.
-- Gaps inside walls mean doors, windows or open passages — classify by the symbol (arc = door, double thin lines = window, nothing = open passage → leave as gap, no polygon).
-- Text, room labels, measurements and notes are NOT geometry — never convert text into walls. Use dimension text only to understand scale.
-- Ignore title blocks, north arrows, legends, hatching — but DO trace the plan itself even when those decorations are visible.
-- When unsure what an element is, OMIT it rather than guessing it into the wrong category; reflect doubt in a lower "confidence" value for borderline shapes you do keep.
+STEP 2 — DETECT ARCHITECTURAL ELEMENTS:
+- "wall": thick parallel black lines or filled black boundaries forming continuous enclosed shapes around rooms. Interior walls may be thinner than exterior walls. Trace the wall BODY along its drawn thickness, one polygon per straight segment.
+- "column": small enclosed rectangles, squares, circles or structural shapes — solid black or enclosed, aligned structurally (grids, cores, inside walls). NEVER confuse furniture blocks with columns.
+- "door": wall openings with swing arcs, door leaves, sliding-door symbols, or clear gaps in wall runs. Trace the opening rectangle in the wall.
+- "window": thin openings within walls shown with double or triple parallel lines, glass panels, repeated narrow rectangles along exterior walls.
+- "stair": repeated parallel lines, step patterns, direction arrows, stair labels — trace the overall stair footprint.
+- "cabinet": thin rectangles attached to walls — counters, closets, shelves, millwork, fixed furniture.
+- "fixture": fixed plumbing and built-ins that are not cabinets (tubs, sinks, WCs, appliances).
+- "floor": every enclosed room area; ALWAYS return at least one floor covering the habitable footprint.
+- "roof": only if the sheet is a roof plan; otherwise omit.
+- Elevator shafts: trace their enclosing walls as "wall" and their area as "floor" (they read as small cores near stairs).
+- Open passages: a wall gap with NO door/window symbol is an opening — leave it as a gap, output NO polygon for it.
+
+STEP 3 — ENCLOSED SHAPES (the most important rule):
+Every closed black-line boundary is a candidate architectural element. For each enclosed shape decide:
+- long + narrow + continuous → wall
+- small + solid + structural → column
+- large + empty inside → room/floor area
+- inside a wall, breaking the wall → door, window, or opening
+- attached to a wall, shallow → cabinet/millwork
+- repeated stepped bands → stair
+When enclosed shapes touch or overlap, resolve them with architectural logic. If a shape cannot be classified, omit it rather than forcing a wrong category, and reflect doubt in lower "confidence".
+
+THINK LIKE AN ARCHITECT — never blind-extrude lines:
+- Walls enclose rooms. Doors interrupt walls. Windows sit inside exterior or partition walls. Columns are structural verticals. Floors are large enclosed horizontal areas. Rooms are usable enclosed spaces.
+- Text and dimensions aid interpretation but are NEVER geometry. Furniture stays out of structural categories.
+
+ROOM LABELS — "roomLabels": READ THE WORDS PRINTED ON THE PLAN. Every room name written on the drawing (LIVING, DINING, KITCHEN, M. BEDROOM, M. BATH, FOYER, LANAI, DEN/OFFICE, LAUNDRY, W.C., ELEV, STAIR…) becomes one entry with the normalized [x,y] center of that printed text. Copy the printed wording exactly; never invent names; skip dimensions, notes and title-block text.
+
+OUTPUT RULES:
 - Coordinates are NORMALISED 0..1 in the image's own pixel grid (x = left→right, y = top→bottom). Polygons must be SIMPLE (no self-intersections).
 - Return ONLY the JSON object, no comments, no markdown.`;
 
