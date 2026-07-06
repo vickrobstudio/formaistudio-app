@@ -59,9 +59,15 @@ export const Route = createFileRoute("/api/generate-image")({
         // that is not a person.
         const peopleMotion =
           " If any people or human figures appear, render them with gentle directional MOTION BLUR — soft, semi-transparent, ghosted as in a long-exposure architectural photograph — while keeping ALL architecture, furniture and objects perfectly sharp and static. This is the professional architectural / interior-design photographer look; do not motion-blur anything except the moving people.";
+        // Practical lighting: interiors and any golden-hour / sunset / dusk /
+        // blue-hour / night scene must have their real light fixtures switched
+        // ON. This is applied to every tool. It only affects lighting and the
+        // surrounding context — never geometry, materials, colours or finishes.
+        const lightingDirective =
+          " ARTIFICIAL LIGHTING: if the scene is an interior, OR the time of day is golden hour, sunset, dusk, blue hour or night, switch ON every visible practical light fixture that exists in the scene — table and floor lamps, pendants, sconces, chandeliers, downlights, spotlights, cove and strip lights — with warm ~2700–3000K illumination, realistic glow, soft falloff and warm reflections on nearby surfaces; never leave an interior or an evening / golden-hour scene with its lights off. When a source image is provided, the ONLY things you may change are the LIGHTING and the real-world CONTEXT / surroundings — keep the geometry, materials, textures, colours and finishes 100% identical to the source.";
         const renderPrompt = hasSource
-          ? `${result.data.prompt}.${fidelityLock}${peopleMotion} No text, no logos, no watermarks.`
-          : `${result.data.prompt}. ${editorialStandard}${peopleMotion} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.`;
+          ? `${result.data.prompt}.${fidelityLock}${lightingDirective}${peopleMotion} No text, no logos, no watermarks.`
+          : `${result.data.prompt}. ${editorialStandard}${lightingDirective}${peopleMotion} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.`;
         // Google Gemini direct — NATIVE generateContent endpoint, which is
         // the only surface exposing the image-quality controls. Renders are
         // produced at maximum quality: 4K output, 3:2 editorial landscape.
