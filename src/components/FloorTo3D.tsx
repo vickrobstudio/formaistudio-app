@@ -10,6 +10,7 @@ import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformat
 import { useCredits } from "@/hooks/use-credits";
 import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
+import { streamImage } from "@/lib/stream-image";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import { ScaleCalibrator } from "@/components/ScaleCalibrator";
@@ -31,7 +32,7 @@ const information: ToolInfoSection[] = [
     description: "Upload a floor plan (one image per floor) or a furniture drawing. Tap Build. Download the 3D file.",
     items: [
       "Buildings: add one image per floor — each floor becomes its own group at real-world scale.",
-      "Furniture: top / front / side views with printed dimensions work best.",
+      "Furniture: upload one clear reference (drawing, sketch or photo) — the AI designs it into one solid piece, then builds the 3D model.",
       "Export: .fbx, .obj, or .dae — opens in SketchUp, Blender, Rhino, Maya, 3ds Max.",
     ],
   },
@@ -490,8 +491,25 @@ export function FloorTo3D() {
         if (b.ok) bounds = { width: b.width, depth: b.depth, height: b.height };
       } catch { /* fallback unscaled */ }
 
+      // The AI reads the reference (line drawing, sketch or photo) and
+      // renders ONE complete solid furniture piece — a clean product photo,
+      // NOT extruded linework. Mesh reconstruction then runs on that solid
+      // render, so the 3D model is a real object, not a flattened drawing.
+      setStatus("Understanding your reference and designing the solid piece…");
+      let solidRender = furnitureUrl;
+      try {
+        const renderPrompt =
+          "Study this reference image of a single piece of furniture and reproduce it as ONE complete, solid, manufacturable furniture object. Keep the exact shape, silhouette, proportions and design intent of the reference. Render it as a clean studio product photograph on a plain neutral background, three-quarter view, fully solid with realistic materials, thickness and volume — NOT a line drawing, NOT a wireframe, NOT a technical sketch, no outlines, no dimension lines, no annotations, no text. A real physical object ready to be turned into a 3D model.";
+        let out: string | null = null;
+        await streamImage(renderPrompt, furnitureUrl, (image, isFinal) => { if (isFinal || !out) out = image; });
+        if (out) solidRender = out;
+      } catch {
+        // If the render step fails, fall back to reconstructing the reference
+        // directly rather than blocking the whole build.
+      }
+
       setStatus("Reconstructing textured mesh — this takes 1–5 minutes…");
-      const started = await startRecon({ data: { imageDataUrl: furnitureUrl, quality: "high" } });
+      const started = await startRecon({ data: { imageDataUrl: solidRender, quality: "high" } });
       if (!started.ok) { setError(started.error); setStage("upload"); return; }
       const deadline = Date.now() + 10 * 60 * 1000;
       while (true) {
