@@ -14,7 +14,6 @@ import { streamImage } from "@/lib/stream-image";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import { ScaleCalibrator } from "@/components/ScaleCalibrator";
-import { FloorAnnotator } from "@/components/FloorAnnotator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import type { VectorRecognition } from "@/lib/dwg-vector-plan";
 
@@ -238,7 +237,6 @@ export function FloorTo3D() {
   const previewRef = useRef<HTMLDivElement>(null);
   const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
   const [calibrating, setCalibrating] = useState<number | null>(null);
-  const [annotating, setAnnotating] = useState<number | null>(null);
 
   function reset() {
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
@@ -254,7 +252,20 @@ export function FloorTo3D() {
     });
   }
 
-  async function runRecognition(index: number) {
+  // Auto-recognise architectural elements the moment an image floor is added
+  // (no manual Recognise step). DWG/DXF sheets already arrive with vector
+  // recognition, so only raster floors that haven't been read trigger this.
+  useEffect(() => {
+    if (subject !== "building") return;
+    floors.forEach((f, i) => {
+      if (f.imageDataUrl.startsWith("data:image/") && !f.recognition && !f.recognizing && !f.recognizeError) {
+        void runRecognition(i, true);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floors, subject]);
+
+  async function runRecognition(index: number, silent = false) {
     const f = floors[index];
     if (!f || !f.imageDataUrl.startsWith("data:image/")) return;
     setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: true, recognizeError: undefined } : x));
@@ -317,7 +328,7 @@ export function FloorTo3D() {
           }))
         : undefined;
       if (!polygons.length) {
-        const message = result && !result.ok ? result.error : "No enclosed shapes found. Open Elements to draw the outline, or upload a sharper plan.";
+        const message = result && !result.ok ? result.error : "No enclosed shapes found — upload a sharper plan with clear walls.";
         setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: message } : x));
         return;
       }
@@ -327,7 +338,7 @@ export function FloorTo3D() {
         recognition: { imageWidth: width, imageHeight: height, planWidthMeters: x.planWidthMetersOverride ?? 12, polygons },
         vectorRooms: namedRooms ?? x.vectorRooms,
       } : x));
-      setRecognitionPreview(index);
+      if (!silent) setRecognitionPreview(index);
     } catch (cause) {
       setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: cause instanceof Error ? cause.message : "Recognition failed." } : x));
     }
@@ -591,20 +602,13 @@ export function FloorTo3D() {
                     {f.imageDataUrl.startsWith("data:image/") ? <img src={f.imageDataUrl} alt="" className="size-full object-contain" /> : "PDF"}
                   </span>
                   <Input value={f.label} onChange={(e) => setFloors((p) => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} className="h-9 flex-1" placeholder={i === 0 ? "Ground floor" : `Floor ${i}`} />
-                  <div className="flex items-center gap-1">
-                    <Input type="number" min={1} max={50} step={0.25} inputMode="decimal" className="h-9 w-16"
-                      value={Number((f.heightMeters * 3.28084).toFixed(2))}
-                      onChange={(e) => { const v = Number(e.target.value) || 0; setFloors((p) => p.map((x, j) => j === i ? { ...x, heightMeters: Math.min(15, Math.max(0.3, v / 3.28084)) } : x)); }} />
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">ft</span>
-                  </div>
                   {f.imageDataUrl.startsWith("data:image/") && (
-                    <Button type="button" variant={f.recognition ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
-                      disabled={f.recognizing}
-                      onClick={() => f.recognition ? setRecognitionPreview(i) : void runRecognition(i)}
-                      title="AI recognises walls, doors, windows for the 3D build">
+                    <button type="button" disabled={!f.recognition} onClick={() => f.recognition && setRecognitionPreview(i)}
+                      className="flex items-center gap-1 rounded-full px-2 text-[10px] font-bold uppercase text-muted-foreground disabled:opacity-70"
+                      title="Architectural elements the AI recognised on this floor — tap to view">
                       {f.recognizing ? <LoaderCircle className="size-3 animate-spin" /> : f.recognition ? <Eye className="size-3" /> : <ScanSearch className="size-3" />}
-                      <span className="text-[10px] font-bold uppercase">{f.recognizing ? "…" : f.recognition ? `${f.recognition.polygons.length}` : "Recognise"}</span>
-                    </Button>
+                      {f.recognizing ? "Recognising…" : f.recognition ? `${f.recognition.polygons.length} elements` : "Reading…"}
+                    </button>
                   )}
                   {f.imageDataUrl.startsWith("data:image/") && (
                     <Button type="button" variant={f.planWidthMetersOverride ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
@@ -612,14 +616,6 @@ export function FloorTo3D() {
                       title="Calibrate scale — click two points with a known distance">
                       <Ruler className="size-3" />
                       <span className="text-[10px] font-bold uppercase">{f.planWidthMetersOverride ? (planUnits === "feet-inches" ? `${(f.planWidthMetersOverride / 0.3048).toFixed(0)}ft` : `${f.planWidthMetersOverride.toFixed(1)}m`) : "Scale"}</span>
-                    </Button>
-                  )}
-                  {f.imageDataUrl.startsWith("data:image/") && (
-                    <Button type="button" variant={f.recognition ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
-                      onClick={() => setAnnotating(i)}
-                      title="Review and correct the detected walls, doors, windows and rooms before building">
-                      <ScanSearch className="size-3" />
-                      <span className="text-[10px] font-bold uppercase">Elements</span>
                     </Button>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
@@ -781,21 +777,6 @@ export function FloorTo3D() {
             : x));
         }}
         onClose={() => setCalibrating(null)}
-      />
-    )}
-    {annotating !== null && floors[annotating] && (
-      <FloorAnnotator
-        imageDataUrl={floors[annotating].imageDataUrl}
-        initialResult={floors[annotating].recognition}
-        planUnits={planUnits}
-        defaultPlanWidth={floors[annotating].planWidthMetersOverride ?? floors[annotating].recognition?.planWidthMeters ?? 12}
-        onClose={() => setAnnotating(null)}
-        onApply={(result) => {
-          setFloors((p) => p.map((x, j) => j === annotating
-            ? { ...x, recognition: result, planWidthMetersOverride: result.planWidthMeters }
-            : x));
-          setAnnotating(null);
-        }}
       />
     )}
     {recognitionPreview !== null && floors[recognitionPreview]?.recognition && (
