@@ -4,6 +4,7 @@ import { LoaderCircle, MousePointer2, PenLine, Trash2, Wand2, X } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
+import { extractPlanShapes } from "@/lib/image-plan-shapes";
 
 export type AnnotatedPolygon = {
   id: string;
@@ -68,16 +69,29 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
     if (!imageWidth || !imageHeight) return;
     setBusy("detect"); setError("");
     try {
-      const result = await detectFn({ data: { imageDataUrl, imageWidth, imageHeight } });
-      if (!result.ok) { setError(result.error); return; }
-      // Replace AI results but keep any manual additions the user already drew.
+      // Walls and floors come from deterministic shape tracing — enclosed
+      // regions of the black linework itself, so geometry hugs the plan.
+      // The AI supplies the semantic extras (doors, windows, stairs, …).
+      const [shapes, result] = await Promise.all([
+        extractPlanShapes(imageDataUrl).catch(() => null),
+        detectFn({ data: { imageDataUrl, imageWidth, imageHeight } }).catch(() => null),
+      ]);
       const manual = polygons.filter((p) => p.id.startsWith("man_"));
-      const ai = result.polygons.map((p, i) => ({
+      const ai = (result && result.ok ? result.polygons : []).map((p, i) => ({
         id: `det_${Date.now()}_${i}`,
         type: p.type as MarkLiftType,
         points: p.points as Array<[number, number]>,
       }));
-      setPolygons([...manual, ...ai]);
+      const traced = (shapes ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      const useTraced = traced.some((p) => p.type === "floor");
+      const merged = useTraced
+        ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
+        : ai;
+      if (!merged.length) {
+        setError(result && !result.ok ? result.error : "No enclosed shapes found — draw the outline manually or try a sharper image.");
+        return;
+      }
+      setPolygons([...manual, ...merged]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Detection failed.");
     } finally {

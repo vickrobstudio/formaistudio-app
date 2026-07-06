@@ -238,16 +238,27 @@ export function FloorTo3D() {
     setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: true, recognizeError: undefined } : x));
     try {
       const { width, height } = await getImageSize(f.imageDataUrl);
-      const result = await detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } });
-      if (!result.ok) {
-        setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: result.error } : x));
-        return;
-      }
-      const polygons: RecognizedPolygon[] = result.polygons.map((p, k) => ({
+      // Deterministic shape tracing supplies walls + floors that hug the
+      // black linework; the AI adds doors, windows, stairs and fixtures.
+      const [shapes, result] = await Promise.all([
+        import("@/lib/image-plan-shapes").then((m) => m.extractPlanShapes(f.imageDataUrl)).catch(() => null),
+        detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } }).catch(() => null),
+      ]);
+      const traced: RecognizedPolygon[] = (shapes ?? []).map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      const ai: RecognizedPolygon[] = (result && result.ok ? result.polygons : []).map((p, k) => ({
         id: p.id ?? `det_${k}`,
         type: p.type as MarkLiftType,
         points: p.points as Array<[number, number]>,
       }));
+      const useTraced = traced.some((p) => p.type === "floor");
+      const polygons: RecognizedPolygon[] = useTraced
+        ? [...traced, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
+        : ai;
+      if (!polygons.length) {
+        const message = result && !result.ok ? result.error : "No enclosed shapes found. Open Elements to draw the outline, or upload a sharper plan.";
+        setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: message } : x));
+        return;
+      }
       setFloors((p) => p.map((x, j) => j === index ? {
         ...x,
         recognizing: false,
