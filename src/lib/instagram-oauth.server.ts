@@ -11,8 +11,8 @@ import crypto from "node:crypto";
 // have this redirect URL registered as a Valid OAuth Redirect URI — see
 // REDIRECT_URI below.
 //
-// Meta redirects straight back to the Settings page (a normal client
-// route, not a server API route) with ?code=&state= — the Settings page
+// Meta redirects straight back to the Account page (a normal client
+// route, not a server API route) with ?code=&state= — the Account page
 // then calls the authenticated completeInstagramConnect server function,
 // which writes instagram_connections using the member's own Supabase JWT
 // (RLS), not the service-role key. This deliberately avoids ever needing
@@ -21,7 +21,7 @@ const GRAPH_VERSION = "v21.0";
 // www is the canonical production host — formaistudio.app (apex) 308s to it,
 // and Meta requires an exact redirect_uri match (no redirect hops).
 const SITE_ORIGIN = "https://www.formaistudio.app";
-export const INSTAGRAM_REDIRECT_PATH = "/settings";
+export const INSTAGRAM_REDIRECT_PATH = "/account";
 const REDIRECT_URI = `${SITE_ORIGIN}${INSTAGRAM_REDIRECT_PATH}`;
 const SCOPES = ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement", "business_management"];
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
