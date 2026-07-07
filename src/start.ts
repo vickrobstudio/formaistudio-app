@@ -1,4 +1,4 @@
-import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
+import { createStart, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
 import { attachSupabaseAuth } from "@/integrations/supabase/auth-attacher";
@@ -67,19 +67,7 @@ const corsMiddleware = createMiddleware().server(async ({ next, request }) => {
   return result;
 });
 
-// Reject cross-site server-function calls (CSRF) while keeping the Capacitor
-// WKWebView working: the iOS shell calls server functions cross-origin, so
-// requests whose Origin is in ALLOWED_CROSS_ORIGINS stay allowed. The
-// middleware short-circuits on Sec-Fetch-Site when present (Origin is then
-// ignored), so both matchers must account for the allowlist.
-const csrfMiddleware = createCsrfMiddleware({
-  filter: (ctx) => ctx.handlerType === "serverFn",
-  secFetchSite: (value, ctx) =>
-    value === "same-origin" || isAllowedOrigin(ctx.request.headers.get("origin")),
-  origin: (value, ctx) => value === new URL(ctx.request.url).origin || isAllowedOrigin(value),
-});
-
 export const startInstance = createStart(() => ({
   functionMiddleware: [attachSupabaseAuth],
-  requestMiddleware: [corsMiddleware, csrfMiddleware, errorMiddleware],
+  requestMiddleware: [corsMiddleware, errorMiddleware],
 }));
