@@ -22,7 +22,13 @@ workflows:
       events:
         - push
       branch_patterns:
+        # claude-migration is where all active development lands (it's also
+        # Vercel's production branch) — main is an old, frozen snapshot that
+        # this work deliberately doesn't merge into, so it must be listed
+        # here too or pushes never reach Codemagic at all.
         - pattern: main
+          include: true
+        - pattern: claude-migration
           include: true
     scripts:
       - name: Install dependencies
