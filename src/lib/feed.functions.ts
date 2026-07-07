@@ -174,6 +174,12 @@ export const sharePublicCreation = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
     const creatorName = profile?.username || "FormAI member";
+    // The public_creations table only permits these creation_type values.
+    // The 3D-to-AI tool tags its output "building", which the DB CHECK
+    // constraint rejects — map any value outside the allowed set to "render"
+    // (a 3D-to-AI output is a photoreal rendering) so publishing never fails.
+    const DB_CREATION_TYPES = new Set(["furniture", "interior", "render", "video", "other"]);
+    const creationType = DB_CREATION_TYPES.has(data.creationType) ? data.creationType : "render";
     const { data: creation, error } = await context.supabase.from("public_creations").insert({
       user_id: context.userId,
       creator_name: creatorName.slice(0, 80),
@@ -182,7 +188,7 @@ export const sharePublicCreation = createServerFn({ method: "POST" })
       image_url: data.imageUrl,
       model_glb_path: data.modelGlbPath,
       model_usdz_path: data.modelUsdzPath,
-      creation_type: data.creationType,
+      creation_type: creationType,
       is_public: data.isPublic,
     }).select("id").single();
     if (error) throw new Error("Unable to publish this creation.");
