@@ -42,6 +42,7 @@ import { Route as AuthenticatedCloudRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as ApiPublicRevenuecatWebhookRouteImport } from './routes/api/public/revenuecat/webhook'
 import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
+import { Route as ApiPublicInstagramCallbackRouteImport } from './routes/api/public/instagram/callback'
 
 const ToolsRoute = ToolsRouteImport.update({
   id: '/tools',
@@ -209,6 +210,12 @@ const ApiPublicPaymentsWebhookRoute =
     path: '/api/public/payments/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicInstagramCallbackRoute =
+  ApiPublicInstagramCallbackRouteImport.update({
+    id: '/api/public/instagram/callback',
+    path: '/api/public/instagram/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -241,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/checkout/return': typeof CheckoutReturnRoute
+  '/api/public/instagram/callback': typeof ApiPublicInstagramCallbackRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
 }
@@ -275,6 +283,7 @@ export interface FileRoutesByTo {
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/checkout/return': typeof CheckoutReturnRoute
+  '/api/public/instagram/callback': typeof ApiPublicInstagramCallbackRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
 }
@@ -311,6 +320,7 @@ export interface FileRoutesById {
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/checkout/return': typeof CheckoutReturnRoute
+  '/api/public/instagram/callback': typeof ApiPublicInstagramCallbackRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
 }
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/checkout/return'
+    | '/api/public/instagram/callback'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/checkout/return'
+    | '/api/public/instagram/callback'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
   id:
@@ -416,6 +428,7 @@ export interface FileRouteTypes {
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/checkout/return'
+    | '/api/public/instagram/callback'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
   fileRoutesById: FileRoutesById
@@ -448,6 +461,7 @@ export interface RootRouteChildren {
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
   CheckoutReturnRoute: typeof CheckoutReturnRoute
+  ApiPublicInstagramCallbackRoute: typeof ApiPublicInstagramCallbackRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
   ApiPublicRevenuecatWebhookRoute: typeof ApiPublicRevenuecatWebhookRoute
 }
@@ -685,6 +699,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicPaymentsWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/instagram/callback': {
+      id: '/api/public/instagram/callback'
+      path: '/api/public/instagram/callback'
+      fullPath: '/api/public/instagram/callback'
+      preLoaderRoute: typeof ApiPublicInstagramCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -733,6 +754,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
   CheckoutReturnRoute: CheckoutReturnRoute,
+  ApiPublicInstagramCallbackRoute: ApiPublicInstagramCallbackRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
   ApiPublicRevenuecatWebhookRoute: ApiPublicRevenuecatWebhookRoute,
 }

@@ -15,6 +15,8 @@ import { Furniture3DViewer } from "@/components/Furniture3DViewer";
 import { generateFurniture3D } from "@/lib/furniture-3d.functions";
 import { saveMediaToDevice } from "@/lib/save-to-device";
 import { shareToInstagram } from "@/lib/share-to-instagram";
+import { useInstagramConnection } from "@/hooks/use-instagram-connection";
+import { shareToMyInstagram } from "@/lib/instagram-connect.functions";
 
 const materialOptions = ["Solid wood", "Stone", "Metal", "Glass", "Upholstery", "Leather", "Recycled composite"];
 
@@ -36,6 +38,8 @@ export function FurnitureCreator() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<"private" | "public" | null>(null);
   const { signedIn } = useCredits();
+  const { connected: instagramConnected } = useInstagramConnection();
+  const shareToMyInstagramFn = useServerFn(shareToMyInstagram);
   const [shareOpen, setShareOpen] = useState(false);
   const create3D = useServerFn(generateFurniture3D);
 
@@ -110,7 +114,10 @@ export function FurnitureCreator() {
 
   async function shareConceptToInstagram() {
     if (!result) return;
-    try { await shareToInstagram(result, "formai-custom-furniture.png", "image/png"); }
+    try {
+      if (instagramConnected) await shareToMyInstagramFn({ data: { imageUrl: result, caption: `${prompt.trim().slice(0, 120)} — made with FormAI Studio` } });
+      else await shareToInstagram(result, "formai-custom-furniture.png", "image/png");
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : "The image could not be shared."); }
   }
 
