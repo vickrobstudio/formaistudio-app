@@ -187,11 +187,16 @@ export const sharePublicCreation = createServerFn({ method: "POST" })
     }).select("id").single();
     if (error) throw new Error("Unable to publish this creation.");
     if (data.isPublic) {
-      // Cross-posting to Instagram is best-effort and must never block
-      // publishing to the community feed.
+      // Cross-posting to Instagram is best-effort and must NEVER block or slow
+      // publishing to the community feed. Instagram media processing can take
+      // ~30s; hard-cap the whole cross-post at 3s so the share always returns
+      // immediately — the post still completes on Instagram's side afterwards.
       const caption = `${data.title}${data.description ? `\n\n${data.description}` : ""}\n\nBy ${creatorName} on FormAI Studio.`;
-      try { await postToStudioInstagram(context.supabase, context.userId, data.imageUrl, caption); } catch { /* ignore */ }
-      try { await postToUserInstagram(context.supabase, context.userId, data.imageUrl, caption); } catch { /* ignore */ }
+      const timeBox = <T,>(p: Promise<T>) => Promise.race([p, new Promise((resolve) => setTimeout(resolve, 3000))]);
+      try { await timeBox(Promise.allSettled([
+        postToStudioInstagram(context.supabase, context.userId, data.imageUrl, caption),
+        postToUserInstagram(context.supabase, context.userId, data.imageUrl, caption),
+      ])); } catch { /* ignore — publishing to the feed already succeeded */ }
     }
     return creation;
   });
