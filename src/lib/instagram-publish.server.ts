@@ -17,6 +17,16 @@ import type { Database } from "@/integrations/supabase/types";
 // SUPABASE_SERVICE_ROLE_KEY.
 const GRAPH_VERSION = "v21.0";
 
+// Two flavours of Instagram publishing tokens exist:
+//  - "IGAA…" tokens come from the newer "Instagram API with Instagram Login"
+//    (no Facebook Page involved) and must call graph.instagram.com.
+//  - "EAA…" Page access tokens come from the classic Facebook-Login flow
+//    (member-connected accounts) and must call graph.facebook.com.
+// The endpoints and payloads are identical; only the host differs.
+function graphHost(accessToken: string): string {
+  return accessToken.startsWith("IG") ? "graph.instagram.com" : "graph.facebook.com";
+}
+
 async function resolvePublicImageUrl(supabase: SupabaseClient<Database>, userId: string, imageUrl: string): Promise<string> {
   if (/^https?:\/\//.test(imageUrl)) return imageUrl;
   const match = /^data:([^;]+);base64,(.+)$/.exec(imageUrl);
@@ -33,7 +43,8 @@ async function resolvePublicImageUrl(supabase: SupabaseClient<Database>, userId:
 }
 
 async function publishToInstagramAccount(businessAccountId: string, accessToken: string, publicImageUrl: string, caption: string): Promise<void> {
-  const createRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${businessAccountId}/media`, {
+  const host = graphHost(accessToken);
+  const createRes = await fetch(`https://${host}/${GRAPH_VERSION}/${businessAccountId}/media`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image_url: publicImageUrl, caption: caption.slice(0, 2200), access_token: accessToken }),
@@ -41,7 +52,7 @@ async function publishToInstagramAccount(businessAccountId: string, accessToken:
   const created = await createRes.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
   if (!createRes.ok || !created?.id) throw new Error(created?.error?.message ?? "Instagram rejected the image.");
 
-  const publishRes = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${businessAccountId}/media_publish`, {
+  const publishRes = await fetch(`https://${host}/${GRAPH_VERSION}/${businessAccountId}/media_publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ creation_id: created.id, access_token: accessToken }),
@@ -52,9 +63,10 @@ async function publishToInstagramAccount(businessAccountId: string, accessToken:
   }
 }
 
-// Configure INSTAGRAM_BUSINESS_ACCOUNT_ID and INSTAGRAM_ACCESS_TOKEN (a
-// long-lived Page access token with the instagram_content_publish
-// permission) in Vercel — until both are set this silently no-ops.
+// Configure INSTAGRAM_BUSINESS_ACCOUNT_ID and INSTAGRAM_ACCESS_TOKEN in
+// Vercel — until both are set this silently no-ops. The token is a
+// long-lived (~60 days, refresh via ig_refresh_token) "IGAA…" token from
+// the Instagram-Login API with instagram_business_content_publish.
 export async function postToStudioInstagram(supabase: SupabaseClient<Database>, userId: string, imageUrl: string, caption: string): Promise<void> {
   const businessAccountId = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID;
   const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
