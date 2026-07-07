@@ -31,8 +31,20 @@ export const Route = createFileRoute("/api/public/instagram/callback")({
         const verified = verifyInstagramOAuthState(state);
         if (!verified) return redirectToSettings({ instagram: "error", reason: "invalid_state" });
 
+        let account: Awaited<ReturnType<typeof completeInstagramConnection>>;
         try {
-          const account = await completeInstagramConnection(code);
+          account = await completeInstagramConnection(code);
+        } catch (cause) {
+          console.error("Instagram OAuth callback failed:", cause);
+          const reason = cause instanceof InstagramConnectError ? cause.message : "connect_failed";
+          return redirectToSettings({ instagram: "error", reason });
+        }
+
+        // Separate try/catch: a failure here means the Instagram side
+        // already succeeded — this is our own infra (e.g. a missing
+        // Supabase env var), never an Instagram-account problem, so it
+        // must never surface as "connect_failed".
+        try {
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
           const { error: dbError } = await supabaseAdmin.from("instagram_connections").upsert({
             user_id: verified.userId,
@@ -42,16 +54,12 @@ export const Route = createFileRoute("/api/public/instagram/callback")({
             access_token: account.pageAccessToken,
             updated_at: new Date().toISOString(),
           });
-          if (dbError) {
-            console.error("Instagram connection upsert failed:", dbError);
-            return redirectToSettings({ instagram: "error", reason: "save_failed" });
-          }
-          return redirectToSettings({ instagram: "connected", username: account.igUsername });
+          if (dbError) throw dbError;
         } catch (cause) {
-          console.error("Instagram OAuth callback failed:", cause);
-          const reason = cause instanceof InstagramConnectError ? cause.message : "connect_failed";
-          return redirectToSettings({ instagram: "error", reason });
+          console.error("Instagram connection save failed:", cause);
+          return redirectToSettings({ instagram: "error", reason: "save_failed" });
         }
+        return redirectToSettings({ instagram: "connected", username: account.igUsername });
       },
     },
   },
