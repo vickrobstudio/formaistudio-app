@@ -42,6 +42,22 @@ async function resolvePublicImageUrl(supabase: SupabaseClient<Database>, userId:
   return signed.signedUrl;
 }
 
+// Container creation is asynchronous on Instagram's side: after POST /media
+// the container needs a few seconds to download + process the image, and
+// calling media_publish before it reaches FINISHED fails with "Media ID is
+// not available". Poll the container status until it's ready.
+async function waitForContainerReady(host: string, containerId: string, accessToken: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const res = await fetch(`https://${host}/${GRAPH_VERSION}/${containerId}?fields=status_code&access_token=${encodeURIComponent(accessToken)}`);
+    const body = await res.json().catch(() => null) as { status_code?: string; error?: { message?: string } } | null;
+    const status = body?.status_code;
+    if (status === "FINISHED") return;
+    if (status === "ERROR" || status === "EXPIRED") throw new Error("Instagram could not process the image. Please try again.");
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  throw new Error("Instagram is taking too long to process the image. Please try again.");
+}
+
 async function publishToInstagramAccount(businessAccountId: string, accessToken: string, publicImageUrl: string, caption: string): Promise<void> {
   const host = graphHost(accessToken);
   const createRes = await fetch(`https://${host}/${GRAPH_VERSION}/${businessAccountId}/media`, {
@@ -52,15 +68,24 @@ async function publishToInstagramAccount(businessAccountId: string, accessToken:
   const created = await createRes.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
   if (!createRes.ok || !created?.id) throw new Error(created?.error?.message ?? "Instagram rejected the image.");
 
-  const publishRes = await fetch(`https://${host}/${GRAPH_VERSION}/${businessAccountId}/media_publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ creation_id: created.id, access_token: accessToken }),
-  });
-  if (!publishRes.ok) {
+  await waitForContainerReady(host, created.id, accessToken);
+
+  // Even after FINISHED, publish can transiently report the media as not yet
+  // available — retry a couple of times before giving up.
+  let lastError = "Instagram could not publish the post.";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const publishRes = await fetch(`https://${host}/${GRAPH_VERSION}/${businessAccountId}/media_publish`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creation_id: created.id, access_token: accessToken }),
+    });
+    if (publishRes.ok) return;
     const failed = await publishRes.json().catch(() => null) as { error?: { message?: string } } | null;
-    throw new Error(failed?.error?.message ?? "Instagram could not publish the post.");
+    lastError = failed?.error?.message ?? lastError;
+    if (!/not available|not ready|try again/i.test(lastError)) break;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
+  throw new Error(lastError);
 }
 
 // Configure INSTAGRAM_BUSINESS_ACCOUNT_ID and INSTAGRAM_ACCESS_TOKEN in
