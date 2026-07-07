@@ -20,8 +20,7 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 
 // Origins allowed to call our server functions / server routes cross-origin.
 // `capacitor://localhost` is the iOS WKWebView origin; `https://localhost` is
-// used by some Capacitor configurations. Add the Lovable preview origins too
-// for in-browser native-emulator testing.
+// used by some Capacitor configurations.
 const ALLOWED_CROSS_ORIGINS = new Set([
   "capacitor://localhost",
   "https://localhost",

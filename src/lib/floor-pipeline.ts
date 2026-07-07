@@ -6,8 +6,7 @@
 // Ramer-Douglas-Peucker to simplify the trace down to a small,
 // editable polygon.
 //
-// This is step 7 ("Polygonize") of the floor-plan pipeline; see
-// .lovable/plan.md.
+// This is step 7 ("Polygonize") of the floor-plan pipeline.
 
 export type RoomRegion = {
   /** Pixel indices that belong to the enclosed region. */

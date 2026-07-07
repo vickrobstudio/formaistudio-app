@@ -18,7 +18,7 @@ function getSupabase() {
 function extractFields(subscription: any) {
   const item = subscription.items?.data?.[0];
   const priceId = item?.price?.lookup_key
-    || item?.price?.metadata?.lovable_external_id
+    || item?.price?.metadata?.lovable_external_id // legacy metadata on Stripe prices created pre-migration; reads our own Stripe data only
     || item?.price?.id;
   const productId = item?.price?.product;
   const periodStart = item?.current_period_start ?? subscription.current_period_start;

@@ -1,6 +1,6 @@
 /**
  * Claude (Anthropic) client for every drawing-analysis and extraction server
- * function. Replaces the Lovable AI gateway.
+ * function. Talks to the Anthropic API directly.
  *
  * The pipeline's prompts already demand STRICT JSON and are parsed with
  * `parseJsonFromModelText` + zod downstream — this module only handles
