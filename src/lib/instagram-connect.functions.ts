@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { buildInstagramAuthorizeUrl, completeInstagramConnection, verifyInstagramOAuthState } from "@/lib/instagram-oauth.server";
-import { postToConnectedInstagramOrThrow } from "@/lib/instagram-publish.server";
+import { postToConnectedInstagramOrThrow, postToStudioInstagramOrThrow } from "@/lib/instagram-publish.server";
 
 export const getMyInstagramConnection = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -64,5 +64,20 @@ export const shareToMyInstagram = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ShareToMyInstagramInput.parse(input))
   .handler(async ({ data, context }) => {
     await postToConnectedInstagramOrThrow(context.supabase, context.userId, data.imageUrl, data.caption);
+    return { posted: true };
+  });
+
+/**
+ * Every signed-in member can post their creation to the studio's own
+ * @formaistudio.app account — no personal Instagram connection or Meta
+ * app review needed. The caption always credits the member.
+ */
+export const shareToStudioInstagram = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ShareToMyInstagramInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).maybeSingle();
+    const credit = profile?.username ? `\n\nBy ${profile.username} on FormAI Studio.` : "\n\nMade with FormAI Studio.";
+    await postToStudioInstagramOrThrow(context.supabase, context.userId, data.imageUrl, `${data.caption}${credit}`.slice(0, 2200));
     return { posted: true };
   });

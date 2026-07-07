@@ -75,6 +75,16 @@ export async function postToStudioInstagram(supabase: SupabaseClient<Database>, 
   await publishToInstagramAccount(businessAccountId, accessToken, publicImageUrl, caption);
 }
 
+// Same as postToStudioInstagram, but throws so the manual "Post to
+// @formaistudio.app" button can show members a real success/error result.
+export async function postToStudioInstagramOrThrow(supabase: SupabaseClient<Database>, userId: string, imageUrl: string, caption: string): Promise<void> {
+  const businessAccountId = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID;
+  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+  if (!businessAccountId || !accessToken) throw new Error("Instagram posting is not configured yet.");
+  const publicImageUrl = await resolvePublicImageUrl(supabase, userId, imageUrl);
+  await publishToInstagramAccount(businessAccountId, accessToken, publicImageUrl, caption);
+}
+
 // Posts to a member's own connected Instagram Business/Creator account.
 // No-ops silently if the member never connected Instagram (see
 // instagram_connections in instagram-connect.functions.ts). This is the
