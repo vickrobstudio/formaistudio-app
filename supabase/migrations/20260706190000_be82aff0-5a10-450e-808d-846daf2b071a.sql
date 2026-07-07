@@ -12,8 +12,9 @@ CREATE TABLE public.instagram_connections (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 -- access_token never reaches the client: the RLS-scoped user client is only
--- ever queried for non-secret columns (see instagram-connect.functions.ts);
--- all writes go through the service-role client in the OAuth callback route.
+-- ever queried for non-secret columns (see instagram-connect.functions.ts).
+-- INSERT/UPDATE grants + policies for authenticated are added in the next
+-- migration so the connect flow never needs the service-role key.
 GRANT SELECT, DELETE ON public.instagram_connections TO authenticated;
 GRANT ALL ON public.instagram_connections TO service_role;
 ALTER TABLE public.instagram_connections ENABLE ROW LEVEL SECURITY;

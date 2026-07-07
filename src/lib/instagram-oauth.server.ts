@@ -8,14 +8,21 @@ import crypto from "node:crypto";
 //
 // Requires INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET and
 // INSTAGRAM_OAUTH_STATE_SECRET in the environment. The Meta app must also
-// have this callback URL registered as a Valid OAuth Redirect URI — see
+// have this redirect URL registered as a Valid OAuth Redirect URI — see
 // REDIRECT_URI below.
+//
+// Meta redirects straight back to the Settings page (a normal client
+// route, not a server API route) with ?code=&state= — the Settings page
+// then calls the authenticated completeInstagramConnect server function,
+// which writes instagram_connections using the member's own Supabase JWT
+// (RLS), not the service-role key. This deliberately avoids ever needing
+// SUPABASE_SERVICE_ROLE_KEY for the connect flow.
 const GRAPH_VERSION = "v21.0";
 // www is the canonical production host — formaistudio.app (apex) 308s to it,
 // and Meta requires an exact redirect_uri match (no redirect hops).
 const SITE_ORIGIN = "https://www.formaistudio.app";
-export const INSTAGRAM_CALLBACK_PATH = "/api/public/instagram/callback";
-const REDIRECT_URI = `${SITE_ORIGIN}${INSTAGRAM_CALLBACK_PATH}`;
+export const INSTAGRAM_REDIRECT_PATH = "/settings";
+const REDIRECT_URI = `${SITE_ORIGIN}${INSTAGRAM_REDIRECT_PATH}`;
 const SCOPES = ["instagram_basic", "instagram_content_publish", "pages_show_list", "pages_read_engagement", "business_management"];
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
@@ -105,7 +112,7 @@ async function findConnectedInstagramAccount(longLivedUserToken: string): Promis
   return { pageId: page.id, pageAccessToken: page.access_token, igUserId: page.instagram_business_account.id, igUsername: page.instagram_business_account.username };
 }
 
-/** Runs the full code -> connected IG Business account exchange for the OAuth callback route. */
+/** Runs the full code -> connected IG Business account exchange for completeInstagramConnect. */
 export async function completeInstagramConnection(code: string): Promise<ConnectedAccount> {
   const shortLivedToken = await exchangeCodeForUserToken(code);
   const longLivedToken = await exchangeForLongLivedToken(shortLivedToken);
