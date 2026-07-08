@@ -5,7 +5,7 @@ import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
 import { useSubscription } from "@/hooks/use-subscription";
 import { PLANS, type PlanId } from "@/lib/plans";
-import { isNativeIOS, purchasePlan, restorePurchases } from "@/lib/iap";
+import { getIapPriceStrings, isNativeIOS, purchasePlan, restorePurchases } from "@/lib/iap";
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -27,11 +27,16 @@ function PricingPage() {
   const [selected, setSelected] = useState<PlanId | null>(null);
   const [iapBusy, setIapBusy] = useState<PlanId | null>(null);
   const [iapMsg, setIapMsg] = useState<string | null>(null);
+  const [iapPrices, setIapPrices] = useState<Partial<Record<PlanId, string>>>({});
   const onIOS = isNativeIOS();
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => setSignedIn(!!data.user));
-  }, []);
+    // Preload RevenueCat on iOS so StoreKit products/offerings are ready
+    // before the first tap, and show Apple's real localized prices (which
+    // must match the products) instead of our hardcoded USD numbers.
+    if (onIOS) void getIapPriceStrings().then(setIapPrices).catch(() => {});
+  }, [onIOS]);
 
   const returnUrl = typeof window !== "undefined"
     ? `${window.location.origin}/checkout/return?session_id={CHECKOUT_SESSION_ID}`
@@ -61,19 +66,11 @@ function PricingPage() {
           <Link to="/" aria-label="Back to FormAI home" className="mx-auto mb-8 inline-block">
             <img src="/app-icon.png" alt="FormAI" className="h-14 w-14 rounded-2xl" />
           </Link>
-          <h1 className="text-4xl font-semibold tracking-tight">{onIOS ? "Your tools" : "Pricing"}</h1>
-          <p className="mt-3 text-muted-foreground">{onIOS ? "Every creative tool is available in the app. Start creating from the Tools tab." : "Subscribe to a single tool, or unlock everything with Pro. Photo to AI is free."}</p>
+          <h1 className="text-4xl font-semibold tracking-tight">Pricing</h1>
+          <p className="mt-3 text-muted-foreground">Subscribe to a single tool, or unlock everything with Pro. Photo to AI is free.</p>
         </header>
 
-        {onIOS ? (
-          <div className="mx-auto max-w-md text-center">
-            <div className="rounded-3xl border bg-card p-8">
-              <p className="text-lg font-semibold">All tools included</p>
-              <p className="mt-2 text-sm text-muted-foreground">2D to 3D, Studio AI, 3D to AI, AI Edits, Photo to AI and Custom Furniture are ready to use.</p>
-              <Link to="/tools" className="mt-6 inline-flex h-12 items-center justify-center rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground">Open the tools</Link>
-            </div>
-          </div>
-        ) : selected ? (
+        {selected && !onIOS ? (
           <div className="rounded-2xl border bg-card p-4">
             <button onClick={() => setSelected(null)} className="mb-4 text-sm text-muted-foreground hover:underline">
               ← Back to pricing
@@ -99,7 +96,7 @@ function PricingPage() {
                       {isPro && <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Best</span>}
                     </span>
                     <span className="block">
-                      <span className="block text-5xl font-semibold leading-none">${plan.priceUsd}<span className="text-base font-normal text-muted-foreground">/mo</span></span>
+                      <span className="block text-5xl font-semibold leading-none">{onIOS && iapPrices[plan.id] ? iapPrices[plan.id] : `$${plan.priceUsd}`}<span className="text-base font-normal text-muted-foreground">/mo</span></span>
                       <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : signedIn === false ? "Sign in to subscribe" : "Subscribe"}</span>
                     </span>
                   </button>

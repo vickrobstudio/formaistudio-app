@@ -10,7 +10,7 @@
  */
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
-import type { PlanId } from "@/lib/plans";
+import { PLANS, type PlanId } from "@/lib/plans";
 
 const IOS_API_KEY = import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | undefined;
 const BUNDLE_ID = "app.formaistudio.formai";
@@ -70,6 +70,36 @@ export async function purchasePlan(planId: PlanId): Promise<{ ok: true } | { ok:
   } catch (e: any) {
     if (e?.userCancelled) return { ok: false, error: "Purchase cancelled.", cancelled: true };
     return { ok: false, error: e?.message ?? "Purchase failed." };
+  }
+}
+
+/**
+ * Real App Store prices per plan, keyed by our plan id (e.g. "$44.99").
+ * Apple requires the price shown in-app to match the StoreKit product, so the
+ * iOS pricing page displays these instead of our hardcoded USD numbers.
+ * Returns {} off-iOS or if offerings can't be read (caller falls back).
+ */
+export async function getIapPriceStrings(): Promise<Partial<Record<PlanId, string>>> {
+  if (!isNativeIOS()) return {};
+  try {
+    await configureIAP();
+    const revenueCat = await loadRevenueCat();
+    if (!revenueCat) return {};
+    const { Purchases } = revenueCat;
+    const offerings = await Purchases.getOfferings();
+    const map: Partial<Record<PlanId, string>> = {};
+    for (const offering of Object.values(offerings.all ?? {})) {
+      for (const pkg of (offering as any).availablePackages ?? []) {
+        const identifier: string | undefined = pkg.product?.identifier;
+        const priceString: string | undefined = pkg.product?.priceString;
+        if (!identifier || !priceString) continue;
+        const plan = PLANS.find((p) => applePid(p.id) === identifier);
+        if (plan) map[plan.id] = priceString;
+      }
+    }
+    return map;
+  } catch {
+    return {};
   }
 }
 
