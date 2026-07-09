@@ -21,7 +21,7 @@ function WalletPage() {
     setRestoreMsg(res.ok ? "Purchases restored." : res.error ?? "Nothing to restore.");
   }
 
-  return <DashboardDetail eyebrow="Billing" title="Wallet" description="Credits, purchases and billing information.">
+  return <DashboardDetail eyebrow="Account" title="Plans & Subscriptions" description="Your credits, plans, billing and subscriptions.">
     <section className="space-y-6 pb-8">
       <div className="rounded-3xl border border-border bg-secondary p-6 text-center">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Available credits</p>
