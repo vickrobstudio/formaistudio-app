@@ -40,8 +40,10 @@ export function ToolsHub() {
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {tools.map(({ icon: Icon, name, tagline, to, plan }) => {
         const free = FREE_TOOLS.includes(to);
-        const unlocked = isUnlocked(to);
-        const priceLabel = free ? "Free" : `$${PLAN_BY_ID[plan!].priceUsd}/mo`;
+        const subscribed = vip || sub.hasTool(to);
+        const unlocked = free || subscribed || credits > 0;
+        // Price is always shown on every tool. Subscribers see "Included".
+        const label = free ? "Free" : subscribed ? "Included" : `$${PLAN_BY_ID[plan!].priceUsd}/mo`;
         return <button key={to} type="button" onClick={() => openTool(to)} className="group relative flex aspect-square flex-col justify-between rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-accent">
           <div className="flex w-full items-start justify-between">
             <Icon className="size-6" />
@@ -50,7 +52,7 @@ export function ToolsHub() {
           <span className="block">
             <span className="block text-sm font-semibold leading-tight">{name}</span>
             <span className="mt-1 block text-[11px] leading-snug text-muted-foreground">{tagline}</span>
-            <span className={`mt-1.5 block text-[11px] font-bold uppercase tracking-wide ${free ? "text-muted-foreground" : "text-foreground"}`}>{priceLabel}</span>
+            <span className={`mt-1.5 block text-[11px] font-bold uppercase tracking-wide ${unlocked ? "text-muted-foreground" : "text-foreground"}`}>{label}</span>
           </span>
         </button>;
       })}
