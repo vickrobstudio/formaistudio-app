@@ -52,7 +52,14 @@ function PricingPage() {
       setIapMsg(null);
       const res = await purchasePlan(planId);
       setIapBusy(null);
-      if (!res.ok && !("cancelled" in res && res.cancelled)) setIapMsg(res.error);
+      if (res.ok) {
+        // Give the RevenueCat webhook a moment to grant access, then reopen
+        // the tools with a fresh session so the unlocked state is picked up.
+        setIapMsg("Subscription active — unlocking your tools…");
+        setTimeout(() => { window.location.assign("/tools"); }, 3000);
+      } else if (!("cancelled" in res && res.cancelled)) {
+        setIapMsg(res.error);
+      }
       return;
     }
     setSelected(planId);

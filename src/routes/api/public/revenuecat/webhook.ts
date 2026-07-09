@@ -52,6 +52,22 @@ async function handle(event: RCEvent) {
       { onConflict: "user_id,entitlement_id,product_id" },
     );
   }
+
+  // Grant usable access: an active subscription unlocks the tools (the app's
+  // credit gate is bypassed for members with has_free_access). Recompute from
+  // the member's live entitlements so cancellations/expirations revoke it.
+  const nowIso = new Date().toISOString();
+  const { data: activeEntitlements } = await supabaseAdmin
+    .from("iap_entitlements")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .limit(1);
+  await supabaseAdmin
+    .from("profiles")
+    .update({ has_free_access: (activeEntitlements?.length ?? 0) > 0, updated_at: nowIso })
+    .eq("id", userId);
 }
 
 export const Route = createFileRoute("/api/public/revenuecat/webhook")({
