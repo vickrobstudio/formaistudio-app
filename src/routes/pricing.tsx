@@ -130,9 +130,18 @@ function PricingPage() {
               </div>
             )}
 
-            <p className="mt-10 text-center text-xs text-muted-foreground">
-              Cancel anytime. Access continues until the end of your billing period.
-            </p>
+            <div className="mt-10 space-y-2 text-center text-xs text-muted-foreground">
+              <p>
+                All plans are auto-renewable monthly subscriptions ($5–$45 per month, billed to your Apple ID).
+                Your subscription renews automatically at the price shown unless you turn off auto-renew at least
+                24 hours before the end of the current period. Manage or cancel anytime in your Apple ID settings.
+              </p>
+              <p className="flex items-center justify-center gap-3">
+                <Link to="/terms" className="font-medium underline">Terms of Use (EULA)</Link>
+                <span aria-hidden="true">·</span>
+                <Link to="/privacy" className="font-medium underline">Privacy Policy</Link>
+              </p>
+            </div>
 
             {sub.isActive && (
               <p className="mt-4 text-center text-sm">
