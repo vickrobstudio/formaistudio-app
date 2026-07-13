@@ -22,7 +22,7 @@ export const PLANS: Plan[] = [
     priceUsd: 45,
     credits: 2000,
     tools: ["/2d-to-3d", "/studio", "/model-to-ai", "/ai-edits", "/photo-to-ai", "/ai-to-video"],
-    blurb: "Every tool, unlocked. Best value.",
+    blurb: "Every FormAI tool unlocked — the complete suite.",
   },
   {
     id: "tool_2d_to_3d_monthly",
@@ -30,7 +30,7 @@ export const PLANS: Plan[] = [
     priceUsd: 20,
     credits: 500,
     tools: ["/2d-to-3d"],
-    blurb: "Plans, sketches and drawings into 3D.",
+    blurb: "Turn 2D plan drawings into a complete 3D model.",
   },
   {
     id: "tool_ai_edits_monthly",
@@ -38,7 +38,7 @@ export const PLANS: Plan[] = [
     priceUsd: 15,
     credits: 500,
     tools: ["/ai-edits"],
-    blurb: "Relight, restyle, grade and refine.",
+    blurb: "Photoshop-style edits on any image, in seconds.",
   },
   {
     id: "tool_model_to_ai_monthly",
@@ -46,7 +46,7 @@ export const PLANS: Plan[] = [
     priceUsd: 10,
     credits: 400,
     tools: ["/model-to-ai"],
-    blurb: "Turn 3D models into photoreal renders.",
+    blurb: "Line perspectives from any 3D software into realistic AI renderings.",
   },
   {
     id: "tool_ai_to_video_monthly",
@@ -54,7 +54,7 @@ export const PLANS: Plan[] = [
     priceUsd: 10,
     credits: 200,
     tools: ["/ai-to-video"],
-    blurb: "Cinematic walkthroughs from a still.",
+    blurb: "Turn a sequence of AI renderings into an AI video.",
   },
   {
     id: "tool_studio_ai_monthly",
@@ -62,7 +62,7 @@ export const PLANS: Plan[] = [
     priceUsd: 5,
     credits: 300,
     tools: ["/studio"],
-    blurb: "Interior, exterior and editorial 8K.",
+    blurb: "A full project from a few filters and specs to high-end realistic renderings.",
   },
 ];
 
