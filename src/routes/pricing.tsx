@@ -6,6 +6,23 @@ import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
 import { useSubscription } from "@/hooks/use-subscription";
 import { PLANS, type PlanId } from "@/lib/plans";
 import { getIapPriceStrings, isNativeIOS, purchasePlan, restorePurchases } from "@/lib/iap";
+import type { Plan } from "@/lib/plans";
+
+const TOOL_NAMES: Record<string, string> = {
+  "/2d-to-3d": "2D to 3D",
+  "/studio": "Studio AI",
+  "/model-to-ai": "3D to AI",
+  "/ai-edits": "AI Edits",
+  "/photo-to-ai": "Photo to AI",
+  "/ai-to-video": "AI to Video",
+};
+
+// A clear, Apple-required description of exactly what each subscription unlocks.
+function describePlan(plan: Plan): string {
+  const paidTools = plan.tools.filter((t) => t !== "/photo-to-ai").map((t) => TOOL_NAMES[t] ?? t);
+  const unlocks = plan.id === "pro_monthly" ? "Unlocks every tool" : `Unlocks ${paidTools.join(", ")}`;
+  return `${unlocks} · ${plan.credits.toLocaleString()} AI credits every month`;
+}
 
 export const Route = createFileRoute("/pricing")({
   head: () => ({
@@ -98,12 +115,16 @@ function PricingPage() {
                     disabled={iapBusy === plan.id || owned}
                     className={`group relative flex aspect-square flex-col justify-between rounded-3xl border bg-card p-7 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-90 ${isPro ? "ring-2 ring-black" : ""}`}
                   >
-                    <span className="flex items-start justify-between gap-2">
-                      <span className="text-lg font-semibold leading-tight">{plan.name}</span>
-                      {isPro && <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Best</span>}
+                    <span className="block space-y-2">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="text-lg font-semibold leading-tight">{plan.name}</span>
+                        {isPro && <span className="rounded-full bg-black px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Best</span>}
+                      </span>
+                      <span className="block text-sm font-medium leading-snug">{plan.blurb}</span>
+                      <span className="block text-xs leading-snug text-muted-foreground">{describePlan(plan)}</span>
                     </span>
                     <span className="block">
-                      <span className="block text-5xl font-semibold leading-none">{onIOS && iapPrices[plan.id] ? iapPrices[plan.id] : `$${plan.priceUsd}`}<span className="text-base font-normal text-muted-foreground">/mo</span></span>
+                      <span className="block text-5xl font-semibold leading-none">{onIOS && iapPrices[plan.id] ? iapPrices[plan.id] : `$${plan.priceUsd}`}<span className="text-base font-normal text-muted-foreground">/mo · auto-renews monthly</span></span>
                       <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : signedIn === false ? "Sign in to subscribe" : "Subscribe"}</span>
                     </span>
                   </button>
