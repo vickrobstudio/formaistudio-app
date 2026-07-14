@@ -103,6 +103,26 @@ export async function getIapPriceStrings(): Promise<Partial<Record<PlanId, strin
   }
 }
 
+/**
+ * Whether THIS device has an active subscription entitlement in RevenueCat —
+ * works for anonymous (not-signed-in) purchases too, so a member can buy and
+ * use a subscription without ever registering an account. Used to grant
+ * access locally, independent of the Supabase profile / login.
+ */
+export async function hasActiveIapEntitlement(): Promise<boolean> {
+  if (!isNativeIOS()) return false;
+  try {
+    await configureIAP();
+    const revenueCat = await loadRevenueCat();
+    if (!revenueCat) return false;
+    const { Purchases } = revenueCat;
+    const { customerInfo } = await Purchases.getCustomerInfo();
+    return Object.keys(customerInfo?.entitlements?.active ?? {}).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function restorePurchases(): Promise<{ ok: boolean; error?: string }> {
   if (!isNativeIOS()) return { ok: false, error: "Only available in the iOS app." };
   try {

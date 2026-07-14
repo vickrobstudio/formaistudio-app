@@ -60,23 +60,26 @@ function PricingPage() {
     : "";
 
   const handleSubscribe = async (planId: PlanId) => {
-    if (signedIn === false) {
-      void navigate({ to: "/auth", search: { redirect: "/pricing" } as any });
-      return;
-    }
+    // iOS In-App Purchase works WITHOUT an account (Apple 5.1.1) — never send
+    // a guest to sign up first. Purchase runs against RevenueCat (anonymous
+    // if not signed in); the device then unlocks locally.
     if (onIOS) {
       setIapBusy(planId);
       setIapMsg(null);
       const res = await purchasePlan(planId);
       setIapBusy(null);
       if (res.ok) {
-        // Give the RevenueCat webhook a moment to grant access, then reopen
-        // the tools with a fresh session so the unlocked state is picked up.
+        // Reopen the tools with a fresh session so the unlocked state is picked up.
         setIapMsg("Subscription active — unlocking your tools…");
         setTimeout(() => { window.location.assign("/tools"); }, 3000);
       } else if (!("cancelled" in res && res.cancelled)) {
         setIapMsg(res.error);
       }
+      return;
+    }
+    // Web only: Stripe checkout needs an account.
+    if (signedIn === false) {
+      void navigate({ to: "/auth", search: { redirect: "/pricing" } as any });
       return;
     }
     setSelected(planId);
@@ -125,7 +128,7 @@ function PricingPage() {
                     </span>
                     <span className="block">
                       <span className="block text-5xl font-semibold leading-none">{onIOS && iapPrices[plan.id] ? iapPrices[plan.id] : `$${plan.priceUsd}`}<span className="text-base font-normal text-muted-foreground">/mo · auto-renews monthly</span></span>
-                      <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : signedIn === false ? "Sign in to subscribe" : "Subscribe"}</span>
+                      <span className="mt-3 block text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{owned ? (sub.cancelAtPeriodEnd && sub.plan === plan.id ? "Ends soon" : "Subscribed") : iapBusy === plan.id ? "Opening…" : signedIn === false && !onIOS ? "Sign in to subscribe" : "Subscribe"}</span>
                     </span>
                   </button>
                 );
@@ -162,6 +165,9 @@ function PricingPage() {
                 <span aria-hidden="true">·</span>
                 <Link to="/privacy" className="font-medium underline">Privacy Policy</Link>
               </p>
+              {onIOS && signedIn === false && (
+                <p>No account required. Optionally <Link to="/auth" className="font-medium underline">create a free account</Link> to use your subscription on your other devices.</p>
+              )}
             </div>
 
             {sub.isActive && (

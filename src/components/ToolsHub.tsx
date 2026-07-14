@@ -27,9 +27,10 @@ export function ToolsHub() {
 
   function openTool(to: string) {
     if (isUnlocked(to)) { void navigate({ to }); return; }
-    // Out of credits with no subscription: guests sign up first; signed-in
-    // members land in their account's Plans & Subscriptions hub to subscribe.
-    if (!signedIn) void navigate({ to: "/auth", search: { redirect: "/wallet" } as never });
+    // Out of credits with no subscription: go straight to the plans so anyone
+    // can subscribe WITHOUT registering (Apple 5.1.1). Guests use /pricing
+    // (public); signed-in members land in their account's Plans hub.
+    if (!signedIn) void navigate({ to: "/pricing" });
     else void navigate({ to: "/wallet" });
   }
 

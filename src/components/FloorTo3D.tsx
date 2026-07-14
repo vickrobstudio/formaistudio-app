@@ -429,8 +429,7 @@ export function FloorTo3D() {
     setBusy(true); setError(""); setFloorParts([]); setBuildReports([]); setStage("modeling");
     if (!(await consume())) {
       setBusy(false); setStage("upload");
-      if (!signedIn) { void navigate({ to: "/auth" }); return; }
-      setError("You have no credits left. Open your Wallet to continue."); return;
+      void navigate({ to: "/pricing" }); return;
     }
     try {
       const parts: FloorPart[] = [];
@@ -500,8 +499,7 @@ export function FloorTo3D() {
     setStatus("Reading dimensions from your drawing…");
     if (!(await consume())) {
       setBusy(false); setStage("upload");
-      if (!signedIn) { void navigate({ to: "/auth" }); return; }
-      setError("You have no credits left. Open your Wallet to continue."); return;
+      void navigate({ to: "/pricing" }); return;
     }
     try {
       let bounds: { width: number; depth: number; height: number } | undefined;
