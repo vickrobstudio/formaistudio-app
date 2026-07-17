@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
+import { useAiConsentGate } from "@/hooks/use-ai-consent";
 import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { streamImage } from "@/lib/stream-image";
@@ -208,6 +209,7 @@ export function FloorTo3D() {
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
   const { credits, signedIn, vip, consume } = useCredits();
+  const { ensureConsent, dialog: consentDialog } = useAiConsentGate();
 
   const [subject, setSubject] = useState<"building" | "furniture">("building");
   const [outputUnits, setOutputUnits] = useState<"meters" | "feet">("feet");
@@ -271,6 +273,7 @@ export function FloorTo3D() {
   }, [floors, subject]);
 
   async function runRecognition(index: number, silent = false) {
+    if (!(await ensureConsent())) return;
     const f = floors[index];
     if (!f || !f.imageDataUrl.startsWith("data:image/")) return;
     setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: true, recognizeError: undefined } : x));
@@ -426,6 +429,7 @@ export function FloorTo3D() {
 
   async function buildBuilding() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
+    if (!(await ensureConsent())) return;
     setBusy(true); setError(""); setFloorParts([]); setBuildReports([]); setStage("modeling");
     if (!(await consume())) {
       setBusy(false); setStage("upload");
@@ -495,6 +499,7 @@ export function FloorTo3D() {
 
   async function buildFurniture() {
     if (!furnitureUrl) return;
+    if (!(await ensureConsent())) return;
     setBusy(true); setError(""); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null); setStage("modeling");
     setStatus("Reading dimensions from your drawing…");
     if (!(await consume())) {
@@ -848,5 +853,6 @@ export function FloorTo3D() {
         </div>
       </div>
     )}
+    {consentDialog}
   </main>;
 }
