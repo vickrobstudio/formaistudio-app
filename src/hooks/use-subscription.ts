@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getStripeEnvironment } from "@/lib/stripe";
 import { toolUnlockedBy } from "@/lib/plans";
+import { isNativeIOS } from "@/lib/iap";
 
 export interface SubscriptionState {
   loading: boolean;
@@ -73,10 +74,14 @@ export function useSubscription() {
   return useMemo<SubscriptionState>(() => {
     const activePlans = new Set<string>();
     let primary: typeof rows[number] | null = null;
-    for (const r of rows) {
-      if (computeActive(r)) {
-        activePlans.add(r.price_id);
-        if (!primary) primary = r;
+    // On iOS, paid access must come only from Apple In-App Purchase — never
+    // honour a web (Stripe) subscription there (Apple 3.1.1 / 3.1.3(b)).
+    if (!isNativeIOS()) {
+      for (const r of rows) {
+        if (computeActive(r)) {
+          activePlans.add(r.price_id);
+          if (!primary) primary = r;
+        }
       }
     }
     const now = Date.now();
