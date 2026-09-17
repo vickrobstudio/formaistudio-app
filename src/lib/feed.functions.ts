@@ -161,3 +161,39 @@ export const saveFurnitureCreation = createServerFn({ method: "POST" })
     if (error) throw new Error("Unable to save this furniture piece.");
     return creation;
   });
+
+const PublishImageInput = z.object({
+  id: z.string().uuid(),
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000),
+  imageDataUrl: z.string().regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/).max(3_000_000),
+  consent: z.literal(true),
+});
+
+export const publishGeneratedImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => PublishImageInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const existing = await context.supabase.from("public_creations").select("id").eq("id", data.id).eq("user_id", context.userId).maybeSingle();
+    if (existing.error) throw new Error("Unable to check this publication. Please retry.");
+    if (existing.data) return existing.data;
+    const recent = await context.supabase.from("public_creations").select("id", { count: "exact", head: true }).eq("user_id", context.userId).gte("created_at", new Date(Date.now() - 86400000).toISOString());
+    if (recent.error) throw new Error("Unable to check publication limits.");
+    if ((recent.count ?? 0) >= 10) throw new Error("You can share up to 10 creations per day.");
+    const profile = await context.supabase.from("profiles").select("username").eq("id", context.userId).maybeSingle();
+    if (profile.error) throw new Error("Unable to load your profile.");
+    const { data: creation, error } = await context.supabase.from("public_creations").insert({
+      id: data.id, user_id: context.userId,
+      creator_name: (profile.data?.username || "FormAI member").slice(0, 80),
+      title: data.title, description: data.description, image_url: data.imageDataUrl,
+      creation_type: "render", is_public: true,
+    }).select("id").single();
+    if (error) {
+      if (error.code === "23505") {
+        const retry = await context.supabase.from("public_creations").select("id").eq("id", data.id).eq("user_id", context.userId).maybeSingle();
+        if (retry.data) return retry.data;
+      }
+      throw new Error("Unable to publish your creation. Please retry.");
+    }
+    return creation;
+  });
