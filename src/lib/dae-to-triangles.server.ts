@@ -33,8 +33,8 @@ export function parseDaeToTriangles(dae: string): TriGroup[] {
   while ((gm = geomRe.exec(dae))) {
     const name = gm[2] || gm[1];
     const mesh = gm[3];
-    // Positions: the first <source> with id ending -pos
-    const posMatch = mesh.match(/<source\s+id="[^"]*-pos"[\s\S]*?<float_array[^>]*>([\s\S]*?)<\/float_array>/);
+    // Positions: the first <source> with id ending -pos or _pos
+    const posMatch = mesh.match(/<source\s+id="[^"]*[-_]pos"[\s\S]*?<float_array[^>]*>([\s\S]*?)<\/float_array>/);
     if (!posMatch) continue;
     const positions = posMatch[1].trim().split(/\s+/).map(Number);
 
@@ -53,7 +53,7 @@ export function parseDaeToTriangles(dae: string): TriGroup[] {
 
     // Colour: material binding → material → effect → diffuse
     let color: [number, number, number] | undefined;
-    const matId = matBinding.replace(/-binding$/, "");
+    const matId = matBinding.replace(/(?:-binding|_sg)$/, "");
     const fxId = materialEffect.get(matId);
     if (fxId) color = effectColors.get(fxId) ?? effectColors.get(fxId.replace(/-effect$/, "") + "-effect");
 
