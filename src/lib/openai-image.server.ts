@@ -9,8 +9,8 @@ export async function renderOpenAIImage(
   if (!key) return new Response("Rendering service is unavailable.", { status: 503 });
   const model = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-2.5-sunburst";
   const options = {
-    model, prompt, n: 1, quality: "medium", size: "auto",
-    output_format: "jpeg", output_compression: 85,
+    model, prompt, n: 1, quality: "max", size: "auto",
+    output_format: "jpeg", output_compression: 100,
   };
   let body: string | FormData;
   const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
