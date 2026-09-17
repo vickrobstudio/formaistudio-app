@@ -96,9 +96,9 @@ const openaiKey = process.env.OPENAI_API_KEY;
         }
 
         const headers: Record<string, string> = {
-          "Lovable-API-Key": key,
-          Accept: "text/event-stream",
-        };
+  Authorization: `Bearer ${geminiKey}`,
+  Accept: "application/json",
+};
         if (contentType) headers["Content-Type"] = contentType;
         const upstream = await fetch(endpoint, {
           method: "POST",
