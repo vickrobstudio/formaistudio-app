@@ -34,9 +34,9 @@ export const Route = createFileRoute("/api/generate-image")({
 
         const geminiKey = process.env.GEMINI_API_KEY;
 
-if (!geminiKey) {
-  return new Response("Rendering service is unavailable.", { status: 500 });
-}
+        if (!geminiKey) {
+          return new Response("Rendering service is unavailable.", { status: 500 });
+        }
 
         const isTechnicalDrawing = /2D (floor plan|orthographic)|architectural drafting/i.test(
           result.data.prompt,
@@ -48,62 +48,31 @@ if (!geminiKey) {
         const fidelityLock = hasSource
           ? " ABSOLUTE PERSPECTIVE & LAYOUT FIDELITY (NON-NEGOTIABLE): the FIRST attached image is the binding spatial reference. Lock the camera position, focal length, framing, viewing angle, horizon line and every vanishing point to that image exactly. Reproduce every perspective line, wall edge, floor edge, ceiling edge, window opening, door opening, structural element and architectural line in the same direction, length, slope and convergence as the source — do not redraw, straighten, re-angle, re-scale or re-compose them. Preserve the exact shape, silhouette, proportions, footprint and orientation of every piece of furniture, fixture, accessory and object visible in the source, and keep each one in the SAME location, on the same wall and at the same depth as in the source. Do not add, remove, move, rotate, resize, swap or restyle any object. Only upgrade materials, lighting and finish quality to photoreal — geometry, layout and perspective stay 100% identical to the source." : "";
         const renderPrompt = `${result.data.prompt}. ${editorialStandard} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.${fidelityLock}`;
-        let endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-        let body: BodyInit;
-        let contentType: string | undefined = "application/json";
-
+        // Use Gemini's native image API. The OpenAI compatibility endpoint
+        // cannot serialize generated JPEG image parts.
+        const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent";
         const references = [result.data.sourceImage, ...(result.data.sourceImages ?? [])].filter(
           (image): image is string => Boolean(image),
         );
-        if (references.length > 0) {
-          // The Lovable AI gateway has no /v1/images/edits route. For
-          // reference-image-conditioned renders, use Gemini's image model via
-          // the chat-completions endpoint, which accepts image_url parts and
-          // returns a generated image inline.
-          for (const reference of references) {
-            if (!/^data:image\/(?:png|jpeg|webp);base64,/.test(reference)) {
-              return new Response("A reference image format is not supported.", {
-                status: 400,
-              });
-            }
+        const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+          { text: renderPrompt },
+        ];
+        for (const reference of references) {
+          const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/.exec(reference);
+          if (!match) {
+            return new Response("A reference image format is not supported.", { status: 400 });
           }
-          endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-          body = JSON.stringify({
-  model: "gemini-3-pro-image",
-  modalities: ["image", "text"],
-  messages: [
-    {
-      role: "user",
-      content: [
-        { type: "text", text: renderPrompt },
-        ...references.map((image) => ({
-          type: "image_url" as const,
-          image_url: { url: image },
-        })),
-      ],
-    },
-  ],
-});
-        } else {
-          body = JSON.stringify({
-  model: "gemini-3-pro-image",
-  modalities: ["image", "text"],
-  messages: [
-    {
-      role: "user",
-      content: [
-        { type: "text", text: renderPrompt },
-      ],
-    },
-  ],
-});
+          parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
         }
-
+        const body = JSON.stringify({
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+        });
         const headers: Record<string, string> = {
-  Authorization: `Bearer ${geminiKey}`,
-  Accept: "application/json",
-};
-        if (contentType) headers["Content-Type"] = contentType;
+          "x-goog-api-key": geminiKey,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        };
         const upstream = await fetch(endpoint, {
           method: "POST",
           headers,
@@ -127,39 +96,29 @@ if (!geminiKey) {
           return new Response(message, { status });
         }
 
-        // Chat-completions returns JSON, not SSE. Extract the generated image
-        // and return it as { image } so the client's JSON branch can pick it up.
-        if (endpoint.endsWith("/chat/completions")) {
-          const payload = (await upstream.json().catch(() => null)) as
-            | {
-                choices?: Array<{
-                  message?: {
-                    images?: Array<{ image_url?: { url?: string } }>;
-                    content?: string;
-                  };
-                }>;
-              }
-            | null;
-          const image =
-            payload?.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
-          if (!image) {
-            console.error("generate-image gemini response missing image", payload);
-            return new Response(
-              "The rendering response did not include an image.",
-              { status: 502 },
-            );
-          }
-          return new Response(JSON.stringify({ image }), {
-            headers: { "Content-Type": "application/json" },
+        const payload = (await upstream.json().catch(() => null)) as {
+          candidates?: Array<{
+            finishReason?: string;
+            content?: { parts?: Array<{
+              thought?: boolean;
+              inlineData?: { mimeType?: string; data?: string };
+            }> };
+          }>;
+          promptFeedback?: { blockReason?: string };
+        } | null;
+        const imagePart = payload?.candidates?.[0]?.content?.parts?.find(
+          (part) => !part.thought && part.inlineData?.mimeType?.startsWith("image/") && part.inlineData.data,
+        );
+        if (!imagePart?.inlineData?.data) {
+          console.error("generate-image gemini response missing image", {
+            finishReason: payload?.candidates?.[0]?.finishReason,
+            blockReason: payload?.promptFeedback?.blockReason,
           });
+          return new Response("The rendering response did not include an image.", { status: 502 });
         }
-
-        return new Response(upstream.body, {
-          headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache, no-transform",
-            Connection: "keep-alive",
-          },
+        const image = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        return new Response(JSON.stringify({ image }), {
+          headers: { "Content-Type": "application/json" },
         });
       },
     },
