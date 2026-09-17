@@ -37,7 +37,6 @@ export const Route = createFileRoute("/api/generate-image")({
 if (!geminiKey) {
   return new Response("Rendering service is unavailable.", { status: 500 });
 }
-}
 
         const isTechnicalDrawing = /2D (floor plan|orthographic)|architectural drafting/i.test(
           result.data.prompt,
