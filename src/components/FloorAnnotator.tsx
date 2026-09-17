@@ -1,3 +1,4 @@
+import { useAiConsentGate } from "@/hooks/use-ai-consent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { alignPlanToInk } from "@/lib/plan-alignment";
 import { calibratePlan, type PlanPoint } from "@/lib/plan-calibration";
@@ -6,6 +7,7 @@ import { LoaderCircle, MousePointer2, PenLine, Trash2, Wand2, X } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
+import { extractPlanShapes, pointInPolygon } from "@/lib/image-plan-shapes";
 
 export type AnnotatedPolygon = {
   id: string;
@@ -28,6 +30,8 @@ type Props = {
   imageDataUrl: string;
   initialResult?: AnnotatorResult;
   defaultPlanWidth?: number;
+  /** Display unit for the plan-scale field; stored value stays meters. */
+  planUnits?: "feet-inches" | "meters";
   onClose: () => void;
   onApply: (result: AnnotatorResult) => void;
 };
@@ -37,7 +41,11 @@ function ratio(s: AnnotatorResult | null) {
   return s.imageWidth / Math.max(1, s.imageHeight);
 }
 
-export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth = 12, onClose, onApply }: Props) {
+export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth = 12, planUnits = "meters", onClose, onApply }: Props) {
+  const isFeet = planUnits === "feet-inches";
+  const metersToDisplay = (m: number) => (isFeet ? Math.round((m / 0.3048) * 10) / 10 : m);
+  const displayToMeters = (v: number) => (isFeet ? v * 0.3048 : v);
+  const {ensureConsent, dialog: consentDialog} = useAiConsentGate();
   const detectFn = useServerFn(detectFloorElements);
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -101,22 +109,59 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
   }
 
   async function runDetect() {
+    if (!(await ensureConsent())) return;
     if (!imageWidth || !imageHeight) return;
     setBusy("detect"); setError("");
     try {
+      // Walls and floors come from deterministic shape tracing — enclosed
+      // regions of the black linework itself, so geometry hugs the plan.
+      // The AI supplies the semantic extras (doors, windows, stairs, …).
+      const shapes = await extractPlanShapes(imageDataUrl).catch(() => null);
       const result = await detectFn({ data: { imageDataUrl, imageWidth, imageHeight } });
-      if (!result.ok) { setError(result.error); return; }
-      // Replace AI results but keep any manual additions the user already drew.
+      if (!result.ok) throw new Error(result.error);
+      const { detectOpeningsTiled } = await import("@/lib/tiled-openings");
+      const tiled = await detectOpeningsTiled(imageDataUrl, (input) => detectFn(input));
       const manual = polygons.filter((p) => p.id.startsWith("man_"));
-      const ai = result.polygons.map((p, i) => ({
+      const ai = (result && result.ok ? result.polygons : []).map((p, i) => ({
         id: `det_${Date.now()}_${i}`,
         type: p.type as MarkLiftType,
         points: p.points as Array<[number, number]>,
       }));
-      const detected = [...manual, ...ai];
-      setPolygons(detected);
-      try { setPolygons(await alignOutlines(detected)); }
-      catch { setAlignmentMessage("Automatic alignment unavailable. Review the detected regions manually."); }
+      // Same arbitration as the main flow: keep regions with a printed room
+      // label inside or a firmly wall-bounded outline.
+      const labels = result && result.ok ? (result.roomLabels ?? []) : [];
+      const OUTDOOR_LABEL = /\b(pool|spa|sun\s?deck|deck|planter|port\s?cochere|driveway|patio|terrace|garden|yard|equipment)\b/i;
+      const keptIndex = new Set(
+        (shapes?.rooms ?? [])
+          .filter((room) => {
+            const label = labels.find((l) => pointInPolygon(l.at[0], l.at[1], room.points));
+            if (label && !OUTDOOR_LABEL.test(label.name)) return true;
+            return room.wallScore >= 0.7 && room.textScore < 0.06 && !(label && OUTDOOR_LABEL.test(label.name));
+          })
+          .map((room) => room.index),
+      );
+      const traced = (shapes?.polygons ?? [])
+        .filter((p) => {
+          const m = p.id.match(/^shape_(?:floor|wall|door|window)_(\d+)/);
+          return !m || keptIndex.has(Number(m[1]));
+        })
+        .map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      const tiledOpenings = tiled.map((p, i) => ({
+        id: `tile_${Date.now()}_${i}`,
+        type: p.type as MarkLiftType,
+        points: p.points,
+      }));
+      const useTraced = traced.some((p) => p.type === "floor");
+      const merged = useTraced
+        ? [...traced, ...tiledOpenings, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
+        : [...ai, ...tiledOpenings];
+      if (!merged.length) {
+        setError("No enclosed shapes found — draw the outline manually or try a sharper image.");
+        return;
+      }
+      const combined = [...manual, ...merged];
+      setPolygons(combined);
+      try { setPolygons(await alignOutlines(combined)); } catch { setAlignmentMessage("Review the detected regions manually."); }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Detection failed.");
     } finally {
@@ -185,12 +230,12 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
   function apply() {
     if (!imageWidth || !imageHeight) return;
     if (polygons.length === 0) { setError("Add at least one element before lifting."); return; }
-    if (!scaleConfirmed || !Number.isFinite(planWidth) || planWidth <= 0) { setError("Calibrate the plan using a known distance before continuing."); return; }
+    if (!scaleConfirmed || !Number.isFinite(planWidth) || planWidth <= 0) { setError("Calibrate a known distance before continuing."); return; }
     onApply({ imageWidth, imageHeight, planWidthMeters: planWidth, polygons, calibration });
   }
 
   const counts = useMemo(() => {
-    const m: Record<MarkLiftType, number> = { wall: 0, door: 0, window: 0, floor: 0, roof: 0, fixture: 0 };
+    const m = Object.fromEntries(MARK_LIFT_TYPES.map((t) => [t, 0])) as Record<MarkLiftType, number>;
     for (const p of polygons) m[p.type] += 1;
     return m;
   }, [polygons]);
@@ -305,7 +350,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
                     <span className="h-4 w-4 rounded" style={{ background: spec.hex }} />
                     <span className="font-medium">{spec.label}</span>
                   </span>
-                  <span className="text-xs text-neutral-500">{spec.height.toFixed(2)} m × {counts[t]}</span>
+                  <span className="text-xs text-neutral-500">{isFeet ? `${(spec.height / 0.3048).toFixed(1)} ft` : `${spec.height.toFixed(2)} m`} × {counts[t]}</span>
                 </button>
               );
             })}
@@ -338,6 +383,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
           </div>
         </div>
       </div>
+      {consentDialog}
     </div>
   );
 }

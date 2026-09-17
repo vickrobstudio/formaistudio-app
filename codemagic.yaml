@@ -1,12 +1,14 @@
 workflows:
   ios-capacitor-workflow:
-    name: FormAI iOS (Capacitor)
+    name: FormAI Studio iOS (Capacitor)
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
       app_store_connect: codemagic_api_key
     environment:
       vars:
+        VITE_SUPABASE_URL: "https://zmkeswetzswdqmruoioa.supabase.co"
+        VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xWsrW2qNkFAD_Zpxza4Oag_RJtwujtV"
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
@@ -18,30 +20,28 @@ workflows:
     cache:
       cache_paths:
         - $HOME/.codemagic-signing
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true
     scripts:
       - name: Install dependencies
         script: |
-          npm install -g bun
-          bun install
+          set -euo pipefail
+          npm ci
+          npm run test:critical
+          npx --no-install tsc --noEmit
+      - name: Check public app configuration
+        script: |
+          node scripts/check-ios-env.mjs
       - name: Build SPA bundle for iOS
         script: |
           set -e
           # Produces dist/client containing index.html + assets that the
           # WKWebView loads from disk. Server functions still call the live
           # SSR host (formaistudio.app) cross-origin at runtime.
-          bun run build:ios
+          npm run build:ios
           ls -la dist/client | head -20
       - name: Add iOS platform if missing
         script: |
           set -e
-          if [ ! -f "ios/App/Podfile" ]; then
-            rm -rf ios
+          if [ ! -d "ios/App/App.xcodeproj" ]; then
             mkdir -p dist/client
             npx --yes cap add ios
           fi
@@ -74,20 +74,20 @@ workflows:
             $PB -c "Set :$key $val" "$PLIST" 2>/dev/null || \
               $PB -c "Add :$key bool $val" "$PLIST"
           }
-          # Privacy usage descriptions — iOS hard-crashes any app that touches
+          # Privacy usage descriptions � iOS hard-crashes any app that touches
           # these APIs (camera, photos, mic, location) without a description.
-          set_str NSCameraUsageDescription "FormAI uses the camera to capture rooms and reference photos for AI interior design."
-          set_str NSPhotoLibraryUsageDescription "FormAI accesses your photo library so you can pick interior photos to redesign."
-          set_str NSPhotoLibraryAddUsageDescription "FormAI saves generated renderings and videos to your photo library."
-          set_str NSMicrophoneUsageDescription "FormAI uses the microphone when you record audio notes for a design."
-          # No NSUserTrackingUsageDescription — FormAI does not track users across apps or websites.
+          set_str NSCameraUsageDescription "FormAI Studio uses the camera to capture rooms and reference photos for AI interior design."
+          set_str NSPhotoLibraryUsageDescription "FormAI Studio accesses your photo library so you can pick interior photos to redesign."
+          set_str NSPhotoLibraryAddUsageDescription "FormAI Studio saves generated renderings and videos to your photo library."
+          set_str NSMicrophoneUsageDescription "FormAI Studio uses the microphone when you record audio notes for a design."
+          # No NSUserTrackingUsageDescription � FormAI Studio does not track users across apps or websites.
           $PB -c "Delete :NSUserTrackingUsageDescription" "$PLIST" 2>/dev/null || true
           # Skips the App Store Connect export-compliance question on every upload.
           set_bool ITSAppUsesNonExemptEncryption false
           # Display name shown under the icon on the home screen.
-          set_str CFBundleDisplayName "FormAI"
-          # The app no longer loads remote pages as its main document — the
-          # UI is bundled into the .ipa — so WKAppBoundDomains is removed.
+          set_str CFBundleDisplayName "FormAI Studio"
+          # The app no longer loads remote pages as its main document � the
+          # UI is bundled into the .ipa � so WKAppBoundDomains is removed.
           $PB -c "Delete :WKAppBoundDomains" "$PLIST" 2>/dev/null || true
           echo "--- Final Info.plist ---"
           $PB -c "Print" "$PLIST" | head -80
@@ -146,8 +146,7 @@ workflows:
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --certificate-key "@file:$CERT_KEY_PATH" \
-            --create \
-            --delete-stale-profiles 2>&1 | tee "$SIGNING_DIR/fetch-signing-files.log"
+            --create 2>&1 | tee "$SIGNING_DIR/fetch-signing-files.log"
           FETCH_EXIT=${PIPESTATUS[0]}
           set -e
           if [ "$FETCH_EXIT" -ne 0 ]; then
@@ -183,7 +182,6 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
-        beta_groups:
-          - Internal Testers
+        submit_to_testflight: false
         submit_to_app_store: false
+

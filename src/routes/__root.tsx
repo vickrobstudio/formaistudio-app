@@ -11,7 +11,6 @@ import { useEffect, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { installIosServerFnBridge } from "../lib/ios-server-fn-bridge";
 
 // Install the iOS server-fn fetch bridge as a side effect at module load —
@@ -45,7 +44,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    console.error("[root-error-boundary]", error);
   }, [error]);
 
   return (
@@ -82,27 +81,31 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "FormAI STUDIO — For the architects of the world" },
-      { name: "description", content: "FormAI STUDIO is the creative platform for architects, interior and furniture designers — build 3D worlds and photorealistic renderings of your ideas. For human and god creators." },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" },
+      { title: "FormAI Studio — For the architects of the world" },
+      { name: "description", content: "FormAI Studio is the creative platform for architects, interior and furniture designers — build 3D worlds and photorealistic renderings of your ideas. For human and god creators." },
       { name: "author", content: "Forma Studio" },
       { name: "google-site-verification", content: "dDJ8BTIOd5KMBg_8UnuCfzxFByXsFKFMAQioHsB-FZQ" },
-      { property: "og:title", content: "FormAI STUDIO — For the architects of the world" },
+      { property: "og:title", content: "FormAI Studio — For the architects of the world" },
       { property: "og:description", content: "The creative platform for architects, interior and furniture designers to build 3D worlds and photorealistic renderings. For human and god creators." },
       { property: "og:type", content: "website" },
        { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "FormAI STUDIO — For the architects of the world" },
+      { name: "twitter:title", content: "FormAI Studio — For the architects of the world" },
       { name: "twitter:description", content: "The creative platform for architects, interior and furniture designers to build 3D worlds and photorealistic renderings." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/saAxfikeWyUmIa5jK4TY97OlnYZ2/social-images/social-1781492090994-72360254-BBEE-41B8-AFAD-44B3C9636E22.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/saAxfikeWyUmIa5jK4TY97OlnYZ2/social-images/social-1781492090994-72360254-BBEE-41B8-AFAD-44B3C9636E22.webp" },
+      { property: "og:image", content: "https://formaistudio.app/og-image.png?v=3" },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:type", content: "image/png" },
+      { property: "og:image:alt", content: "FormAI Studio" },
+      { name: "twitter:image", content: "https://formaistudio.app/og-image.png?v=3" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", type: "image/png", href: "/app-icon.png" },
-      { rel: "shortcut icon", type: "image/png", href: "/app-icon.png" },
+      { rel: "icon", type: "image/png", href: "/favicon.png?v=3" },
+      { rel: "shortcut icon", type: "image/png", href: "/favicon.png?v=3" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
     scripts: [{
@@ -110,8 +113,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       children: JSON.stringify({
         "@context": "https://schema.org",
         "@graph": [
-          { "@type": "Organization", name: "FormAI STUDIO", url: "https://formaistudio.app", description: "Creative platform for architects, interior and furniture designers — 3D worlds and photorealistic renderings, by VICK ROB INC." },
-          { "@type": "WebSite", name: "FormAI STUDIO", url: "https://formaistudio.app", description: "For architects, interior and furniture designers building 3D worlds and photorealistic renderings of their ideas. For human and god creators." },
+          { "@type": "Organization", name: "FormAI Studio", url: "https://formaistudio.app", description: "Creative platform for architects, interior and furniture designers — 3D worlds and photorealistic renderings, by VICK ROB INC." },
+          { "@type": "WebSite", name: "FormAI Studio", url: "https://formaistudio.app", description: "For architects, interior and furniture designers building 3D worlds and photorealistic renderings of their ideas. For human and god creators." },
         ],
       }),
     }],
@@ -141,6 +144,7 @@ function RootComponent() {
 
   useEffect(() => {
     void import("../lib/native-ios").then((m) => m.initNativeIOS());
+    void import("../lib/keyboard-inset").then((m) => m.installKeyboardInsetTracker());
   }, []);
 
   return (

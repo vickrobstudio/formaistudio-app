@@ -61,11 +61,8 @@ RULES:
 - Confidence in [0,1].`;
 
 export const classifyFloorRegions = createServerFn({ method: "POST" })
-  .validator((input: unknown) => Input.parse(input))
+  .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) return { ok: false, error: "The classification service is unavailable." };
-
     const regionsJson = JSON.stringify({ regions: data.regions });
     const userContent = [
       { type: "text", text: SYSTEM },
@@ -74,33 +71,17 @@ export const classifyFloorRegions = createServerFn({ method: "POST" })
       ...(data.hint ? [{ type: "text", text: `Drawing hint: ${data.hint}` }] : []),
     ];
 
-    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-  Authorization: `Bearer ${key}`,
-  "Content-Type": "application/json",
-},
-      body: JSON.stringify({
-        model: "gpt-4.1",
-        messages: [{ role: "user", content: userContent }],
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!upstream.ok) {
-      const detail = await upstream.text().catch(() => "");
-      console.error("floor-classify failed", upstream.status, detail.slice(0, 400));
-      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
-      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      return { ok: false, error: "Region classification failed." };
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent, maxTokens: 8000 });
+    if (!extraction.ok) {
+      console.error("floor-classify failed", extraction.status, extraction.error.slice(0, 400));
+      return { ok: false, error: extraction.error };
     }
 
-    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const raw = payload.choices?.[0]?.message?.content?.trim() ?? "";
-    const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    const jsonText = extraction.text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
     let parsed: unknown;
     try { parsed = JSON.parse(jsonText); } catch {
-      console.error("floor-classify non-JSON", raw.slice(0, 400));
+      console.error("floor-classify non-JSON", extraction.text.slice(0, 400));
       return { ok: false, error: "Classifier returned an unreadable response." };
     }
     const Schema = z.object({

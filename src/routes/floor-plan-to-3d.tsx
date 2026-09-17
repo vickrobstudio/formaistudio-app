@@ -7,7 +7,7 @@ const faqs = [
   ["Can I correct what the AI detects?", "Review the detected parts in 2D before building. Correct missing or misplaced regions, then rotate the 3D preview to inspect the result."],
   ["Which files can I export?", "The converter provides model export options including DAE and OBJ. Check the available formats in the tool and test the file in your destination software."],
   ["Is the model construction-ready?", "No. This is an AI-assisted visualization workflow. Detection can miss openings or misread walls; verify geometry and dimensions independently before technical or construction use."],
-  ["Do I need to download the app?", "You can try FormAI in your web browser. Check the pricing page for current plans and included tools."]
+  ["Do I need to download the app?", "You can try FormAI Studio in your web browser. Check the pricing page for current plans and included tools."]
 ];
 export const Route = createFileRoute("/floor-plan-to-3d")({
   head:()=>({meta:[{title},{name:"description",content:description},{property:"og:title",content:title},{property:"og:description",content:description},{property:"og:url",content:"https://www.formaistudio.app/floor-plan-to-3d"}],

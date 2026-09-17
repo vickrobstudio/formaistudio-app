@@ -3,18 +3,18 @@ import { LegalPage, LegalSection } from "@/components/LegalPage";
 
 export const Route = createFileRoute("/about")({
   head: () => ({ meta: [
-    { title: "About — FormAI STUDIO · For the architects of the world" },
-    { name: "description", content: "FormAI STUDIO is the creative platform for architects, interior and furniture designers building 3D worlds and photorealistic renderings of their ideas. By VICK ROB INC." },
-    { property: "og:title", content: "About FormAI STUDIO — For the architects of the world" },
+    { title: "About — FormAI Studio · For the architects of the world" },
+    { name: "description", content: "FormAI Studio is the creative platform for architects, interior and furniture designers building 3D worlds and photorealistic renderings of their ideas. By VICK ROB INC." },
+    { property: "og:title", content: "About FormAI Studio — For the architects of the world" },
     { property: "og:description", content: "The creative app for architects, interior and furniture designers — and every creator of 3D worlds. By VICK ROB INC." },
   ] }),
   component: AboutPage,
 });
 
 function AboutPage() {
-  return <LegalPage title="About FormAI STUDIO" updated="June 15, 2026">
+  return <LegalPage title="About FormAI Studio" updated="June 15, 2026">
     <LegalSection title="For the architects of the world">
-      <p>FormAI STUDIO is for architects, designers, interior designers and furniture designers — and for every creator interested in building 3D worlds and rendering photorealistic views to showcase their ideas. An app for the architects of the world: human and god creators.</p>
+      <p>FormAI Studio is for architects, designers, interior designers and furniture designers — and for every creator interested in building 3D worlds and rendering photorealistic views to showcase their ideas. An app for the architects of the world: human and god creators.</p>
     </LegalSection>
     <LegalSection title="Design without limits">
       <p>An AI-powered creative platform for custom furniture, interior concepts, photorealistic visualizations, image editing and virtual space tours — backed by a Construction Assistant covering US and European building codes.</p>
@@ -23,7 +23,7 @@ function AboutPage() {
       <p>Our tools help designers and clients move from references and ideas to clear visual concepts while preserving materials, finishes, furniture intent and spatial context.</p>
     </LegalSection>
     <LegalSection title="Company">
-      <p>FormAI STUDIO is a product of VICK ROB INC. © 2026 VICK ROB INC. All rights reserved.</p>
+      <p>FormAI Studio is a product of VICK ROB INC. © 2026 VICK ROB INC. All rights reserved.</p>
     </LegalSection>
   </LegalPage>;
 }

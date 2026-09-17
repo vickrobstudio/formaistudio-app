@@ -11,4 +11,3 @@ export function calibratePlan(a: PlanPoint, b: PlanPoint, width: number, height:
   const metersPerPixel = distance * (units === "feet" ? 0.3048 : 1) / pixels;
   return { metersPerPixel, planWidthMeters: Math.max(width, height) * metersPerPixel };
 }
-

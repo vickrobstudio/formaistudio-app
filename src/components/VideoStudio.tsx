@@ -1,15 +1,23 @@
+import { useSubscription } from "@/hooks/use-subscription";
 import { useRef, useState, type ChangeEvent } from "react";
-import { Download, Film, LoaderCircle, Play, Upload, X } from "lucide-react";
-import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { useNavigate } from "@tanstack/react-router";
+import { Download, Film, Instagram, LoaderCircle, Play, Upload, X } from "lucide-react";
+import { BackLink, FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
 import { ToolInformation } from "@/components/ToolInformation";
 import { videoInformation } from "@/lib/tool-information";
 import { saveMediaToDevice } from "@/lib/save-to-device";
+import { shareToInstagram } from "@/lib/share-to-instagram";
+import { useCredits } from "@/hooks/use-credits";
+
+const VIDEO_CREDIT_COST = 2;
 
 type TourImage = { name: string; url: string };
 
 export function VideoStudio() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const { credits, signedIn, vip, consume } = useCredits();
   const [images, setImages] = useState<TourImage[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -26,8 +34,12 @@ export function VideoStudio() {
     setVideoUrl(null);
   }
 
+  const subscription = useSubscription();
   async function createTour() {
-    if (images.length < 2) return;
+    if (images.length < 2 || busy) return;
+    if (!subscription.hasTool("/ai-to-video")) { void navigate({ to: "/pricing" }); return; }
+    // This montage is rendered on the device, with no paid AI/provider call.
+    // Subscription access is handled by the tool gate; do not double-debit.
     setBusy(true);
     setError("");
     try {

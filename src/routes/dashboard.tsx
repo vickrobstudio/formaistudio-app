@@ -1,16 +1,19 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Cloud, History, UserRound } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, Cloud, CreditCard, History, LogOut, Sparkles, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { useCredits } from "@/hooks/use-credits";
+import { supabase } from "@/integrations/supabase/client";
 
 const dashboardItems = [
+  { icon: CreditCard, name: "Plans & Subscriptions", description: "Your credits, plans, billing and subscriptions", to: "/wallet" },
   { icon: UserRound, name: "Account", description: "Profile and account details", to: "/account" },
   { icon: Cloud, name: "My Cloud", description: "Stored images, projects, products and materials", to: "/cloud" },
   { icon: History, name: "History", description: "Recent creations and activity", to: "/history" },
 ] as const;
 
-export const Route = createFileRoute("/dashboard")({ head: () => ({ meta: [{ title: "Profile — FormAI STUDIO" }, { name: "description", content: "Manage your FormAI STUDIO profile, cloud library and activity." }, { property: "og:title", content: "FormAI STUDIO Profile" }, { property: "og:description", content: "Your account and creative cloud." }] }), component: Dashboard });
+export const Route = createFileRoute("/dashboard")({ head: () => ({ meta: [{ title: "Profile — FormAI Studio" }, { name: "description", content: "Manage your FormAI Studio profile, cloud library and activity." }, { property: "og:title", content: "FormAI Studio Profile" }, { property: "og:description", content: "Your account and creative cloud." }] }), component: Dashboard });
 
 function Dashboard() {
   const { credits, signedIn, vip } = useCredits();

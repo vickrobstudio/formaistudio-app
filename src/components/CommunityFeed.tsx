@@ -34,7 +34,7 @@ export function CommunityFeed() {
   });
 
   async function shareCreation(title: string) {
-    const shareData = { title: `${title} — FormAI STUDIO`, url: window.location.href };
+    const shareData = { title: `${title} — FormAI Studio`, url: window.location.href };
     if (navigator.share) await navigator.share(shareData);
     else { await navigator.clipboard.writeText(window.location.href); setMessage("Link copied"); }
   }
@@ -50,13 +50,17 @@ export function CommunityFeed() {
           <Avatar><AvatarImage src={creation.creatorAvatarUrl ?? undefined} alt={`${creation.creatorName} profile photo`} className="object-cover" /><AvatarFallback>{creation.creatorName.slice(0, 1).toUpperCase()}</AvatarFallback></Avatar>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">{creation.creatorName}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{creation.creationType} · {new Date(creation.createdAt).toLocaleDateString()}</p>
+            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">{creation.creationType} · {new Date(creation.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>
           </div>
           {creation.modelGlbUrl && <span className="rounded-full bg-foreground px-2 py-1 text-[9px] font-bold uppercase tracking-[0.16em] text-background">3D</span>}
         </div>
-        {viewing3D.has(creation.id) && creation.modelGlbUrl
-          ? <FeedModelViewer url={creation.modelGlbUrl} />
-          : <img src={creation.imageUrl} alt={creation.title} loading="lazy" className="aspect-[4/5] w-full object-cover" />}
+        <div className="px-5">
+          <div className="overflow-hidden rounded-2xl border border-border bg-secondary/20">
+            {viewing3D.has(creation.id) && creation.modelGlbUrl
+              ? <FeedModelViewer url={creation.modelGlbUrl} />
+              : <img src={creation.imageUrl} alt={creation.title} loading="lazy" decoding="async" className="aspect-[4/5] w-full object-cover" />}
+          </div>
+        </div>
         {creation.modelGlbUrl && (
           <div className="px-5 pt-3">
             <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => toggle3D(creation.id)}>
@@ -70,7 +74,7 @@ export function CommunityFeed() {
           <Button type="button" variant="ghost" size="icon" aria-label={`Share ${creation.title}`} onClick={() => void shareCreation(creation.title)}><Share /></Button>
           <Button type="button" variant="ghost" size="icon" className="ml-auto" aria-label={`Save ${creation.title} to library`} onClick={() => action.mutate({ type: "favorite", creationId: creation.id })}><Bookmark /></Button>
         </div>
-        <div className="px-5"><p className="text-xs">{creation.likeCount} {creation.likeCount === 1 ? "like" : "likes"}</p><h2 className="mt-3 text-lg font-semibold">{creation.title}</h2>{creation.description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{creation.description}</p>}
+        <div className="px-5"><p className="text-xs">{creation.likeCount} {creation.likeCount === 1 ? "like" : "likes"}</p><h2 className="mt-3 text-2xl font-light tracking-tight">{creation.title}</h2>{creation.description && <p className="mt-2 text-sm leading-7 text-muted-foreground">{creation.description}</p>}
           {creation.comments.map((item) => <p key={item.id} className="mt-3 text-xs leading-5"><span className="font-semibold">{item.authorName}</span> {item.body}</p>)}
           {commentFor === creation.id && (signedIn ? <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (commentBody.trim()) postComment.mutate({ creationId: creation.id, body: commentBody }); }}><input value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={500} placeholder="Add a comment…" aria-label="Comment" className="min-h-11 flex-1 rounded-xl border border-input bg-background px-4 text-sm" /><Button type="submit" size="icon" aria-label="Post comment"><Send /></Button></form> : <Button asChild variant="outline" className="mt-4 w-full"><Link to="/auth">Sign in to comment</Link></Button>)}
         </div>

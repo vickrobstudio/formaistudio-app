@@ -30,7 +30,7 @@ function InstagramReview() {
   return <main className="mx-auto max-w-4xl space-y-6 p-6">
     <Link to="/feed" className="underline">Back to community</Link>
     <h1 className="text-2xl font-semibold">Instagram approval queue</h1>
-    <p>Only the designated FormAI reviewer can approve and publish submissions to @formaistudio.app.</p>
+    <p>Only the designated FormAI Studio reviewer can approve and publish submissions to @formaistudio.app.</p>
     {queue.isPending && <p role="status">Loading submissions…</p>}
     {queue.error && <p role="alert">{queue.error.message} <Link to="/auth" className="underline">Sign in</Link></p>}
     {message && <p role="status">{message}</p>}
@@ -46,4 +46,3 @@ function InstagramReview() {
     </article>)}
   </main>;
 }
-

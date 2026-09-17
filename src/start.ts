@@ -20,8 +20,7 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 
 // Origins allowed to call our server functions / server routes cross-origin.
 // `capacitor://localhost` is the iOS WKWebView origin; `https://localhost` is
-// used by some Capacitor configurations. Add the Lovable preview origins too
-// for in-browser native-emulator testing.
+// used by some Capacitor configurations.
 const ALLOWED_CROSS_ORIGINS = new Set([
   "capacitor://localhost",
   "https://localhost",
@@ -46,7 +45,7 @@ const corsMiddleware = createMiddleware().server(async ({ next, request }) => {
         "access-control-allow-origin": origin,
         "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
         "access-control-allow-headers":
-          "authorization, content-type, x-formai-client, x-requested-with",
+          "authorization, content-type, x-formai-client, x-requested-with, x-formai-operation-id, x-formai-ai-consent",
         "access-control-max-age": "86400",
         vary: "origin",
       },

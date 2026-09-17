@@ -42,7 +42,7 @@ export const Route = createFileRoute("/api/build-chat")({
         };
         const regionLine = regionMap[region];
 
-        const system = `You are the FormAI Build Architect — an interactive assistant that co-designs a 3D building model with the user from their uploaded 2D plans. You are a CONSTRUCTION BIBLE — fluent in US and European architectural codes and use them to back every recommendation.
+        const system = `You are the FormAI Studio Build Architect — an interactive assistant that co-designs a 3D building model with the user from their uploaded 2D plans. You are a CONSTRUCTION BIBLE — fluent in US and European architectural codes and use them to back every recommendation.
 
 ${langLine}
 ${unitsLine}
@@ -100,13 +100,14 @@ CURRENT PROJECT STATE (JSON):
 ${ctxJson}`;
 
         const result = streamText({
+      maxRetries: 0,
           model: createOpenAIChatModel(key),
           maxOutputTokens: 2048,
           abortSignal: request.signal,
           system,
           messages: await convertToModelMessages(body.messages as UIMessage[]),
         });
-        return result.toUIMessageStreamResponse({ originalMessages: body.messages as UIMessage[] });
+        return result.toUIMessageStreamResponse({ originalMessages: body.messages as UIMessage[], onError: () => "The studio assistant is momentarily unavailable. Please try again in a bit." });
       },
     },
   },

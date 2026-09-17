@@ -57,4 +57,3 @@ export function alignPlanToInk<T extends Outline>(polygons: T[], ink: Uint8Array
   if (bestScore < .6 || bestScore - before < .08 || outOfBounds) return { polygons, changed: false, confidence: bestScore };
   return { polygons: candidates, changed: true, confidence: bestScore };
 }
-

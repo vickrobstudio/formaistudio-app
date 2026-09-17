@@ -56,16 +56,15 @@ export function ShareGeneratedImage({ image, signedIn }: { image: string; signed
       {!signedIn ? <p className="text-sm">Sign in to share your work. Download your image before leaving this page. <Link to="/auth" className="underline">Sign in</Link></p> : <>
         <label className="block text-sm">Title<Input value={title} maxLength={120} onChange={e => setTitle(e.target.value)} disabled={busy} /></label>
         <label className="block text-sm">Description<textarea className="mt-1 block w-full rounded border bg-background p-2" value={description} maxLength={1000} onChange={e => setDescription(e.target.value)} disabled={busy} /></label>
-        <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} disabled={busy} />I have permission to share this image publicly in the FormAI community under my profile name.</label>
+        <label className="flex gap-2 text-sm"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} disabled={busy} />I have permission to share this image publicly in the FormAI Studio community under my profile name.</label>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <Button disabled={busy || published || !consent || !title.trim()} onClick={() => void submit("community")}>{published ? "Published to community" : "Publish to Home feed"}</Button>
         {published && <p role="status"><Link to="/feed" className="underline">View Home feed</Link></p>}
-        <label className="flex gap-2 text-sm"><input type="checkbox" checked={instagramConsent} onChange={e => setInstagramConsent(e.target.checked)} disabled={busy || instagramSent} />I have permission to submit this image and caption for public posting on @formaistudio.app after FormAI approval.</label>
-        <Button variant="outline" disabled={busy || instagramSent || !instagramConsent || !title.trim()} onClick={() => void submit("instagram")}>{instagramSent ? "Submitted for Instagram review" : "Submit to FormAI Instagram"}</Button>
-        {instagramSent && <p role="status">Your creation is pending FormAI approval. It has not been posted to Instagram.</p>}
+        <label className="flex gap-2 text-sm"><input type="checkbox" checked={instagramConsent} onChange={e => setInstagramConsent(e.target.checked)} disabled={busy || instagramSent} />I have permission to submit this image and caption for public posting on @formaistudio.app after FormAI Studio approval.</label>
+        <Button variant="outline" disabled={busy || instagramSent || !instagramConsent || !title.trim()} onClick={() => void submit("instagram")}>{instagramSent ? "Submitted for Instagram review" : "Submit to FormAI Studio Instagram"}</Button>
+        {instagramSent && <p role="status">Your creation is pending FormAI Studio approval. It has not been posted to Instagram.</p>}
       </>}
-      <p className="text-xs text-muted-foreground">Community and Instagram sharing are separate choices. Instagram posts require FormAI approval.</p>
+      <p className="text-xs text-muted-foreground">Community and Instagram sharing are separate choices. Instagram posts require FormAI Studio approval.</p>
     </div>}
   </div>;
 }
-

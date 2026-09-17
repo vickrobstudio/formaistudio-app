@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Camera, CircleHelp, LoaderCircle, Trash2, UserRound } from "lucide-react";
-import { useRef, useState, type ChangeEvent } from "react";
+import { Camera, CircleHelp, Instagram, LoaderCircle, Trash2, UserRound } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { DashboardDetail } from "@/components/DashboardDetail";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,19 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteMyAccount, getMyProfile, setMyAvatarPath, updateMyProfile } from "@/lib/profile.functions";
 import { useAssistantPrefs, REGION_LABELS, type AssistantRegion } from "@/lib/assistant-prefs";
+import { useInstagramConnection } from "@/hooks/use-instagram-connection";
+import { completeInstagramConnect, disconnectInstagram, startInstagramConnect } from "@/lib/instagram-connect.functions";
 
-export const Route = createFileRoute("/_authenticated/account")({ component: AccountPage });
+export const Route = createFileRoute("/_authenticated/account")({
+  // code/state/error are Meta's own OAuth redirect params (Meta sends the
+  // browser straight back here — see instagram-oauth.server.ts).
+  validateSearch: (search: Record<string, unknown>): { code?: string; state?: string; error?: string } => ({
+    code: typeof search.code === "string" ? search.code : undefined,
+    state: typeof search.state === "string" ? search.state : undefined,
+    error: typeof search.error === "string" ? search.error : undefined,
+  }),
+  component: AccountPage,
+});
 
 function AccountPage() {
   const user = Route.useRouteContext().user;
@@ -29,6 +40,56 @@ function AccountPage() {
   const [confirmation, setConfirmation] = useState("");
   const shownUsername = username || profile?.username || "";
   const { lang: aiLang, units: aiUnits, region: aiRegion, setLang: setAiLang, setUnits: setAiUnits, setRegion: setAiRegion } = useAssistantPrefs();
+  const { connected: instagramConnected, username: instagramUsername } = useInstagramConnection();
+  const startInstagramConnectFn = useServerFn(startInstagramConnect);
+  const completeInstagramConnectFn = useServerFn(completeInstagramConnect);
+  const disconnectInstagramFn = useServerFn(disconnectInstagram);
+  const [instagramBusy, setInstagramBusy] = useState(false);
+  const [instagramOverride, setInstagramOverride] = useState<{ connected: boolean; username: string | null } | null>(null);
+  const [instagramError, setInstagramError] = useState<string | null>(null);
+  const { code: igCode, state: igState, error: igOauthError } = Route.useSearch();
+  useEffect(() => {
+    if (igOauthError) {
+      setInstagramError("Instagram connection was cancelled.");
+      window.history.replaceState(null, "", "/account");
+      return;
+    }
+    if (!igCode || !igState) return;
+    setInstagramBusy(true);
+    void (async () => {
+      try {
+        const result = await completeInstagramConnectFn({ data: { code: igCode, state: igState } });
+        setInstagramOverride({ connected: true, username: result.username });
+        setInstagramError(null);
+      } catch (cause) {
+        setInstagramError(cause instanceof Error ? cause.message : "Could not connect Instagram.");
+      } finally {
+        setInstagramBusy(false);
+        window.history.replaceState(null, "", "/account");
+      }
+    })();
+    // Runs once for the code/state this page loaded with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  async function connectInstagram() {
+    setInstagramBusy(true);
+    try {
+      const { authorizeUrl } = await startInstagramConnectFn();
+      // target=_blank so Capacitor's iOS shell hands the Facebook Login
+      // dialog to the system browser instead of blocking in-app navigation
+      // to a domain outside allowNavigation.
+      window.open(authorizeUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setInstagramBusy(false);
+    }
+  }
+  async function disconnectInstagramAccount() {
+    setInstagramBusy(true);
+    try { await disconnectInstagramFn(); setInstagramOverride({ connected: false, username: null }); setInstagramError(null); }
+    finally { setInstagramBusy(false); }
+  }
+  const instagramIsConnected = instagramOverride ? instagramOverride.connected : instagramConnected;
+  const instagramDisplayUsername = instagramOverride ? instagramOverride.username : instagramUsername;
 
   async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -72,6 +133,7 @@ function AccountPage() {
       </div>
       <label className="block text-xs"><span className="font-bold uppercase tracking-[0.14em]">Username</span><Input value={shownUsername} disabled={isLoading || busy} minLength={3} maxLength={30} autoCapitalize="none" autoCorrect="off" spellCheck={false} onChange={(event) => setUsername(event.target.value)} placeholder="your-name" className="mt-2 h-12" /><span className="mt-2 block text-muted-foreground">Letters, numbers, hyphens and periods only. This name appears on feed posts.</span></label>
       <Button type="button" className="w-full" disabled={busy || !/^[A-Za-z0-9][A-Za-z0-9.-]{1,28}[A-Za-z0-9]$/.test(shownUsername)} onClick={() => void submitProfile()}>{busy ? <LoaderCircle className="animate-spin" /> : <UserRound />}Save profile</Button>
+      <div className="organic-divider grid grid-cols-[2.75rem_1fr_auto] items-center gap-3 py-5"><span className="grid size-11 place-items-center rounded-full border border-border"><Instagram className="size-5" /></span><span><span className="block text-sm">Instagram</span><span className="mt-1 block text-xs text-muted-foreground">{instagramIsConnected ? `Connected as @${instagramDisplayUsername}` : "Share your creations to your own Instagram"}</span>{instagramError && <span role="alert" className="mt-1 block text-xs text-destructive">{instagramError}</span>}</span>{instagramIsConnected ? <Button type="button" size="sm" variant="outline" disabled={instagramBusy} onClick={() => void disconnectInstagramAccount()}>Disconnect</Button> : <Button type="button" size="sm" variant="outline" disabled={instagramBusy} onClick={() => void connectInstagram()}>Connect</Button>}</div>
       <div className="organic-divider py-5"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Email</p><p className="mt-2 text-sm">{user.email}</p></div>
       <div className="organic-divider py-5">
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">AI Architect</p>

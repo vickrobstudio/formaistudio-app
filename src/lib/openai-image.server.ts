@@ -1,3 +1,4 @@
+import { meteredFetch, GenerationBillingError } from "./generation-billing.server";
 import { Buffer } from "node:buffer";
 
 export async function renderOpenAIImage(
@@ -32,7 +33,7 @@ export async function renderOpenAIImage(
   }
 
   try {
-    const upstream = await fetch(`https://api.openai.com/v1/images/${endpoint}`, {
+    const upstream = await meteredFetch("image", `https://api.openai.com/v1/images/${endpoint}`, {
       method: "POST", headers, body,
       signal: AbortSignal.any([AbortSignal.timeout(240_000), ...(signal ? [signal] : [])]),
     });
@@ -60,6 +61,7 @@ export async function renderOpenAIImage(
     if (!base64) return new Response("The rendering response did not include an image.", { status: 502 });
     return Response.json({ image: `data:image/jpeg;base64,${base64}` });
   } catch (error) {
+    if (error instanceof GenerationBillingError) return new Response(error.message, { status: 402 });
     const name = error instanceof Error ? error.name : "UnknownError";
     console.error("OpenAI image request interrupted", { name, model });
     return new Response(

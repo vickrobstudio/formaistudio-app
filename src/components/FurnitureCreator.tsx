@@ -1,18 +1,24 @@
+import { ShareGeneratedImage } from "@/components/ShareGeneratedImage";
 import { useRef, useState, type ChangeEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Box, Download, ImagePlus, Library, LoaderCircle, MapPin, Share2, Sparkles, X } from "lucide-react";
-import { FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { Box, Download, ImagePlus, Instagram, LoaderCircle, MapPin, Share2, Sparkles, X } from "lucide-react";
+import { FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { streamImage } from "@/lib/stream-image";
-import { saveFurnitureCreation } from "@/lib/feed.functions";
+import { ShareCreationDialog } from "@/components/ShareCreationDialog";
+import { shrinkImageDataUrl } from "@/lib/shrink-image";
 import { useCredits } from "@/hooks/use-credits";
+import { useAiConsentGate } from "@/hooks/use-ai-consent";
 import { FurnitureSketchBoard } from "@/components/FurnitureSketchBoard";
 import { AiPlanGenerator } from "@/components/AiPlanGenerator";
 import { Furniture3DViewer } from "@/components/Furniture3DViewer";
 import { generateFurniture3D } from "@/lib/furniture-3d.functions";
 import { saveMediaToDevice } from "@/lib/save-to-device";
+import { shareToInstagram } from "@/lib/share-to-instagram";
+import { useInstagramConnection } from "@/hooks/use-instagram-connection";
+import { shareToMyInstagram, shareToStudioInstagram } from "@/lib/instagram-connect.functions";
 
 const materialOptions = ["Solid wood", "Stone", "Metal", "Glass", "Upholstery", "Leather", "Recycled composite"];
 
@@ -34,17 +40,24 @@ export function FurnitureCreator() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<"private" | "public" | null>(null);
   const { signedIn } = useCredits();
-  const saveFurniture = useServerFn(saveFurnitureCreation);
+  const { ensureConsent, dialog: consentDialog } = useAiConsentGate();
+  const shareToStudioInstagramFn = useServerFn(shareToStudioInstagram);
+  const { connected: instagramConnected } = useInstagramConnection();
+  const shareToMyInstagramFn = useServerFn(shareToMyInstagram);
+  const [instaState, setInstaState] = useState<"idle" | "posting" | "posted">("idle");
+  const [instaMyState, setInstaMyState] = useState<"idle" | "posting" | "posted">("idle");
+  const [shareOpen, setShareOpen] = useState(false);
   const create3D = useServerFn(generateFurniture3D);
 
   function attach(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).slice(0, 4);
     if (files.some((file) => file.size > 10_000_000)) return setError("Each reference must be smaller than 10 MB.");
-    Promise.all(files.map((file) => new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : ""); reader.readAsDataURL(file); }))).then((images) => setReferences(images.filter(Boolean)));
+    Promise.all(files.map((file) => new Promise<string>((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : ""); reader.readAsDataURL(file); }))).then(async (images) => setReferences(await Promise.all(images.filter(Boolean).map((image) => shrinkImageDataUrl(image, 1600)))));
   }
 
   async function create() {
     if (prompt.trim().length < 10) return;
+    if (!(await ensureConsent())) return;
     setBusy(true);
     setConceptProgress(3);
     setError("");
@@ -69,22 +82,8 @@ export function FurnitureCreator() {
     }
   }
 
-  async function saveToLibrary(isPublic: boolean) {
-    if (!result) return;
-    setBusy(true);
-    setError("");
-    try {
-      await saveFurniture({ data: { title: prompt.trim().slice(0, 120), description: `Custom furniture concept. Materials: ${materials.join(", ") || "Designer selected"}.`, imageUrl: result, modelGlbPath, modelUsdzPath, isPublic } });
-      setSaved(isPublic ? "public" : "private");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The furniture piece could not be saved.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function createRotatableModel() {
-    if (!result) return;
+    if (!result || generating3D || !(await ensureConsent())) return;
     setGenerating3D(true);
     setModelProgress(4);
     setError("");
@@ -120,5 +119,34 @@ export function FurnitureCreator() {
     catch (cause) { setError(cause instanceof Error ? cause.message : "The image could not be saved."); }
   }
 
-  return <main className="min-h-screen bg-background"><FormaHeader /><PageIntro eyebrow="Create with AI" title="Custom furniture" description="Draw an original shape, explore nature-inspired forms, or upload a reference image for shape, texture, or inspiration." /><section className={`${PAGE_SHELL} px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:grid md:grid-cols-2 md:items-start md:gap-x-10 lg:gap-x-14`}><div className="space-y-6"><input ref={inputRef} type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={attach} /><FurnitureSketchBoard onAddReferences={(images) => setReferences((current) => [...current, ...images].slice(0, 4))} onInspiration={setPrompt} />{result && <div className="space-y-3"><p className="text-[10px] font-bold uppercase tracking-[0.2em]">Your furniture concept</p><img src={result} alt="AI custom furniture concept" className="aspect-[4/3] w-full rounded-2xl border border-border object-cover" /><Button type="button" variant="outline" className="w-full" onClick={() => void saveConcept()}><Download />Save image to Photos</Button></div>}{modelUrl && <div ref={modelPreviewRef} className="space-y-3"><p className="text-[10px] font-bold uppercase tracking-[0.2em]">Live 360° 3D preview</p><Furniture3DViewer modelUrl={modelUrl} onUsdExported={(path) => { setModelUsdzPath(path); setSaved(null); }} /></div>}</div><div className="mt-6 space-y-6 md:mt-0"><Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Chat with AI: describe the shape, dimensions, function, style and details…" className="min-h-32 resize-none" /><Button type="button" variant="outline" className="w-full" onClick={() => inputRef.current?.click()}><ImagePlus />{references.length ? `${references.length} shape, texture, or inspiration references` : "Upload more reference images"}</Button>{references.length > 0 && <div className="grid grid-cols-4 gap-2">{references.map((reference, index) => <div key={`${reference.slice(-20)}-${index}`} className="relative aspect-square overflow-hidden rounded-xl border border-border"><img src={reference} alt={`Furniture reference ${index + 1}`} className="h-full w-full object-cover" /><Button type="button" variant="default" size="icon" aria-label={`Remove reference ${index + 1}`} className="absolute right-1 top-1 size-7 min-h-0 rounded-full" onClick={() => setReferences((current) => current.filter((_, itemIndex) => index !== itemIndex))}><X className="size-3" /></Button></div>)}</div>}<div><p className="text-xs uppercase tracking-[0.14em]">Materials</p><div className="mt-3 flex flex-wrap gap-2">{materialOptions.map((material) => <Button key={material} type="button" size="sm" variant={materials.includes(material) ? "default" : "outline"} onClick={() => setMaterials((current) => current.includes(material) ? current.filter((item) => item !== material) : [...current, material])}>{material}</Button>)}</div></div><label className="block text-xs"><span className="flex items-center gap-2 uppercase tracking-[0.14em]"><MapPin className="size-4" />Supplier location</span><Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, country or region" className="mt-2 h-12" /></label>{location && <p className="text-xs leading-5 text-muted-foreground">The concept will prioritize materials and manufacturing methods commonly available near {location}. Supplier outreach and live inventory require verified supplier partnerships.</p>}{error && <p role="alert" className="text-xs text-destructive">{error}</p>}{saved && <p role="status" className="text-xs">Saved to your Cloud and interior library{saved === "public" ? ", and shared with the community" : ""}.</p>}{busy && <div role="status" aria-live="polite" className="space-y-2"><div className="flex items-center justify-between text-xs"><span>Creating furniture piece</span><span className="font-semibold tabular-nums">{conceptProgress}%</span></div><progress value={conceptProgress} max={100} aria-label="Furniture concept creation progress" className="h-1.5 w-full accent-foreground" /></div>}<Button variant="studio" className="h-12 w-full" disabled={busy || prompt.trim().length < 10} onClick={() => void create()}>{busy ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{busy ? `Creating furniture… ${conceptProgress}%` : "Create furniture concept"}</Button>{result && <>{generating3D && <div role="status" aria-live="polite" className="space-y-2"><div className="flex items-center justify-between text-xs"><span>Building rotatable 3D model</span><span className="font-semibold tabular-nums">{modelProgress}%</span></div><progress value={modelProgress} max={100} aria-label="3D model creation progress" className="h-1.5 w-full accent-foreground" /></div>}<Button variant="studio" className="h-12 w-full" disabled={!signedIn || generating3D} onClick={() => void createRotatableModel()}>{generating3D ? <LoaderCircle className="animate-spin" /> : <Box />}{generating3D ? `Creating USDZ-ready 3D model… ${modelProgress}%` : modelUrl ? "Regenerate 3D model" : "Continue to 3D · USDZ"}</Button><AiPlanGenerator sourceImage={result} kind="furniture" /><div className="grid grid-cols-2 gap-3"><Button variant="outline" disabled={!signedIn || busy || Boolean(saved)} onClick={() => void saveToLibrary(false)}><Library />Save</Button><Button variant="outline" disabled={!signedIn || busy || Boolean(saved)} onClick={() => void saveToLibrary(true)}><Share2 />Share</Button></div>{!signedIn && <p className="text-center text-xs text-muted-foreground">Sign in to create 3D files and save this piece to your reusable furniture library.</p>}</>}</div></section><ToolTabBar /></main>;
+  // Signed-in members post to the studio's @formaistudio.app account
+  // (credited to them); guests get the device share sheet instead.
+  async function shareConceptToInstagram() {
+    if (!result || instaState === "posting") return;
+    try {
+      if (signedIn) {
+        setInstaState("posting");
+        const shrunk = await shrinkImageDataUrl(result, 1600);
+        await shareToStudioInstagramFn({ data: { imageUrl: shrunk, caption: prompt.trim().slice(0, 120) } });
+        setInstaState("posted");
+      } else {
+        await shareToInstagram(result, "formai-custom-furniture.png", "image/png");
+      }
+    }
+    catch (cause) { setInstaState("idle"); setError(cause instanceof Error ? cause.message : "The image could not be shared."); }
+  }
+
+  // Members who connected their own Instagram in Account can post there too.
+  async function shareConceptToMyInstagram() {
+    if (!result || instaMyState === "posting") return;
+    try {
+      setInstaMyState("posting");
+      const shrunk = await shrinkImageDataUrl(result, 1600);
+      await shareToMyInstagramFn({ data: { imageUrl: shrunk, caption: `${prompt.trim().slice(0, 120)} — made with FormAI Studio` } });
+      setInstaMyState("posted");
+    }
+    catch (cause) { setInstaMyState("idle"); setError(cause instanceof Error ? cause.message : "The image could not be shared."); }
+  }
+
+  return <main className="min-h-screen bg-background"><FormaHeader /><PageIntro eyebrow="Create with AI" title="Custom furniture" description="Draw an original shape, explore nature-inspired forms, or upload a reference image for shape, texture, or inspiration." /><section className="space-y-6 px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-3xl lg:max-w-4xl"><input ref={inputRef} type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={attach} /><FurnitureSketchBoard onAddReferences={(images) => setReferences((current) => [...current, ...images].slice(0, 4))} onInspiration={setPrompt} />{result && <div className="space-y-3"><p className="text-[10px] font-bold uppercase tracking-[0.2em]">Your furniture concept</p><img src={result} alt="AI custom furniture concept" className="aspect-[4/3] w-full rounded-2xl border border-border object-cover" /><Button type="button" variant="outline" className="w-full" onClick={() => void saveConcept()}><Download />Save image to Photos</Button><ShareGeneratedImage image={result} signedIn={signedIn} /></div>}{modelUrl && <div ref={modelPreviewRef} className="space-y-3"><p className="text-[10px] font-bold uppercase tracking-[0.2em]">Live 360° 3D preview</p><Furniture3DViewer modelUrl={modelUrl} onUsdExported={(path) => { setModelUsdzPath(path); setSaved(null); }} /></div>}<Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Chat with AI: describe the shape, dimensions, function, style and details…" className="min-h-32 resize-none" /><Button type="button" variant="outline" className="w-full" onClick={() => inputRef.current?.click()}><ImagePlus />{references.length ? `${references.length} shape, texture, or inspiration references` : "Upload more reference images"}</Button>{references.length > 0 && <div className="grid grid-cols-4 gap-2">{references.map((reference, index) => <div key={`${reference.slice(-20)}-${index}`} className="relative aspect-square overflow-hidden rounded-xl border border-border"><img src={reference} alt={`Furniture reference ${index + 1}`} className="h-full w-full object-cover" /><Button type="button" variant="default" size="icon" aria-label={`Remove reference ${index + 1}`} className="absolute right-1 top-1 size-7 min-h-0 rounded-full" onClick={() => setReferences((current) => current.filter((_, itemIndex) => index !== itemIndex))}><X className="size-3" /></Button></div>)}</div>}<div><p className="text-xs uppercase tracking-[0.14em]">Materials</p><div className="mt-3 flex flex-wrap gap-2">{materialOptions.map((material) => <Button key={material} type="button" size="sm" variant={materials.includes(material) ? "default" : "outline"} onClick={() => setMaterials((current) => current.includes(material) ? current.filter((item) => item !== material) : [...current, material])}>{material}</Button>)}</div></div><label className="block text-xs"><span className="flex items-center gap-2 uppercase tracking-[0.14em]"><MapPin className="size-4" />Supplier location</span><Input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City, country or region" className="mt-2 h-12" /></label>{location && <p className="text-xs leading-5 text-muted-foreground">The concept will prioritize materials and manufacturing methods commonly available near {location}. Supplier outreach and live inventory require verified supplier partnerships.</p>}{error && <p role="alert" className="text-xs text-destructive">{error}</p>}{saved && <p role="status" className="text-xs">Saved to your Cloud and interior library{saved === "public" ? ", and shared with the community" : ""}.</p>}{busy && <div role="status" aria-live="polite" className="space-y-2"><div className="flex items-center justify-between text-xs"><span>Creating furniture piece</span><span className="font-semibold tabular-nums">{conceptProgress}%</span></div><progress value={conceptProgress} max={100} aria-label="Furniture concept creation progress" className="h-1.5 w-full accent-foreground" /></div>}<Button variant="studio" className="h-12 w-full" disabled={busy || prompt.trim().length < 10} onClick={() => void create()}>{busy ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{busy ? `Creating furniture… ${conceptProgress}%` : "Create furniture concept"}</Button>{result && <>{generating3D && <div role="status" aria-live="polite" className="space-y-2"><div className="flex items-center justify-between text-xs"><span>Building rotatable 3D model</span><span className="font-semibold tabular-nums">{modelProgress}%</span></div><progress value={modelProgress} max={100} aria-label="3D model creation progress" className="h-1.5 w-full accent-foreground" /></div>}<Button variant="studio" className="h-12 w-full" disabled={!signedIn || generating3D} onClick={() => void createRotatableModel()}>{generating3D ? <LoaderCircle className="animate-spin" /> : <Box />}{generating3D ? `Creating USDZ-ready 3D model… ${modelProgress}%` : modelUrl ? "Regenerate 3D model" : "Continue to 3D · USDZ"}</Button><AiPlanGenerator sourceImage={result} kind="furniture" /><Button variant="outline" className="h-12 w-full" disabled={!signedIn || busy || Boolean(saved)} onClick={() => setShareOpen(true)}><Share2 />Showcase in the community…</Button>{!signedIn && <p className="text-center text-xs text-muted-foreground">Sign in to create 3D files and save this piece to your reusable furniture library.</p>}</>}</section>{shareOpen && result && <ShareCreationDialog image={result} creationType="furniture" defaultTitle={prompt.trim().slice(0, 120)} modelGlbPath={modelGlbPath} modelUsdzPath={modelUsdzPath} onClose={() => setShareOpen(false)} onShared={(visibility) => { setShareOpen(false); setSaved(visibility); }} />}{consentDialog}<ToolTabBar /></main>;
 }

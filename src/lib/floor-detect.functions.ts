@@ -50,44 +50,25 @@ RULES:
 - All polygon coordinates must be numbers in [0,1]. Skip anything you cannot place spatially.`;
 
 export const detectFloorElements = createServerFn({ method: "POST" })
-  .validator((input: unknown) => Input.parse(input))
+  .inputValidator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) return { ok: false, error: "The detection service is unavailable." };
-
     const userContent = [
       { type: "text", text: SYSTEM },
       { type: "image_url", image_url: { url: data.imageDataUrl } },
       ...(data.label ? [{ type: "text", text: `Drawing label: ${data.label}` }] : []),
     ];
 
-    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-  Authorization: `Bearer ${key}`,
-  "Content-Type": "application/json",
-},
-      body: JSON.stringify({
-        model: "gpt-4.1",
-        messages: [{ role: "user", content: userContent }],
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!upstream.ok) {
-      const detail = await upstream.text().catch(() => "");
-      console.error("floor-detect failed", upstream.status, detail.slice(0, 400));
-      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
-      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      return { ok: false, error: "Element detection failed." };
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent });
+    if (!extraction.ok) {
+      console.error("floor-detect failed", extraction.status, extraction.error.slice(0, 400));
+      return { ok: false, error: extraction.error };
     }
 
-    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const raw = payload.choices?.[0]?.message?.content?.trim() ?? "";
-    const jsonText = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    const jsonText = extraction.text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
     let parsed: unknown;
     try { parsed = JSON.parse(jsonText); } catch {
-      console.error("floor-detect non-JSON", raw.slice(0, 400));
+      console.error("floor-detect non-JSON", extraction.text.slice(0, 400));
       return { ok: false, error: "Detection returned an unreadable response." };
     }
 

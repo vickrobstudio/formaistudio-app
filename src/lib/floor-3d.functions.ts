@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { MATERIAL_IDS, MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared";
+import { LAYER_NAMES, MATERIAL_IDS, MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared";
 import earcut from "earcut";
 
 const Subject = z.enum(["building", "furniture"]);
@@ -58,6 +58,10 @@ const FloorTo3DInput = z.object({
               .optional(),
             label: z.string().max(60).optional(),
             heightMeters: z.number().min(0.3).max(15).default(2.7),
+            // User two-point scale calibration: real-world width of the plan's
+            // longer image side in meters. When set, the extracted geometry is
+            // deterministically rescaled to it after parsing.
+            planWidthMeters: z.number().min(1).max(500).optional(),
           }),
         )
         .min(1)
@@ -105,12 +109,26 @@ const FloorTo3DInput = z.object({
     .optional(),
 });
 
+// Uncertainty label for every extracted element: "confirmed" = printed
+// dimension or clearly legible geometry, "inferred" = scaled/cross-referenced
+// from other drawings, "assumed" = standard architectural default was used.
+const Confidence = z.enum(["confirmed", "inferred", "assumed"]).default("assumed");
+export type ElementConfidence = z.infer<typeof Confidence>;
+
+// Extraction-wide notes the model must fill instead of guessing silently.
+const NotesFields = {
+  assumptions: z.array(z.string().max(240)).max(80).default([]),
+  missing: z.array(z.string().max(240)).max(80).default([]),
+  conflicts: z.array(z.string().max(240)).max(80).default([]),
+};
+
 const OpeningSchema = z.object({
   kind: z.enum(["door", "window"]),
   position: z.number().min(0),
   width: z.number().positive(),
   sillHeight: z.number().min(0).default(0),
   headHeight: z.number().positive().default(2.1),
+  confidence: Confidence,
 });
 
 const WallSchema = z.object({
@@ -124,6 +142,7 @@ const WallSchema = z.object({
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
   colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
+  confidence: Confidence,
 });
 
 const ColumnSchema = z.object({
@@ -136,6 +155,7 @@ const ColumnSchema = z.object({
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
   colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
+  confidence: Confidence,
 });
 
 const StairSchema = z.object({
@@ -149,6 +169,7 @@ const StairSchema = z.object({
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
   colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
+  confidence: Confidence,
 });
 
 const FixtureSchema = z.object({
@@ -162,7 +183,37 @@ const FixtureSchema = z.object({
   material: z.enum(MATERIAL_IDS).default("other"),
   materialNote: z.string().max(120).optional(),
   colorHex: z.string().regex(/^#?[0-9a-fA-F]{6}$/).optional(),
+  confidence: Confidence,
 });
+
+// Enclosed space traced along the inner face of its bounding walls, in the
+// same plan coordinates as the walls. Rooms feed the geometry JSON export
+// and the assumptions report — they are not solid 3D geometry.
+const RoomSchema = z.object({
+  name: z.string().max(60).optional(),
+  boundary: z.array(z.tuple([z.number(), z.number()])).min(3).max(120),
+  confidence: Confidence,
+});
+export type RoomShape = z.infer<typeof RoomSchema>;
+
+// Shoelace area in m² — computed here, never trusted from the model.
+function polygonAreaM2(boundary: Array<[number, number]>): number {
+  let sum = 0;
+  for (let i = 0; i < boundary.length; i++) {
+    const [x1, y1] = boundary[i];
+    const [x2, y2] = boundary[(i + 1) % boundary.length];
+    sum += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(sum) / 2;
+}
+
+// Drop degenerate AI-returned rooms: near-zero area or larger than the plan.
+function cleanRooms(rooms: RoomShape[], planAreaM2: number): RoomShape[] {
+  return rooms.filter((r) => {
+    const area = polygonAreaM2(r.boundary);
+    return area >= 0.5 && (planAreaM2 <= 0 || area <= planAreaM2 * 1.05);
+  });
+}
 
 const BuildingPlanSchema = z.object({
   kind: z.literal("building"),
@@ -172,6 +223,8 @@ const BuildingPlanSchema = z.object({
   columns: z.array(ColumnSchema).max(200).default([]),
   stairs: z.array(StairSchema).max(40).default([]),
   fixtures: z.array(FixtureSchema).max(400).default([]),
+  rooms: z.array(RoomSchema).max(120).default([]),
+  ...NotesFields,
 });
 
 const PartSchema = z.object({
@@ -240,6 +293,8 @@ const MultiFloorBuildingPlanSchema = z.object({
         columns: z.array(ColumnSchema).max(200).default([]),
         stairs: z.array(StairSchema).max(40).default([]),
         fixtures: z.array(FixtureSchema).max(400).default([]),
+        rooms: z.array(RoomSchema).max(120).default([]),
+        ...NotesFields,
       }),
     )
     .min(1)
@@ -253,6 +308,7 @@ const MultiFloorBuildingPlanSchema = z.object({
       ridgeAxis: z.enum(["x", "y"]).optional(),
     })
     .optional(),
+  ...NotesFields,
 });
 type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 
@@ -263,18 +319,16 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 // Per user request: NO TIME LIMIT for 3D model creation. We still pass a very
 // large abort signal so a hung socket eventually frees the worker, but it is
 // long enough (30 minutes) that the model is allowed to fully complete.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 180_000;
-const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 180_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 180_000;
-const BUILDING_ANALYSIS_MODELS = ["gpt-4.1"] as const;
-const BUILDING_FAST_FALLBACK_MODELS = ["gpt-4.1"] as const;
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 1_800_000;
+const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 1_800_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 1_800_000;
+// All extraction now runs on Claude — see src/lib/claude.server.ts.
 
 type GenerateFloor3DResult =
   | {
       ok: true;
       daeDataUrl: string;
       objDataUrl: string;
-    mtlDataUrl: string;
       fbxDataUrl: string;
       elementCount: number;
       subject: "building" | "furniture";
@@ -291,9 +345,23 @@ type GenerateFloor3DResult =
         label: string;
         daeDataUrl: string;
         objDataUrl: string;
-    mtlDataUrl: string;
         fbxDataUrl: string;
+        glbDataUrl?: string;
+      mtlDataUrl?: string;
       }>;
+      /** Binary glTF of the whole model (buildings only). */
+      glbDataUrl?: string;
+      mtlDataUrl?: string;
+      /** Structured "formai.geometry/1" JSON download (buildings only). */
+      geometryJsonDataUrl?: string;
+      /** Markdown extraction report download (buildings only). */
+      reportMarkdownDataUrl?: string;
+      report?: {
+        assumptions: string[];
+        missing: string[];
+        conflicts: string[];
+        counts: { confirmed: number; inferred: number; assumed: number };
+      };
     }
   | { ok: false; error: string };
 
@@ -344,6 +412,27 @@ Cross-check every element across plan, elevation, section and schedule before co
 DIMENSION PRIORITY (highest to lowest)
 1) Written dimensions, 2) Enlarged details, 3) Schedules, 4) Sections & elevations, 5) Gridlines & centerlines, 6) Scaled plan measurements, 7) Logical architectural assumption.
 
+UNCERTAINTY LABELING — NEVER GUESS SILENTLY
+Every extracted element carries a "confidence" field:
+- "confirmed": a printed dimension, schedule entry or clearly legible geometry defines it.
+- "inferred": logically derived by scaling the plan or cross-referencing another drawing.
+- "assumed": not shown; a standard architectural default was used (see below).
+Alongside the geometry, fill three top-level string arrays:
+- "assumptions": one entry per standard default you applied ("Interior wall thickness assumed 0.10 m — not dimensioned").
+- "missing": required information that is absent from the drawings ("No ceiling heights printed anywhere in the set").
+- "conflicts": every place two drawings disagree, including printed-vs-drawn conflicts you silently reconciled ("Plan scales 3.2 m but printed dimension says 3.5 m — used 3.5 m").
+Keep entries short, factual, one fact per entry. Empty arrays are fine when nothing applies.
+
+STANDARD-ASSUMPTION DEFAULTS (use ONLY when the drawings are silent; tag the element "assumed" and log it in "assumptions")
+- Exterior wall thickness 0.20 m; interior partition 0.10 m.
+- Door: 0.90 m wide, head 2.10 m, sill 0.
+- Window: sill 0.90 m, head 2.10 m.
+- Floor-to-floor height: residential 2.70 m, commercial 3.00–3.60 m.
+- Slab thickness 0.20 m; interior door height 2.10 m.
+
+ROOMS
+Detect every enclosed space from the wall boundaries. For each room return its boundary polygon traced along the INNER face of the enclosing walls, in the same plan coordinates and meters as the walls. If a printed room label is legible ("KITCHEN", "BED 2", "LOBBY"), use it as the name and mark the room "confirmed"; otherwise use a generic type name ("Room") and mark it "inferred". Door openings do not break a room boundary — close the loop across them.
+
 IGNORE
 - MEP entirely (HVAC, plumbing risers/waste, electrical outlets/switches, panels, conduit, sprinklers, data, mechanical equipment, MEP legends).
 - Door swings, dimension lines, text, hatching, north arrows, gridlines, title blocks, revision clouds.
@@ -360,7 +449,9 @@ QUALITY CONTROL BEFORE OUTPUT
 You will now receive the drawing set. Follow the per-extractor schema exactly — the output MUST be strict JSON matching the shape defined below, with no prose and no Markdown fences.`;
 
 function buildingInstruction(planUnits: z.infer<typeof PlanUnits>) {
-  return `You are an architectural CAD vectorizer. Inspect the uploaded floor plan of a building (residential, office, retail, hospitality, industrial, etc.) and return STRICT JSON describing every wall.
+  return `${EXPERT_DRAFTER_PREAMBLE}
+
+You are an architectural CAD vectorizer. Inspect the uploaded floor plan of a building (residential, office, retail, hospitality, industrial, etc.) and return STRICT JSON describing every wall.
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
@@ -377,13 +468,18 @@ Return JSON ONLY in this exact shape:
       "thickness": <m>,
       "height": <optional m, omit to use default ceiling>,
       "openings": [
-        { "kind": "door"|"window", "position": <m from (x1,y1) along the wall>, "width": <m>, "sillHeight": <m>, "headHeight": <m> }
-      ]
+        { "kind": "door"|"window", "position": <m from (x1,y1) along the wall>, "width": <m>, "sillHeight": <m>, "headHeight": <m>, "confidence": "confirmed"|"inferred"|"assumed" }
+      ],
+      "confidence": "confirmed"|"inferred"|"assumed"
     }
   ],
-  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
-  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
-  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
+  "columns": [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+  "stairs":  [ { "name": "<label>", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+  "fixtures":[ { "name": "<label>", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+  "rooms":   [ { "name": "<printed room label or 'Room'>", "boundary": [[<x m>, <y m>], ...], "confidence": "confirmed"|"inferred" } ],
+  "assumptions": ["<one entry per standard default you applied>"],
+  "missing": ["<required info absent from the drawings>"],
+  "conflicts": ["<places two drawings disagree>"]
 }
 
 Rules:
@@ -419,13 +515,17 @@ Return JSON ONLY in this exact shape:
       "index": 0,
       "label": "Ground floor",
       "heightMeters": <floor-to-floor height in m, taken from the user's per-floor value and cross-checked against the elevations>,
-      "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "openings": [ { "kind": "door"|"window", "position": <m>, "width": <m>, "sillHeight": <m>, "headHeight": <m> } ] } ],
-      "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
-      "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
-      "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ]
+      "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "confidence": "confirmed"|"inferred"|"assumed", "openings": [ { "kind": "door"|"window", "position": <m>, "width": <m>, "sillHeight": <m>, "headHeight": <m>, "confidence": "confirmed"|"inferred"|"assumed" } ] } ],
+      "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+      "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+      "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+      "rooms":    [ { "name": "<printed room label or 'Room'>", "boundary": [[<x m>, <y m>], ...], "confidence": "confirmed"|"inferred" } ]
     }
   ],
-  "roof": { "kind": "flat"|"gable"|"hip"|"shed", "thicknessMeters": <m>, "overhangMeters": <m, optional>, "ridgeHeightMeters": <m above top floor's ceiling, only for gable/hip/shed>, "ridgeAxis": "x"|"y" }
+  "roof": { "kind": "flat"|"gable"|"hip"|"shed", "thicknessMeters": <m>, "overhangMeters": <m, optional>, "ridgeHeightMeters": <m above top floor's ceiling, only for gable/hip/shed>, "ridgeAxis": "x"|"y" },
+  "assumptions": ["<one entry per standard default you applied>"],
+  "missing": ["<required info absent from the drawings>"],
+  "conflicts": ["<places two drawings disagree>"]
 }
 
 Rules:
@@ -494,7 +594,7 @@ function coerceFloorExtractionJson(raw: unknown): unknown {
 // Per-floor extractor. ONE floor plan image (plus optional secondary drawing
 // of the same floor) → JSON for just that floor. Running these in parallel
 // keeps each call small enough to finish well inside the worker timeout and
-// lets the powerful model (gpt-4.1) read every wall instead of
+// lets the powerful model (gemini-2.5-pro) read every wall instead of
 // truncating the way one giant multi-floor call does.
 function singleFloorExtractInstruction(
   planUnits: z.infer<typeof PlanUnits>,
@@ -528,11 +628,15 @@ ${PRINTED_UNITS_NOTE[planUnits]}
 
 Return JSON ONLY in this exact shape:
 {
-  "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "openings": [ { "kind": "door"|"window", "position": <m from (x1,y1)>, "width": <m>, "sillHeight": <m>, "headHeight": <m> } ] } ],
-  "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
-  "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg> } ],
-  "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg> } ],
-  "boundsHint": { "width": <overall plan width m>, "length": <overall plan length m> }
+  "walls":    [ { "name": "...", "layer": "exterior"|"interior", "x1": <m>, "y1": <m>, "x2": <m>, "y2": <m>, "thickness": <m>, "height": <optional m>, "confidence": "confirmed"|"inferred"|"assumed", "openings": [ { "kind": "door"|"window", "position": <m from (x1,y1)>, "width": <m>, "sillHeight": <m>, "headHeight": <m>, "confidence": "confirmed"|"inferred"|"assumed" } ] } ],
+  "columns":  [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+  "stairs":   [ { "name": "...", "cx": <m>, "cy": <m>, "width": <m>, "depth": <m>, "height": <m>, "steps": <int>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+  "fixtures": [ { "name": "...", "layer": "kitchen"|"bath"|"furniture"|"appliance"|"plumbing"|"<other>", "cx": <m>, "cy": <m>, "cz": <m>, "width": <m>, "depth": <m>, "height": <m>, "rotationDegZ": <deg>, "confidence": "confirmed"|"inferred"|"assumed" } ],
+  "rooms":    [ { "name": "<printed room label or 'Room'>", "boundary": [[<x m>, <y m>], ...], "confidence": "confirmed"|"inferred" } ],
+  "boundsHint": { "width": <overall plan width m>, "length": <overall plan length m> },
+  "assumptions": ["<one entry per standard default you applied>"],
+  "missing": ["<required info absent from the drawings>"],
+  "conflicts": ["<places two drawings disagree, including printed-vs-drawn conflicts you reconciled>"]
 }
 
 Rules:
@@ -619,7 +723,7 @@ function refineFloorInstruction(
 
 ${PRINTED_UNITS_NOTE[planUnits]}
 
-Your job is to find every discrepancy between the previous JSON and the drawings, and return a CORRECTED JSON with the same shape (walls/columns/stairs/fixtures/boundsHint). Do NOT preserve the previous JSON as-is — re-trace the plan from scratch and use the previous JSON only as a starting checklist.
+Your job is to find every discrepancy between the previous JSON and the drawings, and return a CORRECTED JSON with the same shape (walls/columns/stairs/fixtures/rooms/boundsHint plus "assumptions"/"missing"/"conflicts" arrays and per-element "confidence" labels). Do NOT preserve the previous JSON as-is — re-trace the plan from scratch and use the previous JSON only as a starting checklist. Every correction you make because the drawings disagreed with the previous JSON belongs in "conflicts".
 
 AUDIT CHECKLIST — work through every item:
 - Count every exterior wall segment in the plan. Does the JSON contain that many exterior walls? Add missing ones, fix endpoints to match the drawing, remove duplicates.
@@ -635,7 +739,7 @@ ABSOLUTE FIDELITY RULES:
 - Never invent geometry that is not visible in the drawing.
 - Never omit geometry that IS visible in the drawing.
 - Output JSON ONLY, same shape as the per-floor extractor:
-{ "walls": [...], "columns": [...], "stairs": [...], "fixtures": [...], "boundsHint": { "width": <m>, "length": <m> } }
+{ "walls": [...], "columns": [...], "stairs": [...], "fixtures": [...], "rooms": [...], "boundsHint": { "width": <m>, "length": <m> }, "assumptions": [...], "missing": [...], "conflicts": [...] }
 
 PREVIOUS EXTRACTION (for review only — DO NOT trust it blindly):
 \`\`\`json
@@ -1407,13 +1511,16 @@ function buildGroups(
     // block). The slab represents the floor of THIS level only.
     const ext = exteriorBounds(plan.walls, plan.bounds);
     if (ext) {
-      const slab = makeGroupBuilder("group_slab", "Slab", scale, "concrete_polished");
+      const slab = makeGroupBuilder("group_slab", LAYER_NAMES.slab, scale, "concrete_polished");
       slab.addBox(ext.x0, ext.y0, -0.05, ext.x1, ext.y1, 0);
       groups.push(slab.group);
+      // Ceiling plane at wall height. The multi-floor pipeline strips this
+      // group (its inter-floor slab IS the ceiling of the floor below);
+      // single-floor exports keep it via includeCeiling.
+      const ceiling = makeGroupBuilder("group_ceiling", LAYER_NAMES.ceilings, scale, "plaster_white");
+      ceiling.addBox(ext.x0, ext.y0, wallHeightMeters, ext.x1, ext.y1, wallHeightMeters + 0.05);
+      groups.push(ceiling.group);
     }
-    // NOTE: No ceiling slab is invented here. In the multi-floor pipeline
-    // the inter-floor slab IS the ceiling of the floor below. In the single
-    // building flow there is no ceiling unless the drawings show one.
 
     // Group by (category, material) so each visually distinct material region
     // in the rendering becomes its own selectable .dae layer.
@@ -1440,7 +1547,7 @@ function buildGroups(
 
     const wallBuckets = new Map<string, ReturnType<typeof makeGroupBuilder>>();
     for (const wall of plan.walls) {
-      const label = wall.layer === "exterior" ? "Walls - Exterior" : "Walls - Interior";
+      const label = wall.layer === "exterior" ? LAYER_NAMES.wallsExterior : LAYER_NAMES.wallsInterior;
       const b = bucketFor(wallBuckets, `walls_${wall.layer}`, label, wall.material, wall.colorHex);
       addWallWithOpenings(b.addCorners, wall, wallHeightMeters);
     }
@@ -1449,8 +1556,8 @@ function buildGroups(
     // Doors and windows — every wall opening becomes a real 3D element so
     // the .dae shows actual door leaves and glass panes inside the holes
     // the wall geometry cut out (instead of empty rectangles).
-    const doorBucket = makeGroupBuilder("group_doors", "Doors", scale, "wood_oak");
-    const windowGlass = makeGroupBuilder("group_window_glass", "Windows - Glass", scale, "glass_clear");
+    const doorBucket = makeGroupBuilder("group_doors", LAYER_NAMES.doors, scale, "wood_oak");
+    const windowGlass = makeGroupBuilder("group_window_glass", LAYER_NAMES.windows, scale, "glass_clear");
     for (const wall of plan.walls) {
       const dx = wall.x2 - wall.x1;
       const dy = wall.y2 - wall.y1;
@@ -1489,7 +1596,7 @@ function buildGroups(
     if (plan.columns.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const c of plan.columns) {
-        const b = bucketFor(cache, "columns", "Columns", c.material, c.colorHex);
+        const b = bucketFor(cache, "columns", LAYER_NAMES.columns, c.material, c.colorHex);
         addRotatedBox(b.addCorners, c.cx, c.cy, c.height / 2, c.width, c.depth, c.height, c.rotationDegZ);
       }
       for (const b of cache.values()) groups.push(b.group);
@@ -1497,7 +1604,7 @@ function buildGroups(
     if (plan.stairs.length) {
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const s of plan.stairs) {
-        const g = bucketFor(cache, "stairs", "Stairs", s.material, s.colorHex);
+        const g = bucketFor(cache, "stairs", LAYER_NAMES.stairs, s.material, s.colorHex);
         const stepRise = s.height / s.steps;
         const stepRun = s.depth / s.steps;
         const theta = (s.rotationDegZ * Math.PI) / 180;
@@ -1521,7 +1628,7 @@ function buildGroups(
       const cache = new Map<string, ReturnType<typeof makeGroupBuilder>>();
       for (const f of plan.fixtures) {
         const layerKey = (f.layer || "fixtures").trim().toLowerCase() || "fixtures";
-        const b = bucketFor(cache, `fixtures_${layerKey}`, `Fixtures - ${layerKey}`, f.material, f.colorHex);
+        const b = bucketFor(cache, `fixtures_${layerKey}`, `${LAYER_NAMES.millwork} - ${layerKey}`, f.material, f.colorHex);
         addRotatedBox(b.addCorners, f.cx, f.cy, f.cz, f.width, f.depth, f.height, f.rotationDegZ);
       }
       for (const b of cache.values()) groups.push(b.group);
@@ -1593,16 +1700,16 @@ function buildDae(
   plan: BuildingPlan | FurniturePlan,
   wallHeightMeters: number,
   outputUnits: "meters" | "feet",
-) {
+): { dae: string; groups: Group[] } {
   const groups = buildGroups(plan, wallHeightMeters, outputUnits);
-  return emitDaeFromGroups(groups, outputUnits);
+  return { dae: emitDaeFromGroups(groups, outputUnits), groups };
 }
 
 function buildMultiFloorBuildingDae(
   multi: MultiFloorBuildingPlan,
   outputUnits: "meters" | "feet",
-  options: { includeSite?: boolean; includeRoof?: boolean; includeInterFloorSlab?: boolean; includeFloors?: boolean } = {},
-): { dae: string; elementCount: number } {
+  options: { includeSite?: boolean; includeRoof?: boolean; includeInterFloorSlab?: boolean; includeFloors?: boolean; includeCeiling?: boolean } = {},
+): { dae: string; elementCount: number; groups: Group[] } {
   const scale = outputUnits === "feet" ? 1 / 0.3048 : 1;
   const allGroups: Group[] = [];
   let elementCount = 0;
@@ -1611,6 +1718,7 @@ function buildMultiFloorBuildingDae(
   const includeRoof = options.includeRoof ?? true;
   const includeInterFloorSlab = options.includeInterFloorSlab ?? true;
   const includeFloors = options.includeFloors ?? true;
+  const includeCeiling = options.includeCeiling ?? false;
 
   // Sort floors by index, ground → top
   const sortedFloors = [...multi.floors].sort((a, b) => a.index - b.index);
@@ -1627,7 +1735,7 @@ function buildMultiFloorBuildingDae(
   if (includeSite && groundExt) {
     const ground = makeGroupBuilder("site_ground_slab", "Ground slab", scale, "concrete_polished");
     ground.addBox(groundExt.x0, groundExt.y0, -0.2, groundExt.x1, groundExt.y1, 0);
-    ground.group.parentPath = ["Site"];
+    ground.group.parentPath = [LAYER_NAMES.site];
     allGroups.push(ground.group);
   }
 
@@ -1635,19 +1743,19 @@ function buildMultiFloorBuildingDae(
   // a clean Walls / Doors / Windows / Columns / Stairs / Fixtures / Slabs /
   // Ceiling subfolder on .dae import.
   const categoryFor = (id: string): string => {
-    if (id.startsWith("group_walls_exterior")) return "Walls / Exterior";
-    if (id.startsWith("group_walls_interior")) return "Walls / Interior";
-    if (id === "group_doors") return "Doors";
-    if (id === "group_window_glass") return "Windows";
-    if (id.startsWith("group_columns")) return "Columns";
-    if (id.startsWith("group_stairs")) return "Stairs";
+    if (id.startsWith("group_walls_exterior")) return LAYER_NAMES.wallsExterior;
+    if (id.startsWith("group_walls_interior")) return LAYER_NAMES.wallsInterior;
+    if (id === "group_doors") return LAYER_NAMES.doors;
+    if (id === "group_window_glass") return LAYER_NAMES.windows;
+    if (id.startsWith("group_columns")) return LAYER_NAMES.columns;
+    if (id.startsWith("group_stairs")) return LAYER_NAMES.stairs;
     if (id.startsWith("group_fixtures_")) {
       const layer = id.replace(/^group_fixtures_/, "").split("__")[0];
       const pretty = layer.charAt(0).toUpperCase() + layer.slice(1);
-      return `Fixtures / ${pretty}`;
+      return `${LAYER_NAMES.millwork} / ${pretty}`;
     }
-    if (id === "group_ceiling") return "Ceiling";
-    if (id === "group_slab") return "Slab";
+    if (id === "group_ceiling") return LAYER_NAMES.ceilings;
+    if (id === "group_slab") return LAYER_NAMES.slab;
     return "Other";
   };
 
@@ -1667,10 +1775,15 @@ function buildMultiFloorBuildingDae(
         columns: floor.columns,
         stairs: floor.stairs,
         fixtures: floor.fixtures,
+        rooms: floor.rooms,
+        assumptions: floor.assumptions,
+        missing: floor.missing,
+        conflicts: floor.conflicts,
       };
       const floorGroups = buildGroups(subPlan, floor.heightMeters, outputUnits)
-        // strip the per-floor slab and ceiling — multi-floor adds them explicitly
-        .filter((g) => g.id !== "group_slab" && g.id !== "group_ceiling");
+        // strip the per-floor slab — multi-floor adds slabs explicitly. The
+        // ceiling plane survives only for single-floor exports (includeCeiling).
+        .filter((g) => g.id !== "group_slab" && (includeCeiling || g.id !== "group_ceiling"));
       const dzScaled = zOffset * scale;
       for (const g of floorGroups) {
         for (let p = 2; p < g.positions.length; p += 3) g.positions[p] += dzScaled;
@@ -1699,7 +1812,7 @@ function buildMultiFloorBuildingDae(
         "concrete_polished",
       );
         slab.addBox(slabExt.x0, slabExt.y0, zOffset - 0.12, slabExt.x1, slabExt.y1, zOffset);
-      slab.group.parentPath = [floorTitle, "Ceiling / Slab above"];
+      slab.group.parentPath = [floorTitle, `${LAYER_NAMES.ceilings} / Slab above`];
       allGroups.push(slab.group);
       }
     }
@@ -1733,12 +1846,12 @@ function buildMultiFloorBuildingDae(
       ry1,
       roofBase + roof.thicknessMeters,
     );
-    roofSlab.group.parentPath = ["Roof"];
+    roofSlab.group.parentPath = [LAYER_NAMES.roof];
     allGroups.push(roofSlab.group);
     elementCount += 1;
   }
 
-  return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount };
+  return { dae: emitDaeFromGroups(allGroups, outputUnits), elementCount, groups: allGroups };
 }
 
 function emitDaeFromGroups(groups: Group[], outputUnits: "meters" | "feet") {
@@ -1841,7 +1954,7 @@ ${indent}</node>`);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
   <asset>
-    <contributor><authoring_tool>FormAI STUDIO 2D to 3D</authoring_tool></contributor>
+    <contributor><authoring_tool>FormAI Studio 2D to 3D</authoring_tool></contributor>
     <created>${created}</created>
     <modified>${created}</modified>
     ${unitTag}
@@ -1912,16 +2025,15 @@ function validateMeshGeometry(
 }
 
 export const generateFloor3D = createServerFn({ method: "POST" })
-  .validator((input: unknown) => FloorTo3DInput.parse(input))
+  .inputValidator((input: unknown) => FloorTo3DInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
+    if (!process.env.OPENAI_API_KEY) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
     // NEW PATH — multi-image building flow. The 3D model is built directly
     // from the per-floor plans + roof + elevations, with no master prompt
     // and no approval render in between.
     if (data.subject === "building" && data.building && data.building.floors.length) {
-      return await runMultiFloorBuilding(key, data);
+      return await runMultiFloorBuilding(data);
     }
 
     if (!data.fileDataUrl) {
@@ -1970,41 +2082,13 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       userContent.push({ type: "image_url", image_url: { url: data.approvedRenderUrl } });
     }
 
-    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-  Authorization: `Bearer ${key}`,
-  "Content-Type": "application/json",
-},
-      // Buildings with many drawings + Gemini Pro extraction can take minutes;
-      // give the model up to 5 min before aborting.
-      signal: AbortSignal.timeout(5 * 60 * 1000),
-      body: JSON.stringify({
-        // Furniture pieces need maximum shape fidelity to match the approved
-        // rendering, so we spend the extra latency on gpt-4.1. Building
-        // plans are denser and would time out on pro, so they stay on the fast
-        // multimodal model.
-        model: "gpt-4.1",
-        messages: [{ role: "user", content: userContent }],
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!upstream.ok) {
-      const detail = await upstream.text().catch(() => "");
-      console.error("2d-to-3d extract failed", upstream.status, detail.slice(0, 400));
-      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
-      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      return { ok: false, error: "The drawing could not be analysed." };
-    }
-
-    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const text = payload.choices?.[0]?.message?.content?.trim();
-    if (!text) return { ok: false, error: "The AI did not return a description." };
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent, timeoutMs: 5 * 60 * 1000 });
+    if (!extraction.ok) return { ok: false, error: extraction.error };
 
     let parsed: unknown;
     try {
-      parsed = parseJsonFromModelText(text);
+      parsed = parseJsonFromModelText(extraction.text);
     } catch {
       return { ok: false, error: "The AI response was not valid JSON." };
     }
@@ -2019,7 +2103,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const plan = planResult.data.kind === "furniture"
       ? enforcePromptShapeTraits(planResult.data, data.masterPrompt, data.approvedRenderUrl)
       : planResult.data;
-    const dae = buildDae(plan, data.wallHeightMeters, data.outputUnits);
+    const { dae, groups: builtGroups } = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
     // Reuse the same triangle data to emit OBJ and ASCII FBX so users can
     // download whichever format their CAD tool prefers.
@@ -2034,88 +2118,117 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       console.error(`[single] geometry validation failed — no export: ${validation.reason}`);
       return { ok: false, error: `Generated 3D geometry was empty or degenerate (${validation.reason}). Try a clearer cropped reference image.` } as GenerateFloor3DResult;
     }
-    const { obj } = trianglesToObj(groups);
-    const fbx = trianglesToFbxAscii(groups);
+    const { obj, mtl } = trianglesToObj(groups);
+    const fbx = trianglesToFbxAscii(groups, data.outputUnits, "Z");
     const objDataUrl = toDataUrl(obj, "model/obj");
     const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
     const elementCount = plan.kind === "building"
       ? plan.walls.length + plan.columns.length + plan.stairs.length + plan.fixtures.length
       : plan.parts.length;
-    return { ok: true, daeDataUrl, objDataUrl, fbxDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan };
+    const extras = plan.kind === "building"
+      ? await buildingReportExtras({
+          levels: [{
+            index: 0,
+            label: "Ground floor",
+            heightMeters: data.wallHeightMeters,
+            walls: plan.walls,
+            columns: plan.columns,
+            stairs: plan.stairs,
+            fixtures: plan.fixtures,
+            rooms: plan.rooms,
+          }],
+          bounds: plan.bounds,
+          planUnits: data.planUnits,
+          scale: { method: "printed_dimensions" },
+          assumptions: plan.assumptions,
+          missing: plan.missing,
+          conflicts: plan.conflicts,
+        })
+      : {};
+    let glbDataUrl: string | undefined;
+    if (plan.kind === "building") {
+      const { trianglesToGlb, glbToDataUrlBinary } = await import("./glb-export.server");
+      glbDataUrl = glbToDataUrlBinary(trianglesToGlb(builtGroups, data.outputUnits));
+    }
+    return { ok: true, daeDataUrl, objDataUrl, mtlDataUrl: toDataUrl(mtl, "text/plain"), fbxDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan, glbDataUrl, ...extras };
   });
 
+// Structured JSON + markdown report extras appended to every building result.
+async function buildingReportExtras(args: {
+  levels: import("./geometry-json").GeometryJsonInput["levels"];
+  bounds: { width: number; length: number };
+  planUnits: z.infer<typeof PlanUnits>;
+  scale: import("./geometry-json").ScaleSource;
+  assumptions: string[];
+  missing: string[];
+  conflicts: string[];
+}) {
+  const { buildGeometryJson, buildAssumptionsMarkdown } = await import("./geometry-json");
+  const { toDataUrl } = await import("./mesh-export.server");
+  const json = buildGeometryJson({
+    levels: args.levels,
+    bounds: args.bounds,
+    planUnits: args.planUnits,
+    scale: args.scale,
+    assumptions: args.assumptions,
+    missing: args.missing,
+    conflicts: args.conflicts,
+  });
+  const counts = { confirmed: 0, inferred: 0, assumed: 0 };
+  for (const o of json.objects) counts[o.confidence]++;
+  return {
+    geometryJsonDataUrl: toDataUrl(JSON.stringify(json, null, 2), "application/json"),
+    reportMarkdownDataUrl: toDataUrl(buildAssumptionsMarkdown(json), "text/markdown"),
+    report: { assumptions: args.assumptions, missing: args.missing, conflicts: args.conflicts, counts },
+  };
+}
+
 async function runMultiFloorBuilding(
-  key: string,
   data: z.infer<typeof FloorTo3DInput>,
 ): Promise<GenerateFloor3DResult> {
   const building = data.building!;
   const floors = building.floors.map((f, i) => ({ ...f, index: i }));
 
-  // Helper: one multimodal chat call, returns parsed JSON or throws.
+  // Helper: one multimodal Claude call, returns parsed JSON or throws.
+  // Retries once — Claude occasionally returns geometry the validator
+  // rejects; a second attempt recovers most of those.
   async function callJson(
     content: Array<Record<string, unknown>>,
     label: string,
     timeoutMs = BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS,
     validate?: (json: unknown) => string | null,
-    models: readonly string[] = BUILDING_ANALYSIS_MODELS,
+    attempts = 1,
   ): Promise<unknown> {
+    const { openAIExtractJson } = await import("./openai-extract.server");
     let lastStatus: number | undefined;
     let lastMessage = "";
 
-    for (const model of models) {
-      try {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-  Authorization: `Bearer ${key}`,
-  "Content-Type": "application/json",
-},
-          signal: AbortSignal.timeout(timeoutMs),
-          body: JSON.stringify({
-            model,
-            messages: [{ role: "user", content }],
-            max_tokens: 16000,
-            response_format: { type: "json_object" },
-          }),
-        });
-        if (!res.ok) {
-          const detail = await res.text().catch(() => "");
-          lastStatus = res.status;
-          lastMessage = detail;
-          console.error(`[${label}] extract failed on ${model}`, res.status, detail.slice(0, 300));
-          if (res.status === 404 || res.status === 410) continue;
-          if (res.status === 408 || res.status >= 500) continue;
-          const err = new Error(`upstream_${res.status}`);
-          (err as Error & { status?: number }).status = res.status;
+    for (let attempt = 0; attempt < Math.min(attempts, 1); attempt++) {
+      const result = await openAIExtractJson({ parts: content, timeoutMs });
+      if (!result.ok) {
+        lastStatus = result.status;
+        lastMessage = result.error;
+        console.error(`[${label}] extract failed`, result.status, result.error.slice(0, 300));
+        // Auth/credit failures won't improve on retry.
+        if (result.status === 401 || result.status === 402 || result.status === 403) {
+          const err = new Error(`upstream_${result.status}`);
+          (err as Error & { status?: number }).status = result.status;
           throw err;
         }
-        const payload = (await res.json()) as { choices?: Array<{ message?: { content?: string }; finish_reason?: string }> };
-        const text = payload.choices?.[0]?.message?.content?.trim();
-        const finishReason = payload.choices?.[0]?.finish_reason;
-        if (finishReason === "length") {
-          lastMessage = "response truncated before complete geometry was returned";
-          console.warn(`[${label}] response was TRUNCATED on ${model} (finish_reason=length) — trying the next model instead of exporting a partial/empty file.`);
-          continue;
-        }
-        if (!text) throw new Error(`[${label}] empty response`);
-        const json = parseJsonFromModelText(text);
+        continue;
+      }
+      try {
+        const json = parseJsonFromModelText(result.text);
         const invalidReason = validate?.(json);
         if (invalidReason) {
           lastMessage = invalidReason;
-          console.error(`[${label}] ${model} returned unusable geometry`, invalidReason.slice(0, 300));
+          console.error(`[${label}] returned unusable geometry`, invalidReason.slice(0, 300));
           continue;
         }
         return json;
       } catch (error) {
-        if (error instanceof DOMException && error.name === "TimeoutError") {
-          lastStatus = 408;
-          lastMessage = `${model} timed out after ${Math.round(timeoutMs / 1000)}s`;
-          console.warn(`[${label}] ${lastMessage} — trying the next model instead of failing this drawing.`);
-          continue;
-        }
-        if ((error as { status?: number }).status) throw error;
         lastMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[${label}] extract parse failed on ${model}`, lastMessage.slice(0, 300));
+        console.error(`[${label}] extract parse failed`, lastMessage.slice(0, 300));
       }
     }
 
@@ -2139,7 +2252,9 @@ async function runMultiFloorBuilding(
     columns: z.array(ColumnSchema).max(200).default([]),
     stairs: z.array(StairSchema).max(40).default([]),
     fixtures: z.array(FixtureSchema).max(400).default([]),
+    rooms: z.array(RoomSchema).max(120).default([]),
     boundsHint: z.object({ width: z.number().positive(), length: z.number().positive() }).optional(),
+    ...NotesFields,
   });
 
   type FloorOut = z.infer<typeof floorExtractSchema> & { index: number; label: string; heightMeters: number };
@@ -2154,10 +2269,48 @@ async function runMultiFloorBuilding(
     return null;
   };
 
-  const floorPromises = floors.map(async (floor): Promise<FloorOut | { error: string; status?: number }> => {
+  // Deterministic user-calibration rescale. The prompt hint nudges the model,
+  // but the guarantee comes from rescaling every horizontal coordinate here so
+  // the plan's larger extent equals the user-measured width. Heights stay
+  // untouched — calibration is horizontal only.
+  const applyUserScale = (
+    f: z.infer<typeof floorExtractSchema>,
+    planWidthMeters: number | undefined,
+  ): z.infer<typeof floorExtractSchema> => {
+    if (!planWidthMeters) return f;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const w of f.walls) {
+      minX = Math.min(minX, w.x1, w.x2); maxX = Math.max(maxX, w.x1, w.x2);
+      minY = Math.min(minY, w.y1, w.y2); maxY = Math.max(maxY, w.y1, w.y2);
+    }
+    const extent = Math.max(maxX - minX, maxY - minY);
+    if (!isFinite(extent) || extent < 0.5) return f;
+    const k = planWidthMeters / extent;
+    if (!isFinite(k) || k <= 0 || Math.abs(k - 1) < 0.02) return f;
+    const s = (n: number) => n * k;
+    return {
+      ...f,
+      walls: f.walls.map((w) => ({
+        ...w,
+        x1: s(w.x1), y1: s(w.y1), x2: s(w.x2), y2: s(w.y2),
+        thickness: Math.min(1, Math.max(0.05, s(w.thickness))),
+        openings: w.openings.map((op) => ({ ...op, position: s(op.position), width: s(op.width) })),
+      })),
+      columns: f.columns.map((c) => ({ ...c, cx: s(c.cx), cy: s(c.cy), width: s(c.width), depth: s(c.depth) })),
+      stairs: f.stairs.map((st) => ({ ...st, cx: s(st.cx), cy: s(st.cy), width: s(st.width), depth: s(st.depth) })),
+      fixtures: f.fixtures.map((fx) => ({ ...fx, cx: s(fx.cx), cy: s(fx.cy), width: s(fx.width), depth: s(fx.depth) })),
+      rooms: f.rooms.map((r) => ({ ...r, boundary: r.boundary.map(([x, y]) => [s(x), s(y)] as [number, number]) })),
+      boundsHint: f.boundsHint ? { width: s(f.boundsHint.width), length: s(f.boundsHint.length) } : f.boundsHint,
+    };
+  };
+
+  const floorTasks = floors.map((floor) => async (): Promise<FloorOut | { error: string; status?: number }> => {
     const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
     const parts: Array<Record<string, unknown>> = [
       { type: "text", text: singleFloorExtractInstruction(data.planUnits, lbl, floor.heightMeters) },
+      ...(floor.planWidthMeters
+        ? [{ type: "text", text: `USER CALIBRATION — the user measured this plan: its overall extent along the longer axis is exactly ${floor.planWidthMeters.toFixed(2)} m. Calibrate every coordinate to this measurement; it outranks any scale you infer from the drawing.` }]
+        : []),
       { type: "text", text: `PRIMARY DRAWING — ${lbl}` },
     ];
     attachImg(parts, floor.imageDataUrl, `floor_${floor.index}_a`);
@@ -2198,38 +2351,13 @@ async function runMultiFloorBuilding(
       if (floorWallCount(parsed.data) === 0) {
         return { error: `Floor ${floor.index + 1} returned no wall geometry.` };
       }
-      return { ...parsed.data, index: floor.index, label: lbl, heightMeters: floor.heightMeters };
+      return { ...applyUserScale(parsed.data, floor.planWidthMeters), index: floor.index, label: lbl, heightMeters: floor.heightMeters };
     } catch (e) {
       const status = (e as { status?: number }).status;
       if (status === 401 || status === 402 || status === 403 || status === 429) {
         return { error: `Floor ${floor.index + 1} extraction failed.`, status };
       }
-      try {
-        const fallbackParts: Array<Record<string, unknown>> = [
-          { type: "text", text: quickFloorExtractInstruction(data.planUnits, lbl, floor.heightMeters) },
-          { type: "text", text: `PRIMARY DRAWING — ${lbl}` },
-        ];
-        attachImg(fallbackParts, floor.imageDataUrl, `floor_${floor.index}_fast_a`);
-        if (floor.imageDataUrl2) {
-          fallbackParts.push({ type: "text", text: `SECONDARY DRAWING — same floor (${lbl})` });
-          attachImg(fallbackParts, floor.imageDataUrl2, `floor_${floor.index}_fast_b`);
-        }
-        const fallbackJson = coerceFloorExtractionJson(await callJson(
-          fallbackParts,
-          `floor-${floor.index}-fast-fallback`,
-          BUILDING_FAST_FALLBACK_TIMEOUT_MS,
-          validateFloorExtraction,
-          BUILDING_FAST_FALLBACK_MODELS,
-        ));
-        const fallbackParsed = floorExtractSchema.safeParse(fallbackJson);
-        if (fallbackParsed.success && floorWallCount(fallbackParsed.data) > 0) {
-          console.warn(`floor ${floor.index} used fast fallback extraction after detailed pass failed`);
-          return { ...fallbackParsed.data, index: floor.index, label: lbl, heightMeters: floor.heightMeters };
-        }
-      } catch (fallbackError) {
-        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-        console.error(`floor ${floor.index} fast fallback failed`, fallbackMessage.slice(0, 300));
-      }
+      // Never start another paid extraction automatically after an uncertain failure.
       if (e instanceof DOMException && e.name === "TimeoutError") {
         return { error: `Floor ${floor.index + 1} analysis timed out.`, status: 408 };
       }
@@ -2237,7 +2365,16 @@ async function runMultiFloorBuilding(
     }
   });
 
-  // Roof + elevations pass in parallel.
+  // Analyse floors in order; do not silently omit a failed floor or exceed
+  // the account concurrency limit with a separate paid call per level.
+  const floorResults: Array<FloorOut | { error: string; status?: number }> = [];
+  for (const task of floorTasks) {
+    const result = await task();
+    if ("error" in result) return { ok: false, error: result.error + " No incomplete building was exported. Review this floor before trying again." };
+    floorResults.push(result);
+  }
+
+  // Roof and elevations are analysed after the floors.
   const roofSchema = z.object({
     floorHeightsMeters: z.array(z.number().min(1).max(10)).max(10).optional(),
     roof: z
@@ -2277,7 +2414,8 @@ async function runMultiFloorBuilding(
       })()
     : Promise.resolve(null);
 
-  const [floorResults, roofResult] = await Promise.all([Promise.all(floorPromises), roofPromise]);
+  const roofResult = await roofPromise;
+  if (hasRoofOrElev && !roofResult) return { ok: false, error: "Roof or elevation analysis was incomplete. Review those drawings before creating the final building." };
 
   // Fail fast if every floor failed.
   const goodFloors = floorResults.filter((f): f is FloorOut => !("error" in f));
@@ -2323,8 +2461,13 @@ async function runMultiFloorBuilding(
       columns: f.columns,
       stairs: f.stairs,
       fixtures: f.fixtures,
+      rooms: cleanRooms(f.rooms, maxW * maxL),
+      assumptions: f.assumptions,
+      missing: f.missing,
+      conflicts: f.conflicts,
     }));
 
+  const floorTag = (f: { index: number; label?: string }) => f.label?.trim() || `Floor ${f.index + 1}`;
   const assembledPlan: MultiFloorBuildingPlan = {
     kind: "multi_floor_building",
     units: "meters",
@@ -2334,11 +2477,15 @@ async function runMultiFloorBuilding(
     // invent a hip roof with an overhang. The exterior walls of the top
     // floor will define the roof outline at zero overhang.
     roof: roofResult?.roof,
+    assumptions: floorsForPlan.flatMap((f) => f.assumptions.map((s) => `${floorTag(f)}: ${s}`)),
+    missing: floorsForPlan.flatMap((f) => f.missing.map((s) => `${floorTag(f)}: ${s}`)),
+    conflicts: floorsForPlan.flatMap((f) => f.conflicts.map((s) => `${floorTag(f)}: ${s}`)),
   };
 
-  const { dae, elementCount } = buildMultiFloorBuildingDae(assembledPlan, data.outputUnits);
+  const { dae, elementCount, groups: assembledGroups } = buildMultiFloorBuildingDae(assembledPlan, data.outputUnits);
   const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
   const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
+  const { trianglesToGlb, glbToDataUrlBinary } = await import("./glb-export.server");
   const groups = parseDaeToTriangles(dae);
   const assembledValidation = validateMeshGeometry(groups);
   // If the assembled full-building mesh is invalid, skip its export but
@@ -2351,8 +2498,13 @@ async function runMultiFloorBuilding(
   const daeDataUrl = assembledValid
     ? `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`
     : "";
-  const objDataUrl = assembledValid ? toDataUrl(trianglesToObj(groups).obj, "model/obj") : "";
-  const fbxDataUrl = assembledValid ? toDataUrl(trianglesToFbxAscii(groups), "application/octet-stream") : "";
+  const assembledObj = assembledValid ? trianglesToObj(groups) : null;
+  const objDataUrl = assembledObj ? toDataUrl(assembledObj.obj, "model/obj") : "";
+  const mtlDataUrl = assembledObj ? toDataUrl(assembledObj.mtl, "text/plain") : undefined;
+  const fbxDataUrl = assembledValid ? toDataUrl(trianglesToFbxAscii(groups, data.outputUnits, "Z"), "application/octet-stream") : "";
+  const glbDataUrl = assembledValid
+    ? glbToDataUrlBinary(trianglesToGlb(assembledGroups, data.outputUnits))
+    : undefined;
 
   // ── Per-floor exports ──────────────────────────────────────────────
   // Build separate .dae / .obj / .fbx files. The client orchestrates the
@@ -2366,20 +2518,24 @@ async function runMultiFloorBuilding(
     label: string;
     daeDataUrl: string;
     objDataUrl: string;
-    mtlDataUrl: string;
     fbxDataUrl: string;
+    glbDataUrl?: string;
+    mtlDataUrl?: string;
   }> = [];
   const skippedParts: Array<{ label: string; reason: string }> = [];
   const emitPart = (
     index: number,
     label: string,
     plan: MultiFloorBuildingPlan,
-    opts: { includeSite?: boolean; includeRoof?: boolean; includeFloors?: boolean; includeInterFloorSlab?: boolean },
+    opts: { includeSite?: boolean; includeRoof?: boolean; includeFloors?: boolean; includeInterFloorSlab?: boolean; includeCeiling?: boolean },
   ) => {
     let partDae: string;
+    let builtPartGroups: Group[];
     let partGroups: ReturnType<typeof parseDaeToTriangles>;
     try {
-      partDae = buildMultiFloorBuildingDae(plan, data.outputUnits, opts).dae;
+      const built = buildMultiFloorBuildingDae(plan, data.outputUnits, opts);
+      partDae = built.dae;
+      builtPartGroups = built.groups;
       partGroups = parseDaeToTriangles(partDae);
     } catch (err) {
       const reason = err instanceof Error ? err.message : "build/parse failed";
@@ -2399,7 +2555,7 @@ async function runMultiFloorBuilding(
       return;
     }
     const { obj: partObj, mtl: partMtl } = trianglesToObj(partGroups);
-    const partFbx = trianglesToFbxAscii(partGroups);
+    const partFbx = trianglesToFbxAscii(partGroups, data.outputUnits, "Z");
     floorParts.push({
       index,
       label,
@@ -2407,6 +2563,7 @@ async function runMultiFloorBuilding(
       objDataUrl: toDataUrl(partObj, "model/obj"),
       mtlDataUrl: toDataUrl(partMtl, "text/plain"),
       fbxDataUrl: toDataUrl(partFbx, "application/octet-stream"),
+      glbDataUrl: glbToDataUrlBinary(trianglesToGlb(builtPartGroups, data.outputUnits)),
     });
   };
 
@@ -2418,6 +2575,7 @@ async function runMultiFloorBuilding(
       units: "meters",
       bounds: assembledPlan.bounds,
       floors: [{ ...sortedFloorsForParts[0], index: 0 }],
+      assumptions: [], missing: [], conflicts: [],
     };
     emitPart(-1, "Site", plan, { includeSite: true, includeFloors: false, includeRoof: false, includeInterFloorSlab: false });
   } else if (scope === "roof") {
@@ -2429,6 +2587,7 @@ async function runMultiFloorBuilding(
       bounds: assembledPlan.bounds,
       floors: [{ ...top, index: 0 }],
       roof: assembledPlan.roof ?? { kind: "flat", thicknessMeters: 0.2 },
+      assumptions: [], missing: [], conflicts: [],
     };
     emitPart(9999, "Roof", plan, { includeSite: false, includeFloors: false, includeRoof: true, includeInterFloorSlab: false });
   } else if (scope === "floor") {
@@ -2439,8 +2598,9 @@ async function runMultiFloorBuilding(
         units: "meters",
         bounds: assembledPlan.bounds,
         floors: [{ ...f, index: 0 }],
+        assumptions: [], missing: [], conflicts: [],
       };
-      emitPart(f.index, f.label, plan, { includeSite: false, includeFloors: true, includeRoof: false, includeInterFloorSlab: false });
+      emitPart(f.index, f.label, plan, { includeSite: false, includeFloors: true, includeRoof: false, includeInterFloorSlab: false, includeCeiling: true });
     }
   } else {
     // Legacy path: ground includes site, top includes roof.
@@ -2454,8 +2614,9 @@ async function runMultiFloorBuilding(
         bounds: assembledPlan.bounds,
         floors: [{ ...f, index: 0 }],
         roof: isTop ? assembledPlan.roof : undefined,
+        assumptions: [], missing: [], conflicts: [],
       };
-      emitPart(f.index, f.label, plan, { includeSite: isGround, includeRoof: isTop, includeInterFloorSlab: false });
+      emitPart(f.index, f.label, plan, { includeSite: isGround, includeRoof: isTop, includeInterFloorSlab: false, includeCeiling: !isTop });
     }
   }
 
@@ -2479,18 +2640,49 @@ async function runMultiFloorBuilding(
     columns: assembledPlan.floors.flatMap((f) => f.columns),
     stairs: assembledPlan.floors.flatMap((f) => f.stairs),
     fixtures: assembledPlan.floors.flatMap((f) => f.fixtures),
+    rooms: assembledPlan.floors.flatMap((f) => f.rooms),
+    assumptions: assembledPlan.assumptions,
+    missing: assembledPlan.missing,
+    conflicts: assembledPlan.conflicts,
   };
+
+  const extras = await buildingReportExtras({
+    levels: assembledPlan.floors.map((f) => ({
+      index: f.index,
+      label: f.label?.trim() || `Floor ${f.index + 1}`,
+      heightMeters: f.heightMeters,
+      walls: f.walls,
+      columns: f.columns,
+      stairs: f.stairs,
+      fixtures: f.fixtures,
+      rooms: f.rooms,
+    })),
+    bounds: assembledPlan.bounds,
+    planUnits: data.planUnits,
+    scale: (() => {
+      const calibrated = floors.find((f) => f.planWidthMeters)?.planWidthMeters;
+      return calibrated
+        ? { method: "user_calibration" as const, planWidthMeters: calibrated }
+        : { method: "printed_dimensions" as const };
+    })(),
+    assumptions: assembledPlan.assumptions,
+    missing: assembledPlan.missing,
+    conflicts: assembledPlan.conflicts,
+  });
 
   return {
     ok: true,
     daeDataUrl,
     objDataUrl,
     fbxDataUrl,
+    glbDataUrl,
     elementCount,
     subject: "building",
     outputUnits: data.outputUnits,
     plan: flat,
+    mtlDataUrl,
     floorParts,
+    ...extras,
   };
 }
 
@@ -2519,13 +2711,11 @@ const FurnitureBoundsSchema = z.object({
 });
 
 export const extractFurnitureBounds = createServerFn({ method: "POST" })
-  .validator((input: unknown) => FurnitureBoundsInput.parse(input))
+  .inputValidator((input: unknown) => FurnitureBoundsInput.parse(input))
   .handler(async ({ data }): Promise<
     | { ok: true; width: number; depth: number; height: number }
     | { ok: false; error: string }
   > => {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
     const planUnitNote = data.planUnits === "feet-inches"
       ? "The drawing is dimensioned in feet & inches. Convert every reading to METERS before responding (1 ft = 0.3048 m, 1 in = 0.0254 m)."
@@ -2549,30 +2739,12 @@ Rules:
       if (url === data.fileDataUrl) continue;
       userContent.push({ type: "image_url", image_url: { url } });
     }
-    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-  Authorization: `Bearer ${key}`,
-  "Content-Type": "application/json",
-},
-      signal: AbortSignal.timeout(2 * 60 * 1000),
-      body: JSON.stringify({
-        model: "gpt-4.1",
-        messages: [{ role: "user", content: userContent }],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!upstream.ok) {
-      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
-      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      return { ok: false, error: "Could not read dimensions from the drawing." };
-    }
-    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const text = payload.choices?.[0]?.message?.content?.trim();
-    if (!text) return { ok: false, error: "The AI did not return dimensions." };
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent, maxTokens: 2000, timeoutMs: 2 * 60 * 1000 });
+    if (!extraction.ok) return { ok: false, error: extraction.error };
     let parsed: unknown;
     try {
-      parsed = parseJsonFromModelText(text);
+      parsed = parseJsonFromModelText(extraction.text);
     } catch {
       return { ok: false, error: "The AI response was not valid JSON." };
     }
@@ -2586,7 +2758,7 @@ Rules:
 // then extrude each colored polygon into its own SketchUp-ready 3D group.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const MARK_LIFT_TYPES = ["wall", "door", "window", "floor", "roof", "fixture"] as const;
+export const MARK_LIFT_TYPES = ["wall", "door", "window", "column", "stair", "cabinet", "floor", "roof", "fixture"] as const;
 export type MarkLiftType = (typeof MARK_LIFT_TYPES)[number];
 
 type MarkLiftSpec = {
@@ -2596,15 +2768,19 @@ type MarkLiftSpec = {
   color: [number, number, number]; // sRGB 0..1
   hex: string;          // for UI
   material: MaterialId;
+  layerName: string;    // numbered export-layer name (LAYER_NAMES)
 };
 
 export const MARK_LIFT_SPECS: Record<MarkLiftType, MarkLiftSpec> = {
-  wall:    { label: "Walls",    height: 2.7,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#C8C8C8", material: "concrete_smooth" },
-  door:    { label: "Doors",    height: 2.1,  baseZ: 0,    color: [0.627, 0.322, 0.176], hex: "#A0522D", material: "wood_oak" },
-  window:  { label: "Windows",  height: 1.2,  baseZ: 0.9,  color: [0.529, 0.808, 0.922], hex: "#87CEEB", material: "glass_clear" },
-  floor:   { label: "Floor",    height: 0.15, baseZ: -0.15, color: [0.545, 0.451, 0.333], hex: "#8B7355", material: "concrete_polished" },
-  roof:    { label: "Roof",     height: 0.20, baseZ: 2.7,  color: [0.396, 0.263, 0.129], hex: "#654321", material: "wood_dark" },
-  fixture: { label: "Fixtures", height: 0.9,  baseZ: 0,    color: [0.749, 0.639, 0.486], hex: "#BFA37C", material: "wood_oak" },
+  wall:    { label: "Walls",    layerName: LAYER_NAMES.wallsExterior, height: 3.0,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#334155", material: "concrete_smooth" },
+  door:    { label: "Doors",    layerName: LAYER_NAMES.doors,         height: 2.1,  baseZ: 0,    color: [0.627, 0.322, 0.176], hex: "#A0522D", material: "wood_oak" },
+  window:  { label: "Windows",  layerName: LAYER_NAMES.windows,       height: 1.2,  baseZ: 0.9,  color: [0.529, 0.808, 0.922], hex: "#87CEEB", material: "glass_clear" },
+  column:  { label: "Columns",  layerName: LAYER_NAMES.columns,       height: 3.0,  baseZ: 0,    color: [0.561, 0.561, 0.561], hex: "#8F8F8F", material: "concrete_smooth" },
+  stair:   { label: "Stairs",   layerName: LAYER_NAMES.stairs,        height: 1.5,  baseZ: 0,    color: [0.855, 0.647, 0.125], hex: "#DAA520", material: "concrete_polished" },
+  cabinet: { label: "Cabinets", layerName: LAYER_NAMES.millwork,      height: 0.9,  baseZ: 0,    color: [0.871, 0.722, 0.529], hex: "#DEB887", material: "wood_oak" },
+  floor:   { label: "Floor",    layerName: LAYER_NAMES.slab,          height: 0.15, baseZ: -0.15, color: [0.545, 0.451, 0.333], hex: "#8B7355", material: "concrete_polished" },
+  roof:    { label: "Roof",     layerName: LAYER_NAMES.roof,          height: 0.20, baseZ: 2.7,  color: [0.396, 0.263, 0.129], hex: "#654321", material: "wood_dark" },
+  fixture: { label: "Fixtures", layerName: LAYER_NAMES.millwork,      height: 0.9,  baseZ: 0,    color: [0.749, 0.639, 0.486], hex: "#BFA37C", material: "wood_oak" },
 };
 
 const DetectInput = z.object({
@@ -2622,73 +2798,101 @@ const DetectedPolygon = z.object({
   points: z.array(z.tuple([z.number(), z.number()])).min(3).max(200),
   confidence: z.number().min(0).max(1).optional(),
 });
-const DetectedSchema = z.object({ polygons: z.array(DetectedPolygon).max(400) });
+const RoomLabelSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  at: z.tuple([z.number(), z.number()]),
+});
+const DetectedSchema = z.object({
+  polygons: z.array(DetectedPolygon).max(400),
+  roomLabels: z.array(RoomLabelSchema).max(80).default([]),
+});
 
 export type DetectedFloorPolygon = z.infer<typeof DetectedPolygon> & { id: string };
+export type DetectedRoomLabel = z.infer<typeof RoomLabelSchema>;
 
 export const detectFloorElements = createServerFn({ method: "POST" })
-  .validator((input: unknown) => DetectInput.parse(input))
+  .inputValidator((input: unknown) => DetectInput.parse(input))
   .handler(async ({ data }): Promise<
-    | { ok: true; polygons: DetectedFloorPolygon[] }
+    | { ok: true; polygons: DetectedFloorPolygon[]; roomLabels: DetectedRoomLabel[] }
     | { ok: false; error: string }
   > => {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) return { ok: false, error: "The detection service is unavailable." };
+    const instruction = `You are an architectural drawing recognition AI. Read the uploaded 2D plan the way an architect reads it, then report classified geometry.
+Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|column|stair|cabinet|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...], "roomLabels":[{"name":"<room name exactly as printed>","at":[x,y]}, ...]}.
 
-    const instruction = `You are a professional architectural drafter. The user has uploaded a 2D floor plan image (from CAD, PDF, or a scan). Trace the plan into the 3D-model-ready polygons below.
-Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...]}.
+STEP 1 — READ AND CLEAN THE PLAN (mentally):
+- Detect all black or dark linework. Separate useful architectural geometry from: text, dimensions, furniture symbols, hatch patterns, shadows, title blocks, notes, logos, annotations.
+- Prioritize continuous architectural boundaries over decorative or annotation lines.
+- Mentally straighten slightly crooked lines, connect broken wall segments, ignore tiny noise, merge duplicate lines, detect parallel wall lines, close small gaps.
 
-Rules:
-- Coordinates are NORMALISED 0..1 in the image's own pixel grid (x = left→right, y = top→bottom).
-- Polygons must be SIMPLE (no self-intersections).
-- ALWAYS return at least one "floor" polygon (the outline of the habitable area) and one polygon per visible wall segment. Do not return an empty list unless the image is truly blank.
-- "wall" — the filled body of a wall, traced as a thin strip along the wall's thickness. One polygon per wall segment.
-- "door" — door swing/opening rectangle.
-- "window" — window opening rectangle.
-- "floor" — outline of the floor slab (one big polygon covering the plan footprint).
-- "roof" — roof outline if the sheet is a roof plan; otherwise omit.
-- "fixture" — fixed plumbing / built-ins / stairs / columns footprints.
-- Ignore title blocks, dimension text, room labels, north arrows and legends — but DO trace the plan itself even when those decorations are also visible.
+STEP 2 — DETECT ARCHITECTURAL ELEMENTS:
+- "wall": thick parallel black lines or filled black boundaries forming continuous enclosed shapes around rooms. Interior walls may be thinner than exterior walls. Trace the wall BODY along its drawn thickness, one polygon per straight segment.
+- "column": small enclosed rectangles, squares, circles or structural shapes — solid black or enclosed, aligned structurally (grids, cores, inside walls). NEVER confuse furniture blocks with columns.
+- "door": wall openings with swing arcs, door leaves, sliding-door symbols, or clear gaps in wall runs. Trace the opening rectangle in the wall.
+- "window": thin openings within walls shown with double or triple parallel lines, glass panels, repeated narrow rectangles along exterior walls.
+- "stair": repeated parallel lines, step patterns, direction arrows, stair labels — trace the overall stair footprint.
+- "cabinet": thin rectangles attached to walls — counters, closets, shelves, millwork, fixed furniture.
+- "fixture": fixed plumbing and built-ins that are not cabinets (tubs, sinks, WCs, appliances).
+- "floor": every enclosed room area; ALWAYS return at least one floor covering the habitable footprint.
+- "roof": only if the sheet is a roof plan; otherwise omit.
+- Elevator shafts: trace their enclosing walls as "wall" and their area as "floor" (they read as small cores near stairs).
+- Open passages: a wall gap with NO door/window symbol is an opening — leave it as a gap, output NO polygon for it.
+
+STEP 3 — ENCLOSED SHAPES (the most important rule):
+Every closed black-line boundary is a candidate architectural element. For each enclosed shape decide:
+- long + narrow + continuous → wall
+- small + solid + structural → column
+- large + empty inside → room/floor area
+- inside a wall, breaking the wall → door, window, or opening
+- attached to a wall, shallow → cabinet/millwork
+- repeated stepped bands → stair
+When enclosed shapes touch or overlap, resolve them with architectural logic. If a shape cannot be classified, omit it rather than forcing a wrong category, and reflect doubt in lower "confidence".
+
+THINK LIKE AN ARCHITECT — never blind-extrude lines:
+- Walls enclose rooms. Doors interrupt walls. Windows sit inside exterior or partition walls. Columns are structural verticals. Floors are large enclosed horizontal areas. Rooms are usable enclosed spaces.
+- Text and dimensions aid interpretation but are NEVER geometry. Furniture stays out of structural categories.
+
+ROOM LABELS — "roomLabels": READ THE WORDS PRINTED ON THE PLAN. Every room name written on the drawing (LIVING, DINING, KITCHEN, M. BEDROOM, M. BATH, FOYER, LANAI, DEN/OFFICE, LAUNDRY, W.C., ELEV, STAIR…) becomes one entry with the normalized [x,y] center of that printed text. Copy the printed wording exactly; never invent names; skip dimensions, notes and title-block text.
+
+OUTPUT RULES:
+- Coordinates are NORMALISED 0..1 in the image's own pixel grid (x = left→right, y = top→bottom). Polygons must be SIMPLE (no self-intersections).
 - Return ONLY the JSON object, no comments, no markdown.`;
 
-    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-  Authorization: `Bearer ${key}`,
-  "Content-Type": "application/json",
-},
-      signal: AbortSignal.timeout(5 * 60 * 1000),
-      body: JSON.stringify({
-        model: "gpt-4.1",
-        messages: [{
-          role: "user",
-          content: [
-            { type: "text", text: instruction },
-            { type: "image_url", image_url: { url: data.imageDataUrl } },
-          ],
-        }],
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!upstream.ok) {
-      if (upstream.status === 402) return { ok: false, error: "AI credits are exhausted." };
-      if (upstream.status === 429) return { ok: false, error: "The studio is busy. Please retry shortly." };
-      const text = await upstream.text().catch(() => "");
-      console.error("[mark-lift] detect failed", upstream.status, text.slice(0, 300));
-      return { ok: false, error: "Could not analyse the drawing." };
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    // Model output is occasionally malformed — one retry rescues those runs.
+    let lastError = "The AI response was not valid JSON.";
+    for (let attempt = 0; attempt < 1; attempt++) {
+      const extraction = await openAIExtractJson({
+        parts: [
+          { type: "text", text: instruction },
+          { type: "image_url", image_url: { url: data.imageDataUrl } },
+        ],
+        timeoutMs: 5 * 60 * 1000,
+      });
+      if (!extraction.ok) {
+        console.error("[mark-lift] detect failed", extraction.status, extraction.error.slice(0, 300));
+        if (extraction.status === 401 || extraction.status === 402 || extraction.status === 403) {
+          return { ok: false, error: extraction.error };
+        }
+        lastError = extraction.error;
+        continue;
+      }
+      let parsed: unknown;
+      try {
+        parsed = parseJsonFromModelText(extraction.text);
+      } catch {
+        lastError = "The AI response was not valid JSON.";
+        continue;
+      }
+      const result = DetectedSchema.safeParse(parsed);
+      if (!result.success) {
+        console.error("[mark-lift] detect schema invalid", result.error.issues.slice(0, 5));
+        lastError = "Detection returned an invalid shape. Try a clearer image.";
+        continue;
+      }
+      const polygons: DetectedFloorPolygon[] = result.data.polygons.map((p, i) => ({ ...p, id: `det_${i}` }));
+      return { ok: true, polygons, roomLabels: result.data.roomLabels };
     }
-    const payload = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const text = payload.choices?.[0]?.message?.content?.trim();
-    if (!text) return { ok: false, error: "The AI did not return any elements." };
-    let parsed: unknown;
-    try { parsed = parseJsonFromModelText(text); } catch { return { ok: false, error: "The AI response was not valid JSON." }; }
-    const result = DetectedSchema.safeParse(parsed);
-    if (!result.success) {
-      console.error("[mark-lift] detect schema invalid", result.error.issues.slice(0, 5));
-      return { ok: false, error: "Detection returned an invalid shape. Try a clearer image." };
-    }
-    const polygons: DetectedFloorPolygon[] = result.data.polygons.map((p, i) => ({ ...p, id: `det_${i}` }));
-    return { ok: true, polygons };
+    return { ok: false, error: lastError };
   });
 
 // ── Lift annotated polygons into a per-type grouped 3D model ────────────────
@@ -2708,6 +2912,19 @@ const LiftInput = z.object({
   outputUnits: z.enum(["meters", "feet"]).default("meters"),
   wallHeightMeters: z.number().min(0.3).max(15).default(2.7),
   polygons: z.array(LiftPolygon).min(1).max(800),
+  // Room boundaries (normalized 0..1) with names read from the drawing —
+  // vector CAD extraction fills these; they feed the geometry JSON + report.
+  rooms: z
+    .array(
+      z.object({
+        name: z.string().max(60).optional(),
+        points: z.array(z.tuple([z.number(), z.number()])).min(3).max(400),
+      }),
+    )
+    .max(120)
+    .default([]),
+  // Where the polygons came from — recorded in the report.
+  scaleMethod: z.enum(["printed_dimensions", "user_calibration", "cad_units"]).default("user_calibration"),
 });
 
 // Triangulate a simple polygon in 2D (x,y) and build a vertical prism between
@@ -2749,7 +2966,7 @@ function extrudePolygonIntoGroup(
 }
 
 export const liftAnnotatedFloor = createServerFn({ method: "POST" })
-  .validator((input: unknown) => LiftInput.parse(input))
+  .inputValidator((input: unknown) => LiftInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
     const outputScale = data.outputUnits === "feet" ? 1 / 0.3048 : 1;
     // Image px → metres, longer side maps to planWidthMeters.
@@ -2764,7 +2981,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
     const buckets = new Map<MarkLiftType, ReturnType<typeof makeGroupBuilder>>();
     for (const t of MARK_LIFT_TYPES) {
       const spec = MARK_LIFT_SPECS[t];
-      buckets.set(t, makeGroupBuilder(`mark_${t}`, spec.label, outputScale, spec.material, spec.color));
+      buckets.set(t, makeGroupBuilder(`mark_${t}`, spec.layerName, outputScale, spec.material, spec.color));
     }
 
     // Wall height override applies to walls AND shifts roof baseZ.
@@ -2773,7 +2990,9 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
     for (const poly of data.polygons) {
       const spec = MARK_LIFT_SPECS[poly.type];
       const world = toWorld(poly.points);
-      const height = poly.type === "wall" ? wallH : spec.height;
+      // Walls and columns rise to the full storey height; everything else
+      // keeps its architectural default.
+      const height = poly.type === "wall" || poly.type === "column" ? wallH : spec.height;
       const baseZ = poly.type === "roof" ? wallH : spec.baseZ;
       const bucket = buckets.get(poly.type)!;
       extrudePolygonIntoGroup(bucket.group, world, baseZ, baseZ + height, outputScale);
@@ -2801,7 +3020,9 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       return { ok: false, error: `Lift produced an empty mesh (${validation.reason}).` };
     }
     const { obj, mtl } = trianglesToObj(tris);
-    const fbx = trianglesToFbxAscii(tris);
+    const fbx = trianglesToFbxAscii(tris, data.outputUnits, "Z");
+    const { trianglesToGlb, glbToDataUrlBinary } = await import("./glb-export.server");
+    const glbDataUrl = glbToDataUrlBinary(trianglesToGlb(groups, data.outputUnits));
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
     const objDataUrl = toDataUrl(obj, "model/obj");
     const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
@@ -2812,8 +3033,39 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       daeDataUrl,
       objDataUrl,
       fbxDataUrl,
+      glbDataUrl,
       mtlDataUrl: toDataUrl(mtl, "text/plain"),
     };
+    // Rooms from vector extraction (or user annotation) — world meters, into
+    // the geometry JSON + report. Named rooms were read straight from the
+    // drawing text, so they're "confirmed"; unnamed ones are "inferred".
+    const worldRooms = (data.rooms ?? []).map((room) => ({
+      name: room.name,
+      boundary: toWorld(room.points),
+      confidence: (room.name ? "confirmed" : "inferred") as ElementConfidence,
+    }));
+    const extras = await buildingReportExtras({
+      levels: [{
+        index: 0,
+        label: data.label.trim() || "Floor",
+        heightMeters: wallH,
+        walls: [],
+        columns: [],
+        stairs: [],
+        fixtures: [],
+        rooms: worldRooms,
+      }],
+      bounds: { width: data.imageWidth * mPerPx, length: data.imageHeight * mPerPx },
+      planUnits: "meters",
+      scale: { method: data.scaleMethod, planWidthMeters: data.planWidthMeters },
+      assumptions: [
+        `Wall height ${wallH.toFixed(2)} m applied uniformly — lifted from 2D boundaries.`,
+        ...(data.scaleMethod === "cad_units" ? ["Scale read from CAD drawing units (INSUNITS)."] : []),
+      ],
+      missing: [],
+      conflicts: [],
+    });
+
     // Minimal "plan" payload so the existing client paths that read .plan
     // do not crash; the rich plan model is not needed for mark-and-lift.
     const fauxPlan = {
@@ -2823,16 +3075,20 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       columns: [],
       stairs: [],
       fixtures: [],
+      rooms: worldRooms,
     } as unknown as BuildingPlan;
     return {
       ok: true,
       daeDataUrl,
       objDataUrl,
       fbxDataUrl,
+      glbDataUrl,
+      mtlDataUrl: toDataUrl(mtl, "text/plain"),
       elementCount,
       subject: "building",
       outputUnits: data.outputUnits,
       plan: fauxPlan,
       floorParts: [floorPart],
+      ...extras,
     };
   });

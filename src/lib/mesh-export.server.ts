@@ -75,9 +75,9 @@ export function trianglesToObj(groups: TriGroup[]): { obj: string; mtl: string }
 /**
  * Minimal ASCII FBX 7.4 writer. Emits one Geometry + Model per group,
  * with diffuse colour on a Material connected via OO/OP relationships.
- * Verified to import in Blender 3.x/4.x and Autodesk FBX Review.
+ * Declares the source units and vertical axis for importing applications.
  */
-export function trianglesToFbxAscii(groups: TriGroup[]): string {
+export function trianglesToFbxAscii(groups: TriGroup[], units: "meters" | "feet" = "meters", upAxis: "Y" | "Z" = "Y"): string {
   const now = new Date();
   const ts = {
     Y: now.getUTCFullYear(),
@@ -201,21 +201,28 @@ FBXHeaderExtension:  {
 GlobalSettings:  {
 \tVersion: 1000
 \tProperties70:  {
-\t\tP: "UpAxis", "int", "Integer", "",1
+\t\tP: "UpAxis", "int", "Integer", "",${upAxis === "Z" ? 2 : 1}
 \t\tP: "UpAxisSign", "int", "Integer", "",1
-\t\tP: "FrontAxis", "int", "Integer", "",2
-\t\tP: "FrontAxisSign", "int", "Integer", "",1
+\t\tP: "FrontAxis", "int", "Integer", "",${upAxis === "Z" ? 1 : 2}
+\t\tP: "FrontAxisSign", "int", "Integer", "",${upAxis === "Z" ? -1 : 1}
 \t\tP: "CoordAxis", "int", "Integer", "",0
 \t\tP: "CoordAxisSign", "int", "Integer", "",1
-\t\tP: "UnitScaleFactor", "double", "Number", "",1
+\t\tP: "UnitScaleFactor", "double", "Number", "",${units === "feet" ? 30.48 : 100}
+\t\tP: "OriginalUnitScaleFactor", "double", "Number", "",${units === "feet" ? 30.48 : 100}
 \t}
 }
 Definitions:  {
 \tVersion: 100
 \tCount: ${built.length * 3}
-\tObjectType: "Geometry" { Count: ${built.length} }
-\tObjectType: "Model" { Count: ${built.length} }
-\tObjectType: "Material" { Count: ${built.length} }
+\tObjectType: "Geometry" {
+\t\tCount: ${built.length}
+\t}
+\tObjectType: "Model" {
+\t\tCount: ${built.length}
+\t}
+\tObjectType: "Material" {
+\t\tCount: ${built.length}
+\t}
 }
 `;
 

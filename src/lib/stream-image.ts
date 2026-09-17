@@ -1,3 +1,4 @@
+import { aiRequestHeaders } from "./ai-request";
 const MAX_IMAGE_DATA_URL_LENGTH = 3_800_000;
 const MAX_TOTAL_IMAGE_DATA_URL_LENGTH = 3_800_000;
 const COMPRESSION_STEPS = [
@@ -71,21 +72,39 @@ export async function streamImage(
     );
   }
 
-  const response = await fetch("/api/generate-image", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      prompt,
-      sourceImage: preparedSourceImage,
-      sourceImages: preparedSourceImages,
-    }),
+  // Transient upstream limits (429) and gateway hiccups (502/503/504) are
+  // must not start another paid generation automatically.
+  const body = JSON.stringify({
+    prompt,
+    sourceImage: preparedSourceImage,
+    sourceImages: preparedSourceImages,
   });
+  const RETRY_STATUS = new Set([429, 502, 503, 504]);
+  let response: Response | null = null;
+  let lastMessage = "The rendering could not be created.";
+  for (let attempt = 0; attempt < 1; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt + Math.random() * 500));
+    try {
+      response = await fetch("/api/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...await aiRequestHeaders() },
+        body,
+      });
+    } catch {
+      lastMessage = "The network dropped while creating the image. Please try again.";
+      response = null;
+      continue;
+    }
+    if (response.ok && response.body) break;
+    lastMessage = (await response.text().catch(() => "")) || lastMessage;
+    if (!RETRY_STATUS.has(response.status)) break;
+    response = null;
+  }
 
-  if (!response.ok || !response.body) {
-    const message = await response.text();
-    const cleanMessage = message.trim().startsWith("<!DOCTYPE html>")
+  if (!response || !response.ok || !response.body) {
+    const cleanMessage = lastMessage.trim().startsWith("<!DOCTYPE html>")
       ? "The rendering service could not process these images. Try smaller or fewer references."
-      : message;
+      : lastMessage;
     throw new Error(cleanMessage || "The rendering could not be created.");
   }
 
@@ -95,6 +114,7 @@ export async function streamImage(
       throw new Error("The rendering response did not include an image.");
     }
     onImage(result.image, true);
+    window.dispatchEvent(new Event("formai-credits-changed"));
     return;
   }
 

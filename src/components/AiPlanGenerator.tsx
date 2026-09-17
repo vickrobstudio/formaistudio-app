@@ -2,14 +2,17 @@ import { useState } from "react";
 import { Download, LoaderCircle, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { streamImage } from "@/lib/stream-image";
+import { useAiConsentGate } from "@/hooks/use-ai-consent";
 
 export function AiPlanGenerator({ sourceImage, kind }: { sourceImage: string | null; kind: "furniture" | "space" }) {
+  const { ensureConsent, dialog: consentDialog } = useAiConsentGate();
   const [plan, setPlan] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function generatePlan() {
     if (!sourceImage) return;
+    if (!(await ensureConsent())) return;
     setBusy(true);
     setError("");
     try {
@@ -29,5 +32,6 @@ export function AiPlanGenerator({ sourceImage, kind }: { sourceImage: string | n
     {plan && <img src={plan} alt={`AI-generated 2D ${kind} plan`} className="w-full rounded-xl border border-border bg-primary" />}
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     <div className="grid grid-cols-2 gap-3"><Button type="button" variant="outline" disabled={!sourceImage || busy} onClick={() => void generatePlan()}>{busy ? <LoaderCircle className="animate-spin" /> : <Ruler />}{busy ? "Drawing…" : plan ? "Regenerate" : "Create plan"}</Button><Button asChild variant="outline" disabled={!plan}>{plan ? <a href={plan} download={`formai-${kind}-2d-plan.png`}><Download />Download</a> : <span><Download />Download</span>}</Button></div>
+    {consentDialog}
   </div>;
 }

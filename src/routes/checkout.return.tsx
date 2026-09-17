@@ -18,7 +18,7 @@ function CheckoutReturn() {
         </h1>
         <p className="mt-3 text-muted-foreground">
           {session_id
-            ? "Your FormAI Pro subscription is active. Credits have been added to your account."
+            ? "Your FormAI Studio Pro subscription is active. Credits have been added to your account."
             : "We couldn't locate your checkout session."}
         </p>
         <div className="mt-8 flex justify-center gap-3">

@@ -107,8 +107,8 @@ html.keyboard-open {
  */
 
 @theme inline {
-  --font-sans: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: "SF Pro", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
   --font-weight-thin: 700;
   --font-weight-light: 700;
   --font-weight-normal: 700;
@@ -198,7 +198,7 @@ html.keyboard-open {
   --dashboard-muted: oklch(0.75 0 0);
   --dashboard-border: oklch(1 0 0 / 14%);
   --landing-button: oklch(0.06 0 0);
-  --landing-paper: oklch(0.971 0.0196 87.5);
+  --landing-paper: oklch(0.32 0 0);
 }
 
 @layer base {

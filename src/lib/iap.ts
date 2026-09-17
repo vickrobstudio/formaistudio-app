@@ -1,3 +1,4 @@
+import { ensureBillingSession } from "./billing-session";
 /**
  * In-App Purchases via RevenueCat (iOS only).
  *
@@ -9,13 +10,13 @@
  * On web, IAP is unavailable — the pricing page falls back to Stripe.
  */
 import { Capacitor } from "@capacitor/core";
-import { supabase } from "@/integrations/supabase/client";
-import type { PlanId } from "@/lib/plans";
+import { PLANS, type PlanId } from "@/lib/plans";
 
 const IOS_API_KEY = import.meta.env.VITE_REVENUECAT_IOS_API_KEY as string | undefined;
 const BUNDLE_ID = "app.formaistudio.formai";
 
 let configured = false;
+let configuredUserId: string | null = null;
 let revenueCatModule: Promise<any> | null = null;
 
 export function isNativeIOS(): boolean {
@@ -34,18 +35,25 @@ export function applePid(planId: PlanId): string {
 }
 
 export async function configureIAP(): Promise<void> {
-  if (configured || !isNativeIOS()) return;
+  if (!isNativeIOS()) return;
+  const { user } = await ensureBillingSession();
   if (!IOS_API_KEY) {
-    console.warn("[IAP] VITE_REVENUECAT_IOS_API_KEY not set — IAP disabled.");
-    return;
+    throw new Error("In-app purchases are not configured yet.");
   }
   const revenueCat = await loadRevenueCat();
   if (!revenueCat) return;
   const { Purchases, LOG_LEVEL } = revenueCat;
-  const { data: { user } } = await supabase.auth.getUser();
+  if (configured) {
+    if (configuredUserId !== user.id) {
+      await Purchases.logIn({ appUserID: user.id });
+      configuredUserId = user.id;
+    }
+    return;
+  }
   await Purchases.setLogLevel({ level: LOG_LEVEL.WARN });
-  await Purchases.configure({ apiKey: IOS_API_KEY, appUserID: user?.id ?? null });
+  await Purchases.configure({ apiKey: IOS_API_KEY, appUserID: user.id });
   configured = true;
+  configuredUserId = user.id;
 }
 
 export async function purchasePlan(planId: PlanId): Promise<{ ok: true } | { ok: false; error: string; cancelled?: boolean }> {
@@ -73,6 +81,54 @@ export async function purchasePlan(planId: PlanId): Promise<{ ok: true } | { ok:
   }
 }
 
+/**
+ * Real App Store prices per plan, keyed by our plan id (e.g. "$44.99").
+ * Apple requires the price shown in-app to match the StoreKit product, so the
+ * iOS pricing page displays these instead of our hardcoded USD numbers.
+ * Returns {} off-iOS or if offerings can't be read (caller falls back).
+ */
+export async function getIapPriceStrings(): Promise<Partial<Record<PlanId, string>>> {
+  if (!isNativeIOS()) return {};
+  try {
+    await configureIAP();
+    const revenueCat = await loadRevenueCat();
+    if (!revenueCat) return {};
+    const { Purchases } = revenueCat;
+    const offerings = await Purchases.getOfferings();
+    const map: Partial<Record<PlanId, string>> = {};
+    for (const offering of Object.values(offerings.all ?? {})) {
+      for (const pkg of (offering as any).availablePackages ?? []) {
+        const identifier: string | undefined = pkg.product?.identifier;
+        const priceString: string | undefined = pkg.product?.priceString;
+        if (!identifier || !priceString) continue;
+        const plan = PLANS.find((p) => applePid(p.id) === identifier);
+        if (plan) map[plan.id] = priceString;
+      }
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Read the signed-in account's RevenueCat status for display only.
+ * Server billing remains authoritative for tool access and credits.
+ */
+export async function hasActiveIapEntitlement(): Promise<boolean> {
+  if (!isNativeIOS()) return false;
+  try {
+    await configureIAP();
+    const revenueCat = await loadRevenueCat();
+    if (!revenueCat) return false;
+    const { Purchases } = revenueCat;
+    const { customerInfo } = await Purchases.getCustomerInfo();
+    return Object.keys(customerInfo?.entitlements?.active ?? {}).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function restorePurchases(): Promise<{ ok: boolean; error?: string }> {
   if (!isNativeIOS()) return { ok: false, error: "Only available in the iOS app." };
   try {
@@ -90,9 +146,7 @@ export async function restorePurchases(): Promise<{ ok: boolean; error?: string 
 /** Link the RevenueCat user to the Supabase user after sign-in. */
 export async function identifyIAPUser(userId: string): Promise<void> {
   if (!isNativeIOS() || !IOS_API_KEY) return;
+  const { user } = await ensureBillingSession();
+  if (user.id !== userId) throw new Error("The purchase account must match the signed-in account.");
   await configureIAP();
-  const revenueCat = await loadRevenueCat();
-  if (!revenueCat) return;
-  const { Purchases } = revenueCat;
-  try { await Purchases.logIn({ appUserID: userId }); } catch (e) { console.warn("[IAP] logIn failed", e); }
 }

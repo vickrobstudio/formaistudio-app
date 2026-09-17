@@ -21,20 +21,21 @@ const gateway = "https://api.replicate.com/v1";
 
 export const generateFurniture3D = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: unknown) => GenerateFurniture3DInput.parse(input))
+  .inputValidator((input: unknown) => GenerateFurniture3DInput.parse(input))
   .handler(async ({ data, context }): Promise<GenerateFurniture3DResult> => {
-    const replicateKey = process.env.REPLICATE_API_KEY;
-    if (!replicateKey) return { ok: false, error: "The 3D generation connection is unavailable." };
+    const replicateToken = process.env.REPLICATE_API_TOKEN ?? process.env.REPLICATE_API_KEY;
+    if (!replicateToken) return { ok: false, error: "The 3D generation connection is unavailable." };
 
     const headers = {
-      Authorization: `Bearer ${replicateKey}`,
+      Authorization: `Bearer ${replicateToken}`,
       "Content-Type": "application/json",
       Prefer: "wait=60",
     };
     let created: Response | null = null;
     let createDetail = "";
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      created = await fetch(`${gateway}/models/tencent/hunyuan-3d-3.1/predictions`, {
+    for (let attempt = 0; attempt < 1; attempt += 1) {
+      const { meteredFetch } = await import("./generation-billing.server");
+      created = await meteredFetch("mesh", `${gateway}/models/tencent/hunyuan-3d-3.1/predictions`, {
         method: "POST",
         headers,
         body: JSON.stringify({ input: { image: data.imageDataUrl, enable_pbr: true, face_count: 500000, generate_type: "Normal" } }),
@@ -86,7 +87,7 @@ const SignModelInput = z.object({ path: z.string().min(1).max(500) });
 
 export const getFurnitureModelDownload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: unknown) => SignModelInput.parse(input))
+  .inputValidator((input: unknown) => SignModelInput.parse(input))
   .handler(async ({ data, context }) => {
     if (!data.path.startsWith(`${context.userId}/`)) throw new Error("This model is not in your library.");
     const { data: signed, error } = await context.supabase.storage.from("user-outputs").createSignedUrl(data.path, 300, { download: true });

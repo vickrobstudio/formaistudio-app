@@ -33,7 +33,8 @@ export function parseDaeToTriangles(dae: string): TriGroup[] {
   while ((gm = geomRe.exec(dae))) {
     const name = gm[2] || gm[1];
     const mesh = gm[3];
-    // Positions: the first <source> with id ending -pos or _pos
+    // Positions: the first <source> with id ending -pos
+    // Both emitters must parse: glb-to-dae writes `…-pos`, buildDae writes `…_pos`.
     const posMatch = mesh.match(/<source\s+id="[^"]*[-_]pos"[\s\S]*?<float_array[^>]*>([\s\S]*?)<\/float_array>/);
     if (!posMatch) continue;
     const positions = posMatch[1].trim().split(/\s+/).map(Number);

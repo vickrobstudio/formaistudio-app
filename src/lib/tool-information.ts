@@ -1,7 +1,7 @@
 import type { ToolInfoSection } from "@/components/ToolInformation";
 
 export const studioInformation: ToolInfoSection[] = [
-  { title: "Room plan & exact furniture", description: "Upload a room plan, then add reference images of furniture created in FormAI or from any existing source.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Attach clear images of every exact furniture piece to place in the proposal", "Choose feet or meters, then enter width, length and height", "Choose Indoor or Outdoor, then select the room purpose"] },
+  { title: "Room plan & exact furniture", description: "Upload a room plan, then add reference images of furniture created in FormAI Studio or from any existing source.", items: ["Optional plan upload: PDF, JPG or PNG up to 10 MB", "Attach clear images of every exact furniture piece to place in the proposal", "Choose feet or meters, then enter width, length and height", "Choose Indoor or Outdoor, then select the room purpose"] },
   { title: "100% reference fidelity", items: ["Preserve each referenced piece’s exact silhouette, proportions and construction details", "Match visible materials, grain, weave, color and surface texture without substitution", "Use multiple views when available for more accurate placement", "Set the room style, palette, finishes, use and furniture budget independently"] },
   { title: "Your design output", items: ["2D floor plan with furniture layout and dimensions", "8K-target luxury editorial rendering with referenced furniture placed naturally", "True-to-life color, balanced HDR light, accurate textures and material response", "Downloadable rendering and project saved to your cloud"] },
 ];
@@ -26,5 +26,5 @@ export const videoInformation: ToolInfoSection[] = [
 export const photoInformation: ToolInfoSection[] = [
   { title: "What Photo AI can do", description: "Upload a real photo of an empty, raw or damaged space and transform it through conversation.", items: ["Add or replace furniture", "Change floors, walls and other materials", "Adjust natural or ambient lighting", "Add plants, artwork and decor", "Completely redesign the room in a new style"] },
   { title: "Ideas to try", items: ["Add a modern minimalist sofa in neutral tones", "Change the flooring to elegant white marble", "Add warm, cozy ambient lighting", "Add Monstera and Fiddle Leaf Fig plants", "Try Art Deco or Scandinavian styling"] },
-  { title: "Free for everyone", items: ["No account or credits required", "Your guest conversation stays on this device", "Signed-in users can save one conversation to their account"] },
+  { title: "Credits and access", items: ["Sign in to use your available credits", "Each AI image, analysis or assistant step uses one credit", "Your guest conversation stays on this device", "Signed-in users can save one conversation to their account"] },
 ];

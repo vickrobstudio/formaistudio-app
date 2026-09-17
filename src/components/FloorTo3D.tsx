@@ -1,18 +1,24 @@
 import { useNavigate } from "@tanstack/react-router";
+import { shrinkImageDataUrl } from "@/lib/shrink-image";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Download, Eye, LoaderCircle, Plus, ScanSearch, Sparkles, Upload, X } from "lucide-react";
+import { Download, Eye, LoaderCircle, Plus, Ruler, ScanSearch, Sparkles, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BackLink, FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { Textarea } from "@/components/ui/textarea";
+import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
+import { useAiConsentGate } from "@/hooks/use-ai-consent";
 import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
+import { streamImage } from "@/lib/stream-image";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { FloorAnnotator } from "@/components/FloorAnnotator";
 import { Building3DViewer } from "@/components/Building3DViewer";
+import { ScaleCalibrator } from "@/components/ScaleCalibrator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
+import type { VectorRecognition } from "@/lib/dwg-vector-plan";
 
 type RecognizedPolygon = { id: string; type: MarkLiftType; points: Array<[number, number]> };
 type Recognition = {
@@ -20,6 +26,8 @@ type Recognition = {
   imageHeight: number;
   planWidthMeters: number;
   polygons: RecognizedPolygon[];
+  reviewed?: boolean;
+  calibration?: import("@/components/FloorAnnotator").AnnotatorResult["calibration"];
 };
 
 const information: ToolInfoSection[] = [
@@ -28,15 +36,17 @@ const information: ToolInfoSection[] = [
     description: "Upload a floor plan (one image per floor) or a furniture drawing. Tap Build. Download the 3D file.",
     items: [
       "Buildings: add one image per floor — each floor becomes its own group at real-world scale.",
-      "Furniture: top / front / side views with printed dimensions work best.",
+      "Furniture: upload one clear reference (drawing, sketch or photo) — the AI designs it into one solid piece, then builds the 3D model.",
       "Export: .fbx, .obj, or .dae — opens in SketchUp, Blender, Rhino, Maya, 3ds Max.",
     ],
   },
 ];
 
+const FURNITURE_MATERIALS = ["Solid wood", "Walnut", "Oak", "Metal", "Steel", "Brass", "Glass", "Marble", "Stone", "Leather", "Fabric", "Rattan", "Concrete"];
+
 const CLIENT_TIMEOUT_MS = 1_800_000;
-const MAX_DIMENSION = 2400;
-const JPEG_QUALITY = 0.88;
+const MAX_DIMENSION = 2000;
+const JPEG_QUALITY = 0.85;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
   let id: ReturnType<typeof setTimeout> | undefined;
@@ -99,13 +109,50 @@ async function readDrawing(file: File): Promise<string> {
  * etc.) — never the Model space view. Layouts are classified by tab name so
  * we can label them "Ground floor", "Roof", "Site plan"…
  */
-async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; label: string }>> {
+async function readDrawingSheets(file: File): Promise<Array<{ dataUrl: string; label: string; vector?: VectorRecognition }>> {
   if (isDwg(file) || isDxf(file)) {
     const { parseDrawing, rasterizeDatabase } = await import("@/lib/dwg-database");
+    const { buildVectorRecognition } = await import("@/lib/dwg-vector-plan");
     const db = await parseDrawing(file);
+    const out: Array<{ dataUrl: string; label: string; vector?: VectorRecognition }> = [];
+
+    // Vector-first: Model space carries the real-world coordinates, so it
+    // yields a deterministic no-AI extraction (boundaries + rooms + true
+    // scale from CAD units). Paper-space sheets follow as plain rasters.
+    const modelEntities = (() => {
+      const model = (db.layouts ?? []).find((l) => l.isModelSpace)?.entities ?? [];
+      return model.length >= db.entities.length ? model : db.entities;
+    })();
+    if (modelEntities.length > 0) {
+      // Building mode: clean the DWG to the building shell — keep walls,
+      // doors, windows, floors and roof; strip furniture, fixtures, MEP and
+      // site layers.
+      let vectorOk = false;
+      try {
+        const vector = await buildVectorRecognition(db, modelEntities, { architecturalOnly: true });
+        if (vector) {
+          out.push({ dataUrl: await shrinkImageDataUrl(vector.dataUrl, 2400, 0.85), label: "Ground floor", vector });
+          vectorOk = true;
+        }
+      } catch (cause) {
+        console.warn("vector extraction failed — falling back to model-space raster", cause);
+      }
+      if (!vectorOk) {
+        // Vector polygonization couldn't cope — rasterize the cleaned model
+        // space and let the image pipeline (shape tracer + tiled AI) take over.
+        try {
+          const raster = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: modelEntities, projectViewports: false, architecturalOnly: true });
+          if (raster.drawableCount > 0) {
+            out.push({ dataUrl: await shrinkImageDataUrl(raster.dataUrl, 2400, 0.85), label: "Ground floor" });
+          }
+        } catch (cause) {
+          console.warn("model-space raster failed", cause);
+        }
+      }
+    }
+
     const layouts = (db.layouts ?? []).filter((l) => !l.isModelSpace && l.entities.length > 0);
-    if (layouts.length === 0) throw new Error("This DWG/DXF has no paper-space layouts to import. Open the file in CAD and publish each sheet to a layout tab first.");
-    const out: Array<{ dataUrl: string; label: string }> = [];
+    if (out.length === 0 && layouts.length === 0) throw new Error("This DWG/DXF has no plan linework in Model space and no paper-space layouts to import.");
     let floorOrder = 0;
     for (const layout of layouts) {
       const { dataUrl, drawableCount } = rasterizeDatabase(db, { maxDimension: MAX_DIMENSION, entities: layout.entities, projectViewports: false });
@@ -139,8 +186,22 @@ type Floor = {
   recognition?: Recognition;
   recognizing?: boolean;
   recognizeError?: string;
+  planWidthMetersOverride?: number;
+  /** Room boundaries + names read from CAD TEXT entities (vector path). */
+  vectorRooms?: Array<{ name?: string; points: Array<[number, number]> }>;
+  /** How the plan scale was determined — drives the report's scale method. */
+  scaleSource?: "cad" | "user";
 };
-type FloorPart = { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string };
+type FloorPart = { index: number; label: string; daeDataUrl: string; objDataUrl: string; fbxDataUrl: string; glbDataUrl?: string };
+type BuildReport = {
+  label: string;
+  counts: { confirmed: number; inferred: number; assumed: number };
+  assumptions: string[];
+  missing: string[];
+  conflicts: string[];
+  geometryJsonDataUrl?: string;
+  reportMarkdownDataUrl?: string;
+};
 
 export function FloorTo3D() {
   const navigate = useNavigate();
@@ -151,6 +212,7 @@ export function FloorTo3D() {
   const startRecon = useServerFn(startMeshReconstruction);
   const pollRecon = useServerFn(pollMeshReconstruction);
   const { credits, signedIn, vip, consume } = useCredits();
+  const { ensureConsent, dialog: consentDialog } = useAiConsentGate();
 
   const [subject, setSubject] = useState<"building" | "furniture">("building");
   const [outputUnits, setOutputUnits] = useState<"meters" | "feet">("feet");
@@ -163,6 +225,8 @@ export function FloorTo3D() {
   // Furniture state
   const [furnitureUrl, setFurnitureUrl] = useState<string | null>(null);
   const [furnitureName, setFurnitureName] = useState("");
+  const [furnitureDesc, setFurnitureDesc] = useState("");
+  const [furnitureMaterials, setFurnitureMaterials] = useState<string[]>([]);
   const furnitureInputRef = useRef<HTMLInputElement>(null);
 
   // Result state
@@ -173,6 +237,7 @@ export function FloorTo3D() {
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [floorParts, setFloorParts] = useState<FloorPart[]>([]);
+  const [buildReports, setBuildReports] = useState<BuildReport[]>([]);
   const [dae, setDae] = useState<string | null>(null);
   const [obj, setObj] = useState<string | null>(null);
   const [fbx, setFbx] = useState<string | null>(null);
@@ -181,10 +246,11 @@ export function FloorTo3D() {
   const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae">("fbx");
   const previewRef = useRef<HTMLDivElement>(null);
   const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
+  const [calibrating, setCalibrating] = useState<number | null>(null);
 
   function reset() {
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
-    setFloorParts([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
+    setFloorParts([]); setBuildReports([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
   }
 
   function getImageSize(src: string): Promise<{ width: number; height: number }> {
@@ -196,28 +262,92 @@ export function FloorTo3D() {
     });
   }
 
-  async function runRecognition(index: number) {
+  // Auto-recognise architectural elements the moment an image floor is added
+  // (no manual Recognise step). DWG/DXF sheets already arrive with vector
+  // recognition, so only raster floors that haven't been read trigger this.
+  useEffect(() => {
+    if (subject !== "building") return;
+    floors.forEach((f, i) => {
+      if (f.imageDataUrl.startsWith("data:image/") && !f.recognition && !f.recognizing && !f.recognizeError) {
+        void runRecognition(i, true);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floors, subject]);
+
+  async function runRecognition(index: number, silent = false) {
+    if (!(await ensureConsent())) return;
     const f = floors[index];
     if (!f || !f.imageDataUrl.startsWith("data:image/")) return;
     setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: true, recognizeError: undefined } : x));
     try {
       const { width, height } = await getImageSize(f.imageDataUrl);
+      // Deterministic shape tracing supplies walls + floors that hug the
+      // black linework; the AI adds doors, windows, stairs and fixtures.
+      const shapes = await import("@/lib/image-plan-shapes").then((m) => m.extractPlanShapes(f.imageDataUrl)).catch(() => null);
       const result = await detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } });
-      if (!result.ok) {
-        setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: result.error } : x));
-        return;
-      }
-      const polygons: RecognizedPolygon[] = result.polygons.map((p, k) => ({
+      if (!result.ok) throw new Error(result.error);
+      const { detectOpeningsTiled } = await import("@/lib/tiled-openings");
+      const tiled = await detectOpeningsTiled(f.imageDataUrl, (input) => detect(input));
+      // Arbitration: a traced region is a real room if a printed room label
+      // sits inside it OR its outline runs firmly along walls. Dimension
+      // slivers, title blocks and site cells fail both and are dropped
+      // together with their wall bands.
+      const labels = result && result.ok ? (result.roomLabels ?? []) : [];
+      const { pointInPolygon } = await import("@/lib/image-plan-shapes");
+      // Outdoor amenities are drawn and labeled but are not rooms to lift.
+      const OUTDOOR_LABEL = /\b(pool|spa|sun\s?deck|deck|planter|port\s?cochere|driveway|patio|terrace|garden|yard|equipment)\b/i;
+      const keptRooms = (shapes?.rooms ?? []).filter((room) => {
+        const label = labels.find((l) => pointInPolygon(l.at[0], l.at[1], room.points));
+        if (label && !OUTDOOR_LABEL.test(label.name)) return true;
+        return room.wallScore >= 0.7 && room.textScore < 0.06 && !(label && OUTDOOR_LABEL.test(label.name));
+      });
+      const keptIndex = new Set(keptRooms.map((room) => room.index));
+      const traced: RecognizedPolygon[] = (shapes?.polygons ?? [])
+        .filter((p) => {
+          const m = p.id.match(/^shape_(?:floor|wall|door|window)_(\d+)/);
+          return !m || keptIndex.has(Number(m[1]));
+        })
+        .map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
+      const ai: RecognizedPolygon[] = (result && result.ok ? result.polygons : []).map((p, k) => ({
         id: p.id ?? `det_${k}`,
         type: p.type as MarkLiftType,
         points: p.points as Array<[number, number]>,
       }));
+      // Openings: tiled detections first (sharper), full-sheet extras that
+      // aren't duplicates second.
+      const centerOf = (pts: Array<[number, number]>): [number, number] => [
+        pts.reduce((s, p) => s + p[0], 0) / pts.length,
+        pts.reduce((s, p) => s + p[1], 0) / pts.length,
+      ];
+      const openings: RecognizedPolygon[] = tiled.map((p, k) => ({ id: `tile_${k}`, type: p.type as MarkLiftType, points: p.points }));
+      for (const p of ai.filter((q) => q.type !== "wall" && q.type !== "floor")) {
+        const [cx, cy] = centerOf(p.points);
+        const dupe = openings.some((o) => o.type === p.type && (([ox, oy]) => Math.hypot(cx - ox, cy - oy) < 0.015)(centerOf(o.points)));
+        if (!dupe) openings.push(p);
+      }
+      const useTraced = traced.some((p) => p.type === "floor");
+      const polygons: RecognizedPolygon[] = useTraced
+        ? [...traced, ...openings]
+        : [...ai, ...openings.filter((o) => o.id.startsWith("tile_"))];
+      const namedRooms = useTraced
+        ? keptRooms.map((room) => ({
+            points: room.points,
+            name: labels.find((l) => pointInPolygon(l.at[0], l.at[1], room.points))?.name,
+          }))
+        : undefined;
+      if (!polygons.length) {
+        const message = "No enclosed shapes found — upload a sharper plan with clear walls.";
+        setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: message } : x));
+        return;
+      }
       setFloors((p) => p.map((x, j) => j === index ? {
         ...x,
         recognizing: false,
-        recognition: { imageWidth: width, imageHeight: height, planWidthMeters: 12, polygons },
+        recognition: { imageWidth: width, imageHeight: height, planWidthMeters: x.planWidthMetersOverride ?? 12, polygons },
+        vectorRooms: namedRooms ?? x.vectorRooms,
       } : x));
-      setRecognitionPreview(index);
+      if (!silent) setRecognitionPreview(index);
     } catch (cause) {
       setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: cause instanceof Error ? cause.message : "Recognition failed." } : x));
     }
@@ -242,8 +372,17 @@ export function FloorTo3D() {
           next.push({
             imageDataUrl: sheet.dataUrl,
             label,
-            heightMeters: 2.7,
+            heightMeters: 3.0,
             fileName: sheets.length > 1 ? `${file.name} — ${label}` : file.name,
+            ...(sheet.vector
+              ? {
+                  recognition: sheet.vector.recognition,
+                  vectorRooms: sheet.vector.rooms,
+                  ...(sheet.vector.needsCalibration
+                    ? {}
+                    : { planWidthMetersOverride: sheet.vector.planWidthMeters, scaleSource: "cad" as const }),
+                }
+              : {}),
           });
         }
       }
@@ -291,17 +430,13 @@ export function FloorTo3D() {
 
   async function buildBuilding() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
-    const unreviewed = floors.findIndex((floor) => !floor.recognition?.polygons.length);
-    if (unreviewed !== -1) {
-      setError("Review the 2D parts and confirm the plan scale for every floor before building.");
-      setRecognitionPreview(unreviewed);
-      return;
-    }
-    setBusy(true); setError(""); setFloorParts([]); setStage("modeling");
+    const unreviewed = floors.findIndex(f => !f.recognition?.reviewed);
+    if (unreviewed !== -1) { setError("Review the 2D parts and confirm the measured scale on every floor."); setRecognitionPreview(unreviewed); return; }
+    if (!(await ensureConsent())) return;
+    setBusy(true); setError(""); setFloorParts([]); setBuildReports([]); setStage("modeling");
     if (!(await consume())) {
       setBusy(false); setStage("upload");
-      if (!signedIn) { void navigate({ to: "/auth" }); return; }
-      setError("You have no credits left. Open your Wallet to continue."); return;
+      void navigate({ to: "/pricing" }); return;
     }
     try {
       const parts: FloorPart[] = [];
@@ -317,19 +452,21 @@ export function FloorTo3D() {
                   label,
                   imageWidth: f.recognition.imageWidth,
                   imageHeight: f.recognition.imageHeight,
-                  planWidthMeters: f.recognition.planWidthMeters,
+                  planWidthMeters: f.planWidthMetersOverride ?? f.recognition.planWidthMeters,
                   outputUnits,
-                  wallHeightMeters: f.heightMeters || 2.7,
+                  wallHeightMeters: f.heightMeters || 3.0,
                   polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ id: p.id, type: p.type, points: p.points })),
+                  rooms: f.vectorRooms ?? [],
+                  scaleMethod: f.scaleSource === "cad" ? "cad_units" as const : "user_calibration" as const,
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`)
             : await withTimeout(generate({
                 data: {
-                  wallHeightMeters: f.heightMeters || 2.7,
+                  wallHeightMeters: f.heightMeters || 3.0,
                   planUnits, outputUnits, subject: "building",
                   building: {
                     scope: "floor",
-                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 2.7 }],
+                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 3.0, planWidthMeters: f.planWidthMetersOverride }],
                   },
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`);
@@ -338,6 +475,18 @@ export function FloorTo3D() {
           if (!got) { firstError ||= `${label} returned no model.`; continue; }
           parts.push(got);
           setFloorParts([...parts]);
+          if ("report" in result && result.report) {
+            const r = result.report;
+            setBuildReports((prev) => [...prev, {
+              label,
+              counts: r.counts,
+              assumptions: r.assumptions,
+              missing: r.missing,
+              conflicts: r.conflicts,
+              geometryJsonDataUrl: result.geometryJsonDataUrl,
+              reportMarkdownDataUrl: result.reportMarkdownDataUrl,
+            }]);
+          }
         } catch (cause) {
           firstError ||= cause instanceof Error ? cause.message : `${label} failed.`;
         }
@@ -353,12 +502,12 @@ export function FloorTo3D() {
 
   async function buildFurniture() {
     if (!furnitureUrl) return;
+    if (!(await ensureConsent())) return;
     setBusy(true); setError(""); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null); setStage("modeling");
     setStatus("Reading dimensions from your drawing…");
     if (!(await consume())) {
       setBusy(false); setStage("upload");
-      if (!signedIn) { void navigate({ to: "/auth" }); return; }
-      setError("You have no credits left. Open your Wallet to continue."); return;
+      void navigate({ to: "/pricing" }); return;
     }
     try {
       let bounds: { width: number; depth: number; height: number } | undefined;
@@ -367,8 +516,33 @@ export function FloorTo3D() {
         if (b.ok) bounds = { width: b.width, depth: b.depth, height: b.height };
       } catch { /* fallback unscaled */ }
 
+      // The AI reads the reference (line drawing, sketch or photo) and
+      // renders ONE complete solid furniture piece — a clean product photo,
+      // NOT extruded linework. Mesh reconstruction then runs on that solid
+      // render, so the 3D model is a real object, not a flattened drawing.
+      setStatus("Isolating the furniture and designing the solid piece…");
+      let solidRender = furnitureUrl;
+      try {
+        const materialLine = furnitureMaterials.length
+          ? ` Make it out of these materials: ${furnitureMaterials.join(", ")} — apply them faithfully to the correct parts (frame, legs, seat, top, upholstery) with realistic grain, weave, veining and reflectance.`
+          : "";
+        const descLine = furnitureDesc.trim()
+          ? ` The user describes it as: "${furnitureDesc.trim()}". Honour that description for style, function and details while keeping the shape of the reference.`
+          : "";
+        const renderPrompt =
+          "This is a raw reference PHOTOGRAPH. Find the SINGLE main piece of furniture in it and IGNORE everything else — remove the background completely, and remove any people, walls, floor, other furniture, clutter, plants and props. Reconstruct ONLY that one furniture piece as accurately as possible: keep its exact shape, silhouette, proportions, structure and design details. Render it as ONE complete, solid, manufacturable object — a clean studio product photograph on a plain seamless neutral background, isolated with generous margins, three-quarter view, fully solid with real thickness and volume, evenly lit, sharp, no shadows cast on other objects."
+          + materialLine + descLine
+          + " Strictly photoreal — NOT a line drawing, NOT a wireframe, no outlines, no annotations, no text, no extra objects. A single real physical object ready to be turned into a 3D model.";
+        let out: string | null = null;
+        await streamImage(renderPrompt, furnitureUrl, (image, isFinal) => { if (isFinal || !out) out = image; });
+        if (out) solidRender = out;
+      } catch {
+        // If the render step fails, fall back to reconstructing the reference
+        // directly rather than blocking the whole build.
+      }
+
       setStatus("Reconstructing textured mesh — this takes 1–5 minutes…");
-      const started = await startRecon({ data: { imageDataUrl: furnitureUrl, quality: "high" } });
+      const started = await startRecon({ data: { imageDataUrl: solidRender, quality: "high" } });
       if (!started.ok) { setError(started.error); setStage("upload"); return; }
       const deadline = Date.now() + 10 * 60 * 1000;
       while (true) {
@@ -395,6 +569,12 @@ export function FloorTo3D() {
     } finally { setBusy(false); }
   }
 
+  function downloadDataUrl(href: string, filename: string) {
+    const a = document.createElement("a");
+    a.href = href; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
   function download(format: "dae" | "obj" | "fbx" | "glb") {
     const map: Record<typeof format, string | null> = { dae, obj, fbx, glb };
     const href = map[format];
@@ -410,12 +590,12 @@ export function FloorTo3D() {
 
   return <main className="min-h-screen bg-background">
     <FormaHeader />
-    <div className={`${PAGE_SHELL} px-5 pt-7`}><BackLink /></div>
+    <div className="px-5 pt-7 md:mx-auto md:w-full md:max-w-5xl"><BackLink /></div>
     <PageIntro eyebrow="2D to 3D" title="Plan to 3D model" description="Upload a floor plan or furniture drawing. Tap Build. Download the 3D file.">
       <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "VIP · Unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p>
     </PageIntro>
 
-    <section className={`${PAGE_SHELL} px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:max-w-4xl`}>
+    <section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-5xl">
       {/* Subject toggle */}
       <div className="mb-5 grid grid-cols-2 gap-3">
         <Button type="button" variant={subject === "building" ? "default" : "outline"} onClick={() => { setSubject("building"); reset(); }}>Building</Button>
@@ -441,19 +621,20 @@ export function FloorTo3D() {
                     {f.imageDataUrl.startsWith("data:image/") ? <img src={f.imageDataUrl} alt="" className="size-full object-contain" /> : "PDF"}
                   </span>
                   <Input value={f.label} onChange={(e) => setFloors((p) => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} className="h-9 flex-1" placeholder={i === 0 ? "Ground floor" : `Floor ${i}`} />
-                  <div className="flex items-center gap-1">
-                    <Input type="number" min={1} max={50} step={0.25} inputMode="decimal" className="h-9 w-16"
-                      value={Number((f.heightMeters * 3.28084).toFixed(2))}
-                      onChange={(e) => { const v = Number(e.target.value) || 0; setFloors((p) => p.map((x, j) => j === i ? { ...x, heightMeters: Math.min(15, Math.max(0.3, v / 3.28084)) } : x)); }} />
-                    <span className="text-[10px] font-bold uppercase text-muted-foreground">ft</span>
-                  </div>
                   {f.imageDataUrl.startsWith("data:image/") && (
-                    <Button type="button" variant={f.recognition ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
-                      disabled={f.recognizing}
-                      onClick={() => setRecognitionPreview(i)}
-                      title="Select, draw and classify the parts to include in the 3D model">
+                    <button type="button" disabled={f.recognizing} onClick={() => setRecognitionPreview(i)}
+                      className="flex items-center gap-1 rounded-full px-2 text-[10px] font-bold uppercase text-muted-foreground disabled:opacity-70"
+                      title="Architectural elements the AI recognised on this floor — tap to view">
                       {f.recognizing ? <LoaderCircle className="size-3 animate-spin" /> : f.recognition ? <Eye className="size-3" /> : <ScanSearch className="size-3" />}
-                      <span className="text-[10px] font-bold uppercase">{f.recognizing ? "…" : f.recognition ? `${f.recognition.polygons.length}` : "Review 2D"}</span>
+                      {f.recognizing ? "Recognising…" : f.recognition ? `${f.recognition.polygons.length} elements` : "Reading…"}
+                    </button>
+                  )}
+                  {f.imageDataUrl.startsWith("data:image/") && (
+                    <Button type="button" variant={f.planWidthMetersOverride ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
+                      onClick={() => setCalibrating(i)}
+                      title="Calibrate scale — click two points with a known distance">
+                      <Ruler className="size-3" />
+                      <span className="text-[10px] font-bold uppercase">{f.planWidthMetersOverride ? (planUnits === "feet-inches" ? `${(f.planWidthMetersOverride / 0.3048).toFixed(0)}ft` : `${f.planWidthMetersOverride.toFixed(1)}m`) : "Scale"}</span>
                     </Button>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
@@ -483,7 +664,20 @@ export function FloorTo3D() {
                 <span className="mt-1 block text-xs text-muted-foreground">PDF · DWG · DXF · JPG · PNG</span>
               </span>}
         </Button>
-        {furnitureName && <Button type="button" variant="ghost" size="sm" onClick={() => { setFurnitureUrl(null); setFurnitureName(""); reset(); }}><X />Remove</Button>}
+        {furnitureName && <Button type="button" variant="ghost" size="sm" onClick={() => { setFurnitureUrl(null); setFurnitureName(""); setFurnitureDesc(""); setFurnitureMaterials([]); reset(); }}><X />Remove</Button>}
+        {furnitureUrl && <div className="space-y-3 rounded-2xl border border-border p-4">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Guide the model (optional)</p>
+          <label className="block text-xs">
+            <span className="font-bold uppercase tracking-[0.14em]">Describe the piece</span>
+            <Textarea value={furnitureDesc} onChange={(e) => setFurnitureDesc(e.target.value)} maxLength={500} placeholder="e.g. mid-century lounge chair, curved back, tapered legs…" className="mt-2 min-h-20 resize-none" />
+          </label>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em]">Materials</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {FURNITURE_MATERIALS.map((m) => <Button key={m} type="button" size="sm" variant={furnitureMaterials.includes(m) ? "default" : "outline"} onClick={() => setFurnitureMaterials((cur) => cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m])}>{m}</Button>)}
+            </div>
+          </div>
+        </div>}
       </div>}
 
       {/* Units */}
@@ -534,6 +728,51 @@ export function FloorTo3D() {
         </div>}
 
         {subject === "building" && floorParts.length > 0 && <div className="mt-3"><Building3DViewer parts={floorParts} outputUnits={outputUnits} /></div>}
+
+        {subject === "building" && buildReports.length > 0 && <div className="mt-4 rounded-2xl border border-border p-4">
+          <p className="text-xs font-bold uppercase tracking-[0.14em]">Extraction report</p>
+          {(() => {
+            const totals = buildReports.reduce(
+              (acc, r) => ({ confirmed: acc.confirmed + r.counts.confirmed, inferred: acc.inferred + r.counts.inferred, assumed: acc.assumed + r.counts.assumed }),
+              { confirmed: 0, inferred: 0, assumed: 0 },
+            );
+            const tag = (label: string, items: string[]) => items.map((s) => buildReports.length > 1 ? `${label}: ${s}` : s);
+            const assumptions = buildReports.flatMap((r) => tag(r.label, r.assumptions));
+            const missing = buildReports.flatMap((r) => tag(r.label, r.missing));
+            const conflicts = buildReports.flatMap((r) => tag(r.label, r.conflicts));
+            const list = (title: string, items: string[]) => items.length > 0 && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-[0.2em]">{title} ({items.length})</summary>
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {items.map((item, i) => <li key={i}>• {item}</li>)}
+                </ul>
+              </details>
+            );
+            return <>
+              <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.14em]">
+                <span className="rounded-full border border-border px-3 py-1">Confirmed {totals.confirmed}</span>
+                <span className="rounded-full border border-border px-3 py-1">Inferred {totals.inferred}</span>
+                <span className="rounded-full border border-border px-3 py-1">Assumed {totals.assumed}</span>
+              </div>
+              {list("Assumptions", assumptions)}
+              {list("Missing information", missing)}
+              {list("Conflicts", conflicts)}
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {buildReports.map((r, i) => {
+                  const suffix = buildReports.length > 1 ? `_${r.label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}` : "";
+                  return <div key={i} className="contents">
+                    {r.geometryJsonDataUrl && <Button variant="outline" size="sm" className="justify-between" onClick={() => downloadDataUrl(r.geometryJsonDataUrl!, `floorplan_geometry${suffix}.json`)}>
+                      <span>Geometry JSON{buildReports.length > 1 ? ` — ${r.label}` : ""}</span><Download />
+                    </Button>}
+                    {r.reportMarkdownDataUrl && <Button variant="outline" size="sm" className="justify-between" onClick={() => downloadDataUrl(r.reportMarkdownDataUrl!, `floorplan_report${suffix}.md`)}>
+                      <span>Report{buildReports.length > 1 ? ` — ${r.label}` : ""}</span><Download />
+                    </Button>}
+                  </div>;
+                })}
+              </div>
+            </>;
+          })()}
+        </div>}
         {subject === "furniture" && (glb || dae) && <div className="mt-3"><Furniture3DPreview key={glb || dae || "x"} plan={plan ?? undefined} daeDataUrl={dae ?? undefined} glbDataUrl={glb ?? undefined} /></div>}
 
         {subject === "furniture" && (dae || glb || obj || fbx) && <div className="mt-4 rounded-2xl border border-border p-4">
@@ -554,6 +793,24 @@ export function FloorTo3D() {
       <ToolInformation sections={information} />
     </section>
     <ToolTabBar />
+    {calibrating !== null && floors[calibrating] && (
+      <ScaleCalibrator
+        imageDataUrl={floors[calibrating].imageDataUrl}
+        label={floors[calibrating].label || "this floor"}
+        planUnits={planUnits}
+        onCalibrated={(planWidthMeters) => {
+          setFloors((p) => p.map((x, j) => j === calibrating
+            ? {
+                ...x,
+                planWidthMetersOverride: planWidthMeters,
+                scaleSource: "user" as const,
+                recognition: x.recognition ? { ...x.recognition, planWidthMeters } : x.recognition,
+              }
+            : x));
+        }}
+        onClose={() => setCalibrating(null)}
+      />
+    )}
     {recognitionPreview !== null && floors[recognitionPreview] && (
       <FloorAnnotator
         key={recognitionPreview}
@@ -562,12 +819,13 @@ export function FloorTo3D() {
         onClose={() => setRecognitionPreview(null)}
         onApply={(result) => {
           const index = recognitionPreview;
-          setFloors((current) => current.map((floor, i) => i === index ? { ...floor, recognition: result } : floor));
+          setFloors((current) => current.map((floor, i) => i === index ? { ...floor, recognition: { ...result, reviewed: true }, planWidthMetersOverride: result.planWidthMeters, scaleSource: "user" as const } : floor));
           setRecognitionPreview(null);
-          setFloorParts([]);
+          setFloorParts([]); setBuildReports([]);
           setStage("upload");
         }}
       />
     )}
+    {consentDialog}
   </main>;
 }

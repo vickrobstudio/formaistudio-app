@@ -23,4 +23,3 @@ create policy "Owners read Instagram submissions" on public.instagram_submission
 create policy "Owners submit pending Instagram creations" on public.instagram_submissions for insert to authenticated with check (auth.uid()=user_id and status='pending');
 create index instagram_submissions_queue on public.instagram_submissions(status,created_at);
 commit;
-

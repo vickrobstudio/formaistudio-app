@@ -13,7 +13,7 @@ const submissionInput = z.object({
 const idInput = z.object({ id: z.string().uuid() });
 async function requireModerator(supabase: SupabaseClient) {
   const { data, error } = await supabase.auth.getUser();
-  if (error || !isFormAIOwner(data.user)) throw new Error("Only the FormAI owner can perform this action.");
+  if (error || !isFormAIOwner(data.user)) throw new Error("Only the FormAI Studio owner can perform this action.");
 }
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -99,4 +99,3 @@ export const publishApprovedInstagramSubmission = createServerFn({ method: "POST
       throw cause;
     }
   });
-

@@ -136,8 +136,18 @@ export async function parseDrawing(file: File): Promise<DwgDatabaseLite> {
     // DXF is ASCII; libredwg accepts the text payload.
     const text = await file.text();
     dwgHandle = libredwg.dwg_read_data(text, Dwg_File_Type.DXF);
-    if (!dwgHandle) throw new Error("Could not parse DXF file.");
+    // libredwg's DXF importer is strict and rejects many simple or
+    // loosely-written DXF exports (online converters, hand exports).
+    // Fall back to the tolerant dxf-parser adapter for those.
+    if (!dwgHandle) return await parseDxfTolerant(text);
     db = libredwg.convert(dwgHandle);
+    try {
+      const normalized = normalize(db, kind);
+      if (normalized.entities.length > 0) return normalized;
+      return await parseDxfTolerant(text);
+    } finally {
+      try { libredwg.dwg_free(dwgHandle); } catch { /* noop */ }
+    }
   } else {
     const buf = await file.arrayBuffer();
     dwgHandle = libredwg.dwg_read_data(buf, Dwg_File_Type.DWG);
@@ -152,6 +162,93 @@ export async function parseDrawing(file: File): Promise<DwgDatabaseLite> {
       try { libredwg.dwg_free(dwgHandle); } catch { /* noop */ }
     }
   }
+}
+
+/**
+ * Tolerant DXF fallback. Adapts `dxf-parser` output (which accepts files
+ * libredwg rejects) to the same lite database, so the entire downstream
+ * pipeline — rasterization, vector recognition, 3D lift — works unchanged.
+ * Files that rely on blocks/INSERTs still need the strict parser.
+ */
+async function parseDxfTolerant(text: string): Promise<DwgDatabaseLite> {
+  const { default: DxfParser } = await import("dxf-parser");
+  const parser = new DxfParser();
+  type ParsedDxf = { header?: Record<string, unknown>; entities?: Array<Record<string, unknown>> };
+  let dxf: ParsedDxf | null = null;
+  try {
+    dxf = parser.parseSync(text) as ParsedDxf | null;
+  } catch {
+    throw new Error("Could not parse DXF file.");
+  }
+  if (!dxf || !Array.isArray(dxf.entities) || dxf.entities.length === 0) {
+    throw new Error("Could not parse DXF file.");
+  }
+  const insunits = Number(dxf.header?.["$INSUNITS"] ?? 0);
+  const units = UNIT_MAP[insunits] ?? "unitless";
+
+  type P = { x: number; y: number; bulge?: number };
+  const entities: DwgEntityLite[] = [];
+  let id = 0;
+  for (const raw of dxf.entities) {
+    const e = raw as Record<string, any>;
+    const type = String(e.type ?? "").toUpperCase();
+    const layer = typeof e.layer === "string" ? e.layer : "0";
+    if (type === "LINE") {
+      const v: P[] = Array.isArray(e.vertices) ? e.vertices : [];
+      const start = v[0] ?? e.start;
+      const end = v[1] ?? e.end;
+      if (!start || !end) continue;
+      entities.push({ id: id++, type, layer, start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } });
+    } else if (type === "LWPOLYLINE" || type === "POLYLINE") {
+      const v: P[] = Array.isArray(e.vertices) ? e.vertices : [];
+      if (v.length < 2) continue;
+      entities.push({ id: id++, type: "LWPOLYLINE", layer, vertices: v.map((p) => ({ x: p.x, y: p.y, bulge: p.bulge })), closed: Boolean(e.shape ?? e.closed) });
+    } else if (type === "CIRCLE" || type === "ARC") {
+      if (!e.center || typeof e.radius !== "number") continue;
+      entities.push({ id: id++, type, layer, center: { x: e.center.x, y: e.center.y }, radius: e.radius, startAngle: e.startAngle, endAngle: e.endAngle });
+    } else if (type === "ELLIPSE") {
+      if (!e.center) continue;
+      entities.push({ id: id++, type, layer, center: { x: e.center.x, y: e.center.y }, majorAxisEndPoint: e.majorAxisEndPoint, axisRatio: e.axisRatio, startAngle: e.startAngle, endAngle: e.endAngle });
+    } else if (type === "TEXT" || type === "MTEXT") {
+      const p = e.startPoint ?? e.position;
+      const textValue = typeof e.text === "string" ? e.text : "";
+      if (!p || !textValue) continue;
+      entities.push({ id: id++, type, layer, text: textValue, insertionPoint: { x: p.x, y: p.y }, height: e.textHeight ?? e.height });
+    }
+  }
+  if (!entities.length) throw new Error("Could not parse DXF file.");
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const seen = (p?: { x: number; y: number }) => {
+    if (!p) return;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  };
+  for (const e of entities) {
+    seen(e.start); seen(e.end); seen(e.insertionPoint);
+    if (e.center && typeof e.radius === "number") {
+      seen({ x: e.center.x - e.radius, y: e.center.y - e.radius });
+      seen({ x: e.center.x + e.radius, y: e.center.y + e.radius });
+    } else {
+      seen(e.center);
+    }
+    for (const v of e.vertices ?? []) seen(v);
+  }
+  if (!Number.isFinite(minX)) { minX = 0; minY = 0; maxX = 1; maxY = 1; }
+
+  return {
+    source: "dxf",
+    units,
+    unitToMeters: UNIT_TO_METERS[units] ?? 1,
+    extents: { min: { x: minX, y: minY }, max: { x: maxX, y: maxY } },
+    layers: [],
+    blocks: [],
+    entities,
+    layouts: [{ name: "Model", isModelSpace: true, entities }],
+    raw: dxf as unknown as DwgDatabase,
+  };
 }
 
 function pt(p: unknown): { x: number; y: number; z?: number } | undefined {
@@ -211,9 +308,16 @@ function normalize(db: DwgDatabase, source: "dwg" | "dxf"): DwgDatabaseLite {
     };
   });
 
-  const entities: DwgEntityLite[] = (db.entities ?? []).map((e, i) =>
+  let entities: DwgEntityLite[] = (db.entities ?? []).map((e, i) =>
     normalizeEntity(e as unknown as Record<string, unknown>, i),
   );
+  // DWG files frequently keep ALL model-space entities inside the
+  // `*Model_Space` block record and leave the top-level list empty —
+  // without this harvest the whole drawing looks blank.
+  if (entities.length === 0) {
+    const modelBlock = blocks.find((b) => /^\*model[_ ]?space$/i.test(b.name));
+    if (modelBlock?.entities?.length) entities = modelBlock.entities;
+  }
 
   // Extract per-layout entity buckets. Model space is `db.entities`;
   // every other layout lives inside a BLOCK_RECORD whose `layout` handle
@@ -446,9 +550,26 @@ export function describePrecheckIssues(issues: DwgPrecheckIssue[]): string {
  * this helper is opt-in for callers that still need an image, e.g. the
  * room-segmentation step.
  */
+// Layers that are NOT the building shell — furniture, fixtures, MEP, site,
+// people/cars. In architectural-only mode these are stripped so only walls,
+// doors, windows, floors and roof survive.
+const NON_ARCH_TOKENS = [
+  "furn", "furniture", "furnishing", "fixture", "fixtures", "casework", "cabinet",
+  "cabinets", "millwork", "appliance", "appliances", "equip", "equipment",
+  "plumb", "plumbing", "sanitary", "elec", "electric", "electrical", "power",
+  "data", "comm", "lighting", "light", "lite", "lites", "hvac", "mech", "mechanical", "duct",
+  "fire", "sprinkler", "landscape", "planting", "plant", "plants", "tree",
+  "trees", "shrub", "car", "cars", "vehicle", "vehicles", "people", "person",
+  "furniture", "rcp", "reflected", "detail", "section",
+];
+const NON_ARCH_LAYER = new RegExp(
+  `(^|[\\s\\-_.])(${NON_ARCH_TOKENS.join("|")})($|[\\s\\-_.])`,
+  "i",
+);
+
 export function rasterizeDatabase(
   db: DwgDatabaseLite,
-  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[]; projectViewports?: boolean } = {},
+  opts: { maxDimension?: number; padding?: number; entities?: DwgEntityLite[]; projectViewports?: boolean; permissive?: boolean; architecturalOnly?: boolean } = {},
 ): { dataUrl: string; width: number; height: number; bounds: DwgDatabaseLite["extents"]; drawableCount: number } {
   const maxDim = opts.maxDimension ?? 2400;
   const padding = opts.padding ?? 24;
@@ -495,30 +616,64 @@ export function rasterizeDatabase(
       || t === "LEADER" || t === "MLEADER" || t === "MULTILEADER"
       || t === "HATCH" || t === "SOLID" || t === "INSERT" || t === "VIEWPORT");
   }
-  const visibleSolidEntities = sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
-  const strictEntities = visibleSolidEntities.filter((e) => !isNoiseLayer(e));
+  // Permissive mode: grab EVERY vector line regardless of layer naming or
+  // linetype (annotation entity types still stay out) — used when strict
+  // filtering leaves too little linework to enclose areas.
+  const visibleSolidEntities = opts.permissive
+    ? sourceEntities.filter((e) => isDrawableType(e))
+    : sourceEntities.filter((e) => isDrawableType(e) && isDashed(e));
+  const strictEntities = opts.permissive
+    ? visibleSolidEntities
+    : visibleSolidEntities.filter((e) => !isNoiseLayer(e));
   // If a CAD author put real plan linework on a badly named layer, keep the
   // preview from going blank. Entity types still remove text/dimensions/arrows,
   // and dashed/hidden/center linetypes still stay out.
-  const drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
+  let drawableEntities = strictEntities.length > 0 ? strictEntities : visibleSolidEntities;
 
-  // Fall back to entity-bounding-box if extents are empty.
+  // Architectural-only cleaning (Building mode): drop furniture, fixtures,
+  // MEP, casework and site layers so only the building shell — walls, doors,
+  // windows, floors and roof — is rasterized. Skipped if it would remove
+  // everything (unconventional layer naming), so a plan never goes blank.
+  if (opts.architecturalOnly) {
+    const shell = drawableEntities.filter((e) => !NON_ARCH_LAYER.test(e.layer));
+    // Keep the cleaned set unless it stripped almost everything (which would
+    // mean layers aren't named conventionally — then don't risk a blank plan).
+    if (shell.length >= Math.max(4, drawableEntities.length * 0.1)) drawableEntities = shell;
+  }
+
+  // Zoom-to-fit bounds. The header EXTMIN/EXTMAX are often stale or inflated
+  // by a stray far-away entity (a leftover point, a construction line), which
+  // makes the real drawing render as tiny micro-lines in a blank ocean. So we
+  // recompute from the drawn geometry using a ROBUST bounding box: gather all
+  // point coordinates and trim the extreme 0.5% on each axis, discarding
+  // outliers so the frame fits the bulk of the linework (the building).
   let { min, max } = db.extents;
-  // If a specific entity set was supplied (per-layout), recompute bounds
-  // from those entities so the layout fills the page.
   if (opts.entities || max.x - min.x <= 0 || max.y - min.y <= 0) {
-    let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+    const xs: number[] = [];
+    const ys: number[] = [];
     for (const e of drawableEntities) {
       for (const p of pointsOf(e)) {
-        if (p.x < mnX) mnX = p.x; if (p.y < mnY) mnY = p.y;
-        if (p.x > mxX) mxX = p.x; if (p.y > mxY) mxY = p.y;
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) { xs.push(p.x); ys.push(p.y); }
       }
     }
-    if (!isFinite(mnX) || !isFinite(mxX)) {
-      mnX = 0; mnY = 0; mxX = 1000; mxY = 1000;
+    if (xs.length === 0) {
+      min = { x: 0, y: 0 };
+      max = { x: 1000, y: 1000 };
+    } else {
+      xs.sort((a, b) => a - b);
+      ys.sort((a, b) => a - b);
+      const trim = xs.length >= 50 ? 0.005 : 0; // only trim when there's enough data
+      const lo = (arr: number[]) => arr[Math.floor(arr.length * trim)];
+      const hi = (arr: number[]) => arr[Math.min(arr.length - 1, Math.ceil(arr.length * (1 - trim)))];
+      let mnX = lo(xs), mxX = hi(xs), mnY = lo(ys), mxY = hi(ys);
+      // Safety: if trimming collapsed the box (degenerate), fall back to the
+      // full absolute extent so nothing is ever lost on sparse drawings.
+      if (mxX - mnX < 1e-6 || mxY - mnY < 1e-6) {
+        mnX = xs[0]; mxX = xs[xs.length - 1]; mnY = ys[0]; mxY = ys[ys.length - 1];
+      }
+      min = { x: mnX, y: mnY };
+      max = { x: mxX, y: mxY };
     }
-    min = { x: mnX, y: mnY };
-    max = { x: mxX, y: mxY };
   }
 
   const w = Math.max(1, max.x - min.x);
@@ -593,7 +748,7 @@ export function rasterizeDatabase(
   return { dataUrl: canvas.toDataURL("image/png"), width: W, height: H, bounds: { min, max }, drawableCount: drawableEntities.length };
 }
 
-function expandRenderableEntities(
+export function expandRenderableEntities(
   db: DwgDatabaseLite,
   entities: DwgEntityLite[],
   opts: { projectViewports?: boolean } = {},

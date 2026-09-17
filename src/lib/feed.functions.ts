@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+
 const CreationIdInput = z.object({ creationId: z.string().uuid() });
 const CommentInput = CreationIdInput.extend({ body: z.string().trim().min(1).max(500) });
 const FurnitureCreationInput = z.object({
@@ -110,7 +111,7 @@ export const addCreationComment = createServerFn({ method: "POST" })
   .validator((input: unknown) => CommentInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
-    const authorName = profile?.username || "FormAI member";
+    const authorName = profile?.username || "FormAI Studio member";
     const { error } = await context.supabase.from("creation_comments").insert({ creation_id: data.creationId, user_id: context.userId, author_name: authorName.slice(0, 80), body: data.body });
     if (error) throw new Error("Unable to post your comment.");
     return { ok: true };
@@ -146,7 +147,7 @@ export const saveFurnitureCreation = createServerFn({ method: "POST" })
   .validator((input: unknown) => FurnitureCreationInput.parse(input))
   .handler(async ({ data, context }) => {
     const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
-    const creatorName = profile?.username || "FormAI member";
+    const creatorName = profile?.username || "FormAI Studio member";
     const { data: creation, error } = await context.supabase.from("public_creations").insert({
       user_id: context.userId,
       creator_name: creatorName.slice(0, 80),
@@ -184,7 +185,7 @@ export const publishGeneratedImage = createServerFn({ method: "POST" })
     if (profile.error) throw new Error("Unable to load your profile.");
     const { data: creation, error } = await context.supabase.from("public_creations").insert({
       id: data.id, user_id: context.userId,
-      creator_name: (profile.data?.username || "FormAI member").slice(0, 80),
+      creator_name: (profile.data?.username || "FormAI Studio member").slice(0, 80),
       title: data.title, description: data.description, image_url: data.imageDataUrl,
       creation_type: "render", is_public: true,
     }).select("id").single();
@@ -195,5 +196,34 @@ export const publishGeneratedImage = createServerFn({ method: "POST" })
       }
       throw new Error("Unable to publish your creation. Please retry.");
     }
+    return creation;
+  });
+
+const ShareCreationInput = FurnitureCreationInput.extend({ creationType: z.enum(["furniture", "interior", "render", "building"]) });
+
+export const sharePublicCreation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => ShareCreationInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).single();
+    const creatorName = profile?.username || "FormAI Studio member";
+    // The public_creations table only permits these creation_type values.
+    // The 3D-to-AI tool tags its output "building", which the DB CHECK
+    // constraint rejects — map any value outside the allowed set to "render"
+    // (a 3D-to-AI output is a photoreal rendering) so publishing never fails.
+    const DB_CREATION_TYPES = new Set(["furniture", "interior", "render", "video", "other"]);
+    const creationType = DB_CREATION_TYPES.has(data.creationType) ? data.creationType : "render";
+    const { data: creation, error } = await context.supabase.from("public_creations").insert({
+      user_id: context.userId,
+      creator_name: creatorName.slice(0, 80),
+      title: data.title,
+      description: data.description,
+      image_url: data.imageUrl,
+      model_glb_path: data.modelGlbPath,
+      model_usdz_path: data.modelUsdzPath,
+      creation_type: creationType,
+      is_public: data.isPublic,
+    }).select("id").single();
+    if (error) throw new Error("Unable to publish this creation.");
     return creation;
   });

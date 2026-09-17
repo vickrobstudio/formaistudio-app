@@ -8,7 +8,7 @@ export function LandingPaintLogo() {
     >
       <img
         src={logoAsset}
-        alt="FORM AI"
+        alt="FormAI Studio"
         draggable={false}
         className="absolute inset-0 size-full object-contain"
         style={{ filter: "invert(0.82)" }}

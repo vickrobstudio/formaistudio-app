@@ -1,16 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { LandingBackgroundPaint } from "@/components/LandingBackgroundPaint";
-import { LandingArchitectGuide } from "@/components/LandingArchitectGuide";
 import { LandingPaintLogo } from "@/components/LandingPaintLogo";
+import { LandingArchitectGuide } from "@/components/LandingArchitectGuide";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
     { title: "FormAI Studio — 2D Floor Plans to 3D & AI Rendering" },
     { name: "description", content: "The creative app for architects, interior and furniture designers — build 3D worlds and photorealistic renderings to showcase your ideas. For human and god creators." },
-    { name: "theme-color", content: "#ffffff" },
+    { name: "theme-color", content: "#3a3a3a" },
     { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     { property: "og:title", content: "FormAI Studio — 2D Floor Plans to 3D & AI Rendering" },
     { property: "og:description", content: "Build 3D worlds and photorealistic renderings. For architects, interior and furniture designers — and every creator." },
+  ],
+  links: [
+    { rel: "preload", as: "image", href: "/backgrounds/eden-mobile.jpg", media: "(max-width: 639px)" },
+    { rel: "preload", as: "image", href: "/backgrounds/eden-ipad.jpg", media: "(min-width: 640px) and (max-width: 1023px)" },
+    { rel: "preload", as: "image", href: "/backgrounds/eden-desktop.jpg", media: "(min-width: 1024px)" },
   ] }),
   component: HomePage,
 });

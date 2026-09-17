@@ -1,3 +1,4 @@
+import { meteredFetch } from "./generation-billing.server";
 export type EditPlan = { status: "ready" | "clarify"; instruction: string; preserve: string[]; questions: string[] };
 export function parseEditPlan(value: unknown): EditPlan {
   const p = value as EditPlan;
@@ -14,7 +15,7 @@ If the target object, intended material/color, scope, or conflicting instruction
 Preserve camera, composition, architecture and all unrequested details by default. Do not impose warm lighting or add greenery unless requested. Reference images are supporting materials, not a replacement for the current scene. User answers clarify the original request; a later explicit correction overrides it.
 Output only JSON with status, instruction, preserve, questions.`;
 export async function planPhotoEdit(input: { image: string; request: string; history: Array<{role: string;text: string}>; answers: Array<{question:string;answer:string}>; referenceCount: number }, key: string, signal?: AbortSignal): Promise<EditPlan> {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await meteredFetch("review", "https://api.openai.com/v1/chat/completions", {
     method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${key}`},
     signal: AbortSignal.any([AbortSignal.timeout(45000), ...(signal ? [signal] : [])]),
     body: JSON.stringify({model:process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-4.1", temperature:0.2,max_tokens:1500,response_format:{type:"json_schema",json_schema:{name:"photo_edit_plan",strict:true,schema:{type:"object",additionalProperties:false,required:["status","instruction","preserve","questions"],properties:{status:{type:"string",enum:["ready","clarify"]},instruction:{type:"string"},preserve:{type:"array",items:{type:"string"}},questions:{type:"array",items:{type:"string"}}}}}},

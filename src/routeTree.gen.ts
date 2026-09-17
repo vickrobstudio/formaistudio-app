@@ -18,6 +18,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PhotoToAiRouteImport } from './routes/photo-to-ai'
 import { Route as ModelToAiRouteImport } from './routes/model-to-ai'
+import { Route as InstagramReviewRouteImport } from './routes/instagram-review'
 import { Route as FloorPlanTo3dRouteImport } from './routes/floor-plan-to-3d'
 import { Route as FeedRouteImport } from './routes/feed'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -33,6 +34,7 @@ import { Route as R2dTo3dRouteImport } from './routes/2d-to-3d'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CheckoutReturnRouteImport } from './routes/checkout.return'
+import { Route as ApiPhotoEditPlanRouteImport } from './routes/api/photo-edit-plan'
 import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
 import { Route as ApiBuildChatRouteImport } from './routes/api/build-chat'
@@ -86,6 +88,11 @@ const PhotoToAiRoute = PhotoToAiRouteImport.update({
 const ModelToAiRoute = ModelToAiRouteImport.update({
   id: '/model-to-ai',
   path: '/model-to-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstagramReviewRoute = InstagramReviewRouteImport.update({
+  id: '/instagram-review',
+  path: '/instagram-review',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FloorPlanTo3dRoute = FloorPlanTo3dRouteImport.update({
@@ -162,6 +169,11 @@ const CheckoutReturnRoute = CheckoutReturnRouteImport.update({
   path: '/checkout/return',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPhotoEditPlanRoute = ApiPhotoEditPlanRouteImport.update({
+  id: '/api/photo-edit-plan',
+  path: '/api/photo-edit-plan',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPhotoChatRoute = ApiPhotoChatRouteImport.update({
   id: '/api/photo-chat',
   path: '/api/photo-chat',
@@ -224,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
+  '/instagram-review': typeof InstagramReviewRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/pricing': typeof PricingRoute
@@ -240,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/api/build-chat': typeof ApiBuildChatRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
+  '/api/photo-edit-plan': typeof ApiPhotoEditPlanRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
@@ -258,6 +272,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
+  '/instagram-review': typeof InstagramReviewRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/pricing': typeof PricingRoute
@@ -274,6 +289,7 @@ export interface FileRoutesByTo {
   '/api/build-chat': typeof ApiBuildChatRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
+  '/api/photo-edit-plan': typeof ApiPhotoEditPlanRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
@@ -294,6 +310,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/feed': typeof FeedRoute
   '/floor-plan-to-3d': typeof FloorPlanTo3dRoute
+  '/instagram-review': typeof InstagramReviewRoute
   '/model-to-ai': typeof ModelToAiRoute
   '/photo-to-ai': typeof PhotoToAiRoute
   '/pricing': typeof PricingRoute
@@ -310,6 +327,7 @@ export interface FileRoutesById {
   '/api/build-chat': typeof ApiBuildChatRoute
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
+  '/api/photo-edit-plan': typeof ApiPhotoEditPlanRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
@@ -330,6 +348,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/floor-plan-to-3d'
+    | '/instagram-review'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/pricing'
@@ -346,6 +365,7 @@ export interface FileRouteTypes {
     | '/api/build-chat'
     | '/api/generate-image'
     | '/api/photo-chat'
+    | '/api/photo-edit-plan'
     | '/checkout/return'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
@@ -364,6 +384,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/floor-plan-to-3d'
+    | '/instagram-review'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/pricing'
@@ -380,6 +401,7 @@ export interface FileRouteTypes {
     | '/api/build-chat'
     | '/api/generate-image'
     | '/api/photo-chat'
+    | '/api/photo-edit-plan'
     | '/checkout/return'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
@@ -399,6 +421,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/feed'
     | '/floor-plan-to-3d'
+    | '/instagram-review'
     | '/model-to-ai'
     | '/photo-to-ai'
     | '/pricing'
@@ -415,6 +438,7 @@ export interface FileRouteTypes {
     | '/api/build-chat'
     | '/api/generate-image'
     | '/api/photo-chat'
+    | '/api/photo-edit-plan'
     | '/checkout/return'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
@@ -435,6 +459,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   FeedRoute: typeof FeedRoute
   FloorPlanTo3dRoute: typeof FloorPlanTo3dRoute
+  InstagramReviewRoute: typeof InstagramReviewRoute
   ModelToAiRoute: typeof ModelToAiRoute
   PhotoToAiRoute: typeof PhotoToAiRoute
   PricingRoute: typeof PricingRoute
@@ -447,6 +472,7 @@ export interface RootRouteChildren {
   ApiBuildChatRoute: typeof ApiBuildChatRoute
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
+  ApiPhotoEditPlanRoute: typeof ApiPhotoEditPlanRoute
   CheckoutReturnRoute: typeof CheckoutReturnRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
   ApiPublicRevenuecatWebhookRoute: typeof ApiPublicRevenuecatWebhookRoute
@@ -515,6 +541,13 @@ declare module '@tanstack/react-router' {
       path: '/model-to-ai'
       fullPath: '/model-to-ai'
       preLoaderRoute: typeof ModelToAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/instagram-review': {
+      id: '/instagram-review'
+      path: '/instagram-review'
+      fullPath: '/instagram-review'
+      preLoaderRoute: typeof InstagramReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/floor-plan-to-3d': {
@@ -622,6 +655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CheckoutReturnRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/photo-edit-plan': {
+      id: '/api/photo-edit-plan'
+      path: '/api/photo-edit-plan'
+      fullPath: '/api/photo-edit-plan'
+      preLoaderRoute: typeof ApiPhotoEditPlanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/photo-chat': {
       id: '/api/photo-chat'
       path: '/api/photo-chat'
@@ -720,6 +760,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   FeedRoute: FeedRoute,
   FloorPlanTo3dRoute: FloorPlanTo3dRoute,
+  InstagramReviewRoute: InstagramReviewRoute,
   ModelToAiRoute: ModelToAiRoute,
   PhotoToAiRoute: PhotoToAiRoute,
   PricingRoute: PricingRoute,
@@ -732,6 +773,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBuildChatRoute: ApiBuildChatRoute,
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
+  ApiPhotoEditPlanRoute: ApiPhotoEditPlanRoute,
   CheckoutReturnRoute: CheckoutReturnRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
   ApiPublicRevenuecatWebhookRoute: ApiPublicRevenuecatWebhookRoute,
@@ -739,3 +781,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
