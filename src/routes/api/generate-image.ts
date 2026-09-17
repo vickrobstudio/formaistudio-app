@@ -32,8 +32,11 @@ export const Route = createFileRoute("/api/generate-image")({
           );
         }
 
-        const key = process.env.LOVABLE_API_KEY;
-        if (!key) return new Response("Rendering service is unavailable.", { status: 500 });
+        const geminiKey = process.env.GEMINI_API_KEY;
+const openaiKey = process.env.OPENAI_API_KEY;
+        if (!geminiKey && !openaiKey) {
+  return new Response("Rendering service is unavailable.", { status: 500 });
+}
 
         const isTechnicalDrawing = /2D (floor plan|orthographic)|architectural drafting/i.test(
           result.data.prompt,
