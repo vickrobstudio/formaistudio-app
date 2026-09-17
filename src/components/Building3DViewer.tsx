@@ -27,6 +27,7 @@ type RawPart = {
   label: string;
   daeDataUrl: string;
   objDataUrl: string;
+  mtlDataUrl?: string;
   fbxDataUrl: string;
 };
 
@@ -463,19 +464,23 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
     });
   };
 
-  const downloadPart = (part: LoadedPart, raw: RawPart) => {
+  const downloadPart = (part: LoadedPart, raw: RawPart, materialsOnly = false) => {
     const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "part";
     let prefix: string;
     if (part.index === -1) prefix = "00_site";
     else if (part.index === 9999) prefix = "99_roof";
     else prefix = `${String(part.index + 1).padStart(2, "0")}_floor`;
-    const filename = `${prefix}_${slug}.${downloadFormat}`;
+    const baseName = `${prefix}_${slug}`;
+    const filename = `${baseName}.${materialsOnly ? "mtl" : downloadFormat}`;
     let href: string;
-    if (downloadFormat === "dae") {
+    if (materialsOnly) {
+      href = raw.mtlDataUrl ?? "";
+    } else if (downloadFormat === "dae") {
       const text = rewriteDae(part, overrides);
       href = URL.createObjectURL(new Blob([text], { type: "model/vnd.collada+xml" }));
     } else if (downloadFormat === "obj") {
-      href = raw.objDataUrl;
+      const text = dataUrlToText(raw.objDataUrl).replace(/^mtllib .*$/m, `mtllib ${baseName}.mtl`);
+      href = URL.createObjectURL(new Blob([text], { type: "model/obj" }));
     } else {
       href = raw.fbxDataUrl;
     }
@@ -483,7 +488,7 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
     const a = document.createElement("a");
     a.href = href; a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
-    if (downloadFormat === "dae") setTimeout(() => URL.revokeObjectURL(href), 1000);
+    if (href.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(href), 1000);
   };
 
   const toggleCollapsed = (key: string) => setCollapsed((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
@@ -631,10 +636,13 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
               else if (part.index === 9999) title = "Roof";
               else title = `Floor ${String(part.index + 1).padStart(2, "0")} — ${part.label}`;
               return (
-                <Button key={part.index} variant="default" className="h-11 w-full justify-between" onClick={() => downloadPart(part, raw)}>
+                <div key={part.index} className="space-y-2"><Button variant="default" className="h-11 w-full justify-between" onClick={() => downloadPart(part, raw)}>
                   <span>{title}</span>
                   <Download />
                 </Button>
+                {downloadFormat === "obj" && raw.mtlDataUrl && <Button variant="outline" className="w-full" onClick={() => downloadPart(part, raw, true)}>Download materials (.mtl) — {title}</Button>}
+                {downloadFormat === "obj" && <p className="text-xs text-muted-foreground">Keep the OBJ and MTL files together in the same folder before importing.</p>}
+                </div>
               );
             })}
           </div>

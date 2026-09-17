@@ -278,6 +278,7 @@ type GenerateFloor3DResult =
       ok: true;
       daeDataUrl: string;
       objDataUrl: string;
+    mtlDataUrl: string;
       fbxDataUrl: string;
       elementCount: number;
       subject: "building" | "furniture";
@@ -294,6 +295,7 @@ type GenerateFloor3DResult =
         label: string;
         daeDataUrl: string;
         objDataUrl: string;
+    mtlDataUrl: string;
         fbxDataUrl: string;
       }>;
     }
@@ -2368,6 +2370,7 @@ async function runMultiFloorBuilding(
     label: string;
     daeDataUrl: string;
     objDataUrl: string;
+    mtlDataUrl: string;
     fbxDataUrl: string;
   }> = [];
   const skippedParts: Array<{ label: string; reason: string }> = [];
@@ -2399,13 +2402,14 @@ async function runMultiFloorBuilding(
       skippedParts.push({ label, reason: validation.reason });
       return;
     }
-    const { obj: partObj } = trianglesToObj(partGroups);
+    const { obj: partObj, mtl: partMtl } = trianglesToObj(partGroups);
     const partFbx = trianglesToFbxAscii(partGroups);
     floorParts.push({
       index,
       label,
       daeDataUrl: `data:model/vnd.collada+xml;base64,${Buffer.from(partDae, "utf8").toString("base64")}`,
       objDataUrl: toDataUrl(partObj, "model/obj"),
+      mtlDataUrl: toDataUrl(partMtl, "text/plain"),
       fbxDataUrl: toDataUrl(partFbx, "application/octet-stream"),
     });
   };
