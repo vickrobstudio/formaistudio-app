@@ -7,6 +7,8 @@ workflows:
       app_store_connect: codemagic_api_key
     environment:
       vars:
+        VITE_SUPABASE_URL: "https://zmkeswetzswdqmruoioa.supabase.co"
+        VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xWsrW2qNkFAD_Zpxza4Oag_RJtwujtV"
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
@@ -72,20 +74,20 @@ workflows:
             $PB -c "Set :$key $val" "$PLIST" 2>/dev/null || \
               $PB -c "Add :$key bool $val" "$PLIST"
           }
-          # Privacy usage descriptions — iOS hard-crashes any app that touches
+          # Privacy usage descriptions � iOS hard-crashes any app that touches
           # these APIs (camera, photos, mic, location) without a description.
           set_str NSCameraUsageDescription "FormAI Studio uses the camera to capture rooms and reference photos for AI interior design."
           set_str NSPhotoLibraryUsageDescription "FormAI Studio accesses your photo library so you can pick interior photos to redesign."
           set_str NSPhotoLibraryAddUsageDescription "FormAI Studio saves generated renderings and videos to your photo library."
           set_str NSMicrophoneUsageDescription "FormAI Studio uses the microphone when you record audio notes for a design."
-          # No NSUserTrackingUsageDescription — FormAI Studio does not track users across apps or websites.
+          # No NSUserTrackingUsageDescription � FormAI Studio does not track users across apps or websites.
           $PB -c "Delete :NSUserTrackingUsageDescription" "$PLIST" 2>/dev/null || true
           # Skips the App Store Connect export-compliance question on every upload.
           set_bool ITSAppUsesNonExemptEncryption false
           # Display name shown under the icon on the home screen.
           set_str CFBundleDisplayName "FormAI Studio"
-          # The app no longer loads remote pages as its main document — the
-          # UI is bundled into the .ipa — so WKAppBoundDomains is removed.
+          # The app no longer loads remote pages as its main document � the
+          # UI is bundled into the .ipa � so WKAppBoundDomains is removed.
           $PB -c "Delete :WKAppBoundDomains" "$PLIST" 2>/dev/null || true
           echo "--- Final Info.plist ---"
           $PB -c "Print" "$PLIST" | head -80
@@ -182,3 +184,4 @@ workflows:
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
+
