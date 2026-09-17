@@ -267,9 +267,9 @@ const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 1_800_000;
 const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 1_800_000;
 const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 1_800_000;
 const BUILDING_ANALYSIS_MODELS = [
-  "google/gemini-3.1-pro-preview",
-  "google/gemini-2.5-pro",
-  "google/gemini-3-flash-preview",
+  "gemini-3.1-pro-preview",
+  "gemini-2.5-pro",
+  "gemini-3-flash-preview",
 ] as const;
 const BUILDING_FAST_FALLBACK_MODELS = ["gemini-3-flash-preview"] as const;
 
