@@ -10,6 +10,7 @@ import { useCredits } from "@/hooks/use-credits";
 import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
+import { FloorAnnotator } from "@/components/FloorAnnotator";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 
@@ -443,10 +444,10 @@ export function FloorTo3D() {
                   {f.imageDataUrl.startsWith("data:image/") && (
                     <Button type="button" variant={f.recognition ? "default" : "outline"} size="sm" className="h-9 gap-1 px-2"
                       disabled={f.recognizing}
-                      onClick={() => f.recognition ? setRecognitionPreview(i) : void runRecognition(i)}
-                      title="AI recognises walls, doors, windows for the 3D build">
+                      onClick={() => setRecognitionPreview(i)}
+                      title="Select, draw and classify the parts to include in the 3D model">
                       {f.recognizing ? <LoaderCircle className="size-3 animate-spin" /> : f.recognition ? <Eye className="size-3" /> : <ScanSearch className="size-3" />}
-                      <span className="text-[10px] font-bold uppercase">{f.recognizing ? "…" : f.recognition ? `${f.recognition.polygons.length}` : "Recognise"}</span>
+                      <span className="text-[10px] font-bold uppercase">{f.recognizing ? "…" : f.recognition ? `${f.recognition.polygons.length}` : "Review 2D"}</span>
                     </Button>
                   )}
                   <Button type="button" variant="ghost" size="sm" onClick={() => setFloors((p) => p.filter((_, j) => j !== i))}><X className="size-3" /></Button>
@@ -547,50 +548,20 @@ export function FloorTo3D() {
       <ToolInformation sections={information} />
     </section>
     <ToolTabBar />
-    {recognitionPreview !== null && floors[recognitionPreview]?.recognition && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setRecognitionPreview(null)}>
-        <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white text-black" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-[0.14em]">AI recognition</h2>
-              <p className="mt-0.5 text-[11px] text-neutral-600">{floors[recognitionPreview].recognition!.polygons.length} elements detected on {floors[recognitionPreview].label}</p>
-            </div>
-            <button onClick={() => setRecognitionPreview(null)} className="rounded-full p-1 text-neutral-500 hover:bg-neutral-100"><X className="h-4 w-4" /></button>
-          </div>
-          <div className="relative flex-1 overflow-auto bg-neutral-100 p-3">
-            <div className="relative mx-auto" style={{ width: "100%", aspectRatio: String(floors[recognitionPreview].recognition!.imageWidth / floors[recognitionPreview].recognition!.imageHeight) }}>
-              <img src={floors[recognitionPreview].imageDataUrl} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
-              <svg viewBox="0 0 1 1" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-                {floors[recognitionPreview].recognition!.polygons.map((poly) => {
-                  const spec = MARK_LIFT_SPECS[poly.type];
-                  return (
-                    <polygon key={poly.id} points={poly.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                      fill={spec.hex} fillOpacity={0.45} stroke={spec.hex} strokeOpacity={0.95}
-                      strokeWidth={0.003} vectorEffect="non-scaling-stroke" />
-                  );
-                })}
-              </svg>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 border-t border-neutral-200 px-4 py-3">
-            {MARK_LIFT_TYPES.map((t) => {
-              const spec = MARK_LIFT_SPECS[t];
-              const count = floors[recognitionPreview]!.recognition!.polygons.filter((p) => p.type === t).length;
-              if (count === 0) return null;
-              return (
-                <span key={t} className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium">
-                  <span className="h-3 w-3 rounded" style={{ background: spec.hex }} />
-                  {spec.label} · {count}
-                </span>
-              );
-            })}
-          </div>
-          <div className="flex gap-2 border-t border-neutral-200 p-3">
-            <Button variant="outline" className="flex-1 rounded-full" onClick={() => { const i = recognitionPreview; setRecognitionPreview(null); void runRecognition(i); }}>Re-recognise</Button>
-            <Button className="flex-1 rounded-full" onClick={() => setRecognitionPreview(null)}>Use for 3D build</Button>
-          </div>
-        </div>
-      </div>
+    {recognitionPreview !== null && floors[recognitionPreview] && (
+      <FloorAnnotator
+        key={recognitionPreview}
+        imageDataUrl={floors[recognitionPreview].imageDataUrl}
+        initialResult={floors[recognitionPreview].recognition}
+        onClose={() => setRecognitionPreview(null)}
+        onApply={(result) => {
+          const index = recognitionPreview;
+          setFloors((current) => current.map((floor, i) => i === index ? { ...floor, recognition: result } : floor));
+          setRecognitionPreview(null);
+          setFloorParts([]);
+          setStage("upload");
+        }}
+      />
     )}
   </main>;
 }
