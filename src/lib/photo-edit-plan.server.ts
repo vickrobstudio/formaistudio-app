@@ -17,7 +17,7 @@ export async function planPhotoEdit(input: { image: string; request: string; his
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method:"POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${key}`},
     signal: AbortSignal.any([AbortSignal.timeout(45000), ...(signal ? [signal] : [])]),
-    body: JSON.stringify({model:process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-4.1", temperature:0.2,max_tokens:1500,response_format:{type:"json_schema",json_schema:{name:"photo_edit_plan",strict:true,schema:{type:"object",additionalProperties:false,required:["status","instruction","preserve","questions"],properties:{status:{type:"string",enum:["ready","clarify"]},instruction:{type:"string"},preserve:{type:"array",items:{type:"string"}},questions:{type:"array",items:{type:"string"}}}}},
+    body: JSON.stringify({model:process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-4.1", temperature:0.2,max_tokens:1500,response_format:{type:"json_schema",json_schema:{name:"photo_edit_plan",strict:true,schema:{type:"object",additionalProperties:false,required:["status","instruction","preserve","questions"],properties:{status:{type:"string",enum:["ready","clarify"]},instruction:{type:"string"},preserve:{type:"array",items:{type:"string"}},questions:{type:"array",items:{type:"string"}}}}}},
       messages:[{role:"system",content:EDIT_PLANNING_RULES},{role:"user",content:[
         {type:"text",text:JSON.stringify({recentContext:input.history.slice(-6),latestRequest:input.request,clarifications:input.answers,referenceCount:input.referenceCount})},
         {type:"image_url",image_url:{url:input.image,detail:"auto"}}
