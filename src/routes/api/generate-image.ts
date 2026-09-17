@@ -67,9 +67,9 @@ const openaiKey = process.env.OPENAI_API_KEY;
               });
             }
           }
-          endpoint = "https://ai.gateway.lovable.dev/v1/chat/completions";
+          endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           body = JSON.stringify({
-            model: "google/gemini-3-pro-image-preview",
+            model: "gemini-3-pro-image-preview",
             modalities: ["image", "text"],
             messages: [
               {
