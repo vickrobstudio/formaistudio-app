@@ -63,7 +63,7 @@ RULES:
 export const classifyFloorRegions = createServerFn({ method: "POST" })
   .validator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
-    const key = process.env.GEMINI_API_KEY;
+    const key = process.env.OPENAI_API_KEY;
     if (!key) return { ok: false, error: "The classification service is unavailable." };
 
     const regionsJson = JSON.stringify({ regions: data.regions });
@@ -74,14 +74,14 @@ export const classifyFloorRegions = createServerFn({ method: "POST" })
       ...(data.hint ? [{ type: "text", text: `Drawing hint: ${data.hint}` }] : []),
     ];
 
-    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
   Authorization: `Bearer ${key}`,
   "Content-Type": "application/json",
 },
       body: JSON.stringify({
-        model: "gemini-3-flash-preview",
+        model: "gpt-4.1",
         messages: [{ role: "user", content: userContent }],
         response_format: { type: "json_object" },
       }),

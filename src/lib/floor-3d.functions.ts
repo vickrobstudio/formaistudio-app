@@ -263,15 +263,11 @@ type MultiFloorBuildingPlan = z.infer<typeof MultiFloorBuildingPlanSchema>;
 // Per user request: NO TIME LIMIT for 3D model creation. We still pass a very
 // large abort signal so a hung socket eventually frees the worker, but it is
 // long enough (30 minutes) that the model is allowed to fully complete.
-const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 1_800_000;
-const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 1_800_000;
-const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 1_800_000;
-const BUILDING_ANALYSIS_MODELS = [
-  "gemini-3.1-pro-preview",
-  "gemini-2.5-pro",
-  "gemini-3-flash-preview",
-] as const;
-const BUILDING_FAST_FALLBACK_MODELS = ["gemini-3-flash-preview"] as const;
+const BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS = 180_000;
+const BUILDING_FAST_FALLBACK_TIMEOUT_MS = 180_000;
+const BUILDING_ROOF_ANALYSIS_TIMEOUT_MS = 180_000;
+const BUILDING_ANALYSIS_MODELS = ["gpt-4.1"] as const;
+const BUILDING_FAST_FALLBACK_MODELS = ["gpt-4.1"] as const;
 
 type GenerateFloor3DResult =
   | {
@@ -498,7 +494,7 @@ function coerceFloorExtractionJson(raw: unknown): unknown {
 // Per-floor extractor. ONE floor plan image (plus optional secondary drawing
 // of the same floor) → JSON for just that floor. Running these in parallel
 // keeps each call small enough to finish well inside the worker timeout and
-// lets the powerful model (gemini-2.5-pro) read every wall instead of
+// lets the powerful model (gpt-4.1) read every wall instead of
 // truncating the way one giant multi-floor call does.
 function singleFloorExtractInstruction(
   planUnits: z.infer<typeof PlanUnits>,
@@ -1918,7 +1914,7 @@ function validateMeshGeometry(
 export const generateFloor3D = createServerFn({ method: "POST" })
   .validator((input: unknown) => FloorTo3DInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
-    const key = process.env.GEMINI_API_KEY;
+    const key = process.env.OPENAI_API_KEY;
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
     // NEW PATH — multi-image building flow. The 3D model is built directly
@@ -1974,7 +1970,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       userContent.push({ type: "image_url", image_url: { url: data.approvedRenderUrl } });
     }
 
-    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
   Authorization: `Bearer ${key}`,
@@ -1985,10 +1981,10 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       signal: AbortSignal.timeout(5 * 60 * 1000),
       body: JSON.stringify({
         // Furniture pieces need maximum shape fidelity to match the approved
-        // rendering, so we spend the extra latency on gemini-2.5-pro. Building
+        // rendering, so we spend the extra latency on gpt-4.1. Building
         // plans are denser and would time out on pro, so they stay on the fast
         // multimodal model.
-        model: data.subject === "furniture" ? "google/gemini-2.5-pro" : "google/gemini-3-flash-preview",
+        model: "gpt-4.1",
         messages: [{ role: "user", content: userContent }],
         response_format: { type: "json_object" },
       }),
@@ -2068,7 +2064,7 @@ async function runMultiFloorBuilding(
 
     for (const model of models) {
       try {
-        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
   Authorization: `Bearer ${key}`,
@@ -2528,7 +2524,7 @@ export const extractFurnitureBounds = createServerFn({ method: "POST" })
     | { ok: true; width: number; depth: number; height: number }
     | { ok: false; error: string }
   > => {
-    const key = process.env.GEMINI_API_KEY;
+    const key = process.env.OPENAI_API_KEY;
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
     const planUnitNote = data.planUnits === "feet-inches"
@@ -2553,7 +2549,7 @@ Rules:
       if (url === data.fileDataUrl) continue;
       userContent.push({ type: "image_url", image_url: { url } });
     }
-    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
   Authorization: `Bearer ${key}`,
@@ -2561,7 +2557,7 @@ Rules:
 },
       signal: AbortSignal.timeout(2 * 60 * 1000),
       body: JSON.stringify({
-        model: "gemini-3-flash-preview",
+        model: "gpt-4.1",
         messages: [{ role: "user", content: userContent }],
         response_format: { type: "json_object" },
       }),
@@ -2636,7 +2632,7 @@ export const detectFloorElements = createServerFn({ method: "POST" })
     | { ok: true; polygons: DetectedFloorPolygon[] }
     | { ok: false; error: string }
   > => {
-    const key = process.env.GEMINI_API_KEY;
+    const key = process.env.OPENAI_API_KEY;
     if (!key) return { ok: false, error: "The detection service is unavailable." };
 
     const instruction = `You are a professional architectural drafter. The user has uploaded a 2D floor plan image (from CAD, PDF, or a scan). Trace the plan into the 3D-model-ready polygons below.
@@ -2655,7 +2651,7 @@ Rules:
 - Ignore title blocks, dimension text, room labels, north arrows and legends — but DO trace the plan itself even when those decorations are also visible.
 - Return ONLY the JSON object, no comments, no markdown.`;
 
-    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
+    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
   Authorization: `Bearer ${key}`,
@@ -2663,7 +2659,7 @@ Rules:
 },
       signal: AbortSignal.timeout(5 * 60 * 1000),
       body: JSON.stringify({
-        model: "gemini-2.5-pro",
+        model: "gpt-4.1",
         messages: [{
           role: "user",
           content: [
