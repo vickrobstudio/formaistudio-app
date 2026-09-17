@@ -47,7 +47,13 @@ export async function authorizePrediction(predictionId: string) {
 export async function readBillingState(request: Request) {
   const user = await billingIdentity(request);
   const environment = billingEnvironment();
-  const provider = request.headers.get("x-formai-client") === "ios" ? "apple" : "stripe";
+  let provider = request.headers.get("x-formai-client") === "ios" ? "apple" : "stripe";
+  // Review access is issued by the server, expires, and never grants owner rights.
+  const review = await db().from("billing_entitlements").select("expires_at")
+    .eq("user_id", user.id).eq("environment", environment).eq("provider", "review")
+    .eq("active", true).gt("expires_at", new Date().toISOString()).limit(1);
+  if (review.error) throw new GenerationBillingError("Credit service is not available yet.");
+  if (user.email_confirmed_at && review.data?.length) provider = "review";
   if (!user.is_anonymous && user.email_confirmed_at) {
     const seeded = await db().rpc("ensure_trial_wallet", { p_user_id: user.id, p_environment: environment });
     if (seeded.error) throw new GenerationBillingError("Credit service is not available yet.");
@@ -100,3 +106,4 @@ export async function meteredFetch(kind: GenerationKind, url: string | URL | Req
   }
   return executeMeteredOperation(async () => reserved.data, finish, () => fetch(url, init));
 }
+
