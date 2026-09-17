@@ -41,7 +41,7 @@ export default defineConfig({
     optimizeDeps: {
       exclude: ["three/examples/jsm/loaders/ColladaLoader.js"],
     },
-    plugins: isIosBuild ? [iosAssetUrlRewriter] : [],
+    plugins: isIosBuild ? [...(isIosBuild ? [iosAssetUrlRewriter] : []),] : [],
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
