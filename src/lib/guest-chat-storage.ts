@@ -13,8 +13,9 @@ export function readGuestChat(getStorage: () => ChatStorage, key: string): UIMes
       ["user", "assistant", "system"].includes(message.role) &&
       Array.isArray(message.parts) &&
       message.parts.every((part: unknown) => !!part && typeof part === "object" && "type" in part && (
-        (part.type === "text" && "text" in part && typeof part.text === "string") ||
-        (part.type === "file" && "url" in part && typeof part.url === "string" && "mediaType" in part && typeof part.mediaType === "string")
+        part.type === "text" ? "text" in part && typeof part.text === "string" :
+        part.type === "file" ? "url" in part && typeof part.url === "string" && "mediaType" in part && typeof part.mediaType === "string" :
+        typeof part.type === "string"
       ))
     );
   } catch {
