@@ -2800,7 +2800,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
     if (!validation.ok) {
       return { ok: false, error: `Lift produced an empty mesh (${validation.reason}).` };
     }
-    const { obj } = trianglesToObj(tris);
+    const { obj, mtl } = trianglesToObj(tris);
     const fbx = trianglesToFbxAscii(tris);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
     const objDataUrl = toDataUrl(obj, "model/obj");
@@ -2812,6 +2812,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       daeDataUrl,
       objDataUrl,
       fbxDataUrl,
+      mtlDataUrl: toDataUrl(mtl, "text/plain"),
     };
     // Minimal "plan" payload so the existing client paths that read .plan
     // do not crash; the rich plan model is not needed for mark-and-lift.
