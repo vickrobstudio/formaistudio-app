@@ -271,7 +271,7 @@ const BUILDING_ANALYSIS_MODELS = [
   "google/gemini-2.5-pro",
   "google/gemini-3-flash-preview",
 ] as const;
-const BUILDING_FAST_FALLBACK_MODELS = ["google/gemini-3-flash-preview"] as const;
+const BUILDING_FAST_FALLBACK_MODELS = ["gemini-3-flash-preview"] as const;
 
 type GenerateFloor3DResult =
   | {
@@ -2557,7 +2557,7 @@ Rules:
 },
       signal: AbortSignal.timeout(2 * 60 * 1000),
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gemini-3-flash-preview",
         messages: [{ role: "user", content: userContent }],
         response_format: { type: "json_object" },
       }),
@@ -2659,7 +2659,7 @@ Rules:
 },
       signal: AbortSignal.timeout(5 * 60 * 1000),
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "gemini-2.5-pro",
         messages: [{
           role: "user",
           content: [
