@@ -76,6 +76,10 @@ const openaiKey = process.env.OPENAI_API_KEY;
       role: "user",
       content: [
         { type: "text", text: renderPrompt },
+        ...references.map((image) => ({
+          type: "image_url" as const,
+          image_url: { url: image },
+        })),
       ],
     },
   ],
