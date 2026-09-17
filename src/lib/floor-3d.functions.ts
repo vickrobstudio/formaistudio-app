@@ -1916,7 +1916,7 @@ function validateMeshGeometry(
 export const generateFloor3D = createServerFn({ method: "POST" })
   .validator((input: unknown) => FloorTo3DInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
-    const key = process.env.LOVABLE_API_KEY;
+    const key = process.env.GEMINI_API_KEY;
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
     // NEW PATH — multi-image building flow. The 3D model is built directly
@@ -2518,7 +2518,7 @@ export const extractFurnitureBounds = createServerFn({ method: "POST" })
     | { ok: true; width: number; depth: number; height: number }
     | { ok: false; error: string }
   > => {
-    const key = process.env.LOVABLE_API_KEY;
+    const key = process.env.GEMINI_API_KEY;
     if (!key) return { ok: false, error: "The 2D to 3D service is unavailable." };
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
     const planUnitNote = data.planUnits === "feet-inches"
@@ -2623,7 +2623,7 @@ export const detectFloorElements = createServerFn({ method: "POST" })
     | { ok: true; polygons: DetectedFloorPolygon[] }
     | { ok: false; error: string }
   > => {
-    const key = process.env.LOVABLE_API_KEY;
+    const key = process.env.GEMINI_API_KEY;
     if (!key) return { ok: false, error: "The detection service is unavailable." };
 
     const instruction = `You are a professional architectural drafter. The user has uploaded a 2D floor plan image (from CAD, PDF, or a scan). Trace the plan into the 3D-model-ready polygons below.
