@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { isFormAIOwner } from "@/lib/owner-access";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -10,9 +11,9 @@ const submissionInput = z.object({
   consent: z.literal(true),
 });
 const idInput = z.object({ id: z.string().uuid() });
-function requireModerator(userId: string) {
-  const ids = (process.env.FORMAI_INSTAGRAM_REVIEWER_IDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
-  if (!ids.includes(userId)) throw new Error("Only the FormAI reviewer can perform this action.");
+async function requireModerator(supabase: SupabaseClient) {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !isFormAIOwner(data.user)) throw new Error("Only the FormAI owner can perform this action.");
 }
 async function admin() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -40,7 +41,7 @@ export const submitInstagramCreation = createServerFn({ method: "POST" })
 
 export const getInstagramReviewQueue = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    requireModerator(context.userId);
+    await requireModerator(context.supabase);
     const db = await admin();
     const result = await db.from("instagram_submissions").select("id,title,caption,image_data_url,status,created_at,instagram_media_id").order("created_at", { ascending: false }).limit(20);
     if (result.error) throw new Error("Unable to load Instagram submissions.");
@@ -50,7 +51,7 @@ export const getInstagramReviewQueue = createServerFn({ method: "GET" }).middlew
 export const reviewInstagramSubmission = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth])
   .validator((input: unknown) => idInput.extend({ decision: z.enum(["approved", "rejected"]) }).parse(input))
   .handler(async ({ data, context }) => {
-    requireModerator(context.userId);
+    await requireModerator(context.supabase);
     const db = await admin();
     const result = await db.from("instagram_submissions").update({ status: data.decision, reviewed_by: context.userId, reviewed_at: new Date().toISOString() }).eq("id", data.id).eq("status", "pending").select("id,status").maybeSingle();
     if (result.error || !result.data) throw new Error("This submission has already changed. Refresh the queue.");
@@ -60,7 +61,7 @@ export const reviewInstagramSubmission = createServerFn({ method: "POST" }).midd
 export const publishApprovedInstagramSubmission = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth])
   .validator((input: unknown) => idInput.parse(input))
   .handler(async ({ data, context }) => {
-    requireModerator(context.userId);
+    await requireModerator(context.supabase);
     const config = instagramConfig();
     const db = await admin();
     // Atomic transition: another click or request cannot publish the same item twice.

@@ -1,3 +1,4 @@
+import { isFormAIOwner } from "@/lib/owner-access";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getStripeEnvironment } from "@/lib/stripe";
@@ -25,6 +26,7 @@ function computeActive(row: { status: string; current_period_end: string | null 
 }
 
 export function useSubscription() {
+  const [owner, setOwner] = useState(false);
   const [rows, setRows] = useState<Array<{ status: string; price_id: string; current_period_end: string | null; cancel_at_period_end: boolean | null }>>([]);
   const [iapRows, setIapRows] = useState<Array<{ entitlement_id: string; expires_at: string | null; is_active: boolean }>>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,7 @@ export function useSubscription() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
+      setOwner(isFormAIOwner(user));
       await refetch(user.id);
 
       const channel = supabase
@@ -86,13 +89,13 @@ export function useSubscription() {
     }
     return {
       loading,
-      isActive: activePlans.size > 0,
+      isActive: owner || activePlans.size > 0,
       status: primary?.status ?? null,
       plan: primary?.price_id ?? null,
       currentPeriodEnd: primary?.current_period_end ?? null,
       cancelAtPeriodEnd: !!primary?.cancel_at_period_end,
       activePlans,
-      hasTool: (toolPath: string) => toolUnlockedBy(activePlans, toolPath),
+      hasTool: (toolPath: string) => owner || toolUnlockedBy(activePlans, toolPath),
     };
-  }, [rows, iapRows, loading]);
+  }, [rows, iapRows, loading, owner]);
 }

@@ -1,3 +1,4 @@
+import { isFormAIOwner } from "@/lib/owner-access";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getGuestCredits, spendGuestCredit } from "@/lib/guest-trial";
@@ -16,7 +17,7 @@ export function useCredits() {
       if (!data.user) { setCredits(getGuestCredits()); return; }
       setSignedIn(true);
       const { data: profile } = await supabase.from("profiles").select("starter_credits, has_free_access").eq("id", data.user.id).single();
-      if (profile) { setCredits(profile.starter_credits); setVip(profile.has_free_access); }
+      if (profile) { setCredits(profile.starter_credits); setVip(isFormAIOwner(data.user)); }
     })();
   }, []);
 
