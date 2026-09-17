@@ -69,7 +69,7 @@ if (!geminiKey) {
           }
           endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           body = JSON.stringify({
-  model: "gemini-3-pro-image-preview",
+  model: "gemini-3-pro-image",
   modalities: ["image", "text"],
   messages: [
     {
