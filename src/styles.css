@@ -208,12 +208,12 @@ html.keyboard-open {
 
   html:has(.landing-screen),
   body:has(.landing-screen) {
-    position: fixed;
-    inset: 0;
+    position: relative;
     width: 100%;
-    height: 100%;
+    height: auto;
     min-height: 100%;
-    overflow: hidden;
+    overflow-x: clip;
+    overflow-y: auto;
     overscroll-behavior: none;
     background-color: var(--color-landing-paper);
   }
