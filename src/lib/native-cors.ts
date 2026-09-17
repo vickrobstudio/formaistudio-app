@@ -6,8 +6,10 @@ export function withNativeCors(request: Request, response: Response): Response {
   if (!origin || !nativeOrigins.has(origin)) return response;
   const headers = new Headers(response.headers);
   headers.set('access-control-allow-origin', origin);
+  headers.set('access-control-expose-headers', 'x-tss-serialized, x-tss-raw, x-tss-context');
   const vary = headers.get('vary')?.split(',').map(value => value.trim()).filter(Boolean) ?? [];
   if (!vary.some(value => value.toLowerCase() === 'origin') && !vary.includes('*')) vary.push('Origin');
   headers.set('vary', vary.join(', '));
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
+
