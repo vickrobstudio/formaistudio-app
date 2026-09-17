@@ -86,7 +86,7 @@ if (!geminiKey) {
 });
         } else {
           body = JSON.stringify({
-  model: "gemini-3-pro-image-preview",
+  model: "gemini-3-pro-image",
   modalities: ["image", "text"],
   messages: [
     {
