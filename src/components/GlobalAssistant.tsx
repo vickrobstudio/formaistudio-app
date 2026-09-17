@@ -17,7 +17,7 @@ export function GlobalAssistant() {
   const { lang, units, region, setLang, setUnits } = useAssistantPrefs();
 
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/build-chat" }), []);
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     id: "global-assistant",
     transport,
     onError: (e) => console.error("global assistant error", e),
@@ -33,7 +33,7 @@ export function GlobalAssistant() {
 
   async function send(text: string) {
     const t = text.trim();
-    if (!t) return;
+    if (!t || status === "submitted" || status === "streaming") return;
     setInput("");
     await sendMessage({ text: t }, { body: { context: ctx } });
   }
@@ -41,7 +41,7 @@ export function GlobalAssistant() {
   return <>
     {!open && <button
       type="button"
-      aria-label="Open AI assistant"
+      aria-label="Open Studio Assistant"
       onClick={() => setOpen(true)}
       className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-black text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
     >
@@ -53,10 +53,10 @@ export function GlobalAssistant() {
     {open && <div className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-50 mx-auto flex max-h-[78vh] w-full max-w-[420px] flex-col overflow-hidden rounded-3xl border border-foreground/30 bg-background shadow-2xl sm:right-5 sm:left-auto sm:inset-x-auto">
       <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/40 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">AI Architect · Construction Assistant</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Studio Assistant</p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">US (IBC/IRC/ADA) + EU (Eurocodes/CTE) codes</p>
         </div>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}><X className="size-4" /></Button>
+        <Button type="button" aria-label="Close Studio Assistant" size="sm" variant="ghost" onClick={() => setOpen(false)}><X className="size-4" /></Button>
       </div>
 
       <div className="flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-2">
@@ -88,6 +88,7 @@ export function GlobalAssistant() {
         </div>}
       </div>
 
+      {error && <p role="alert" className="px-4 py-2 text-xs text-destructive">The assistant could not respond. Please try again.</p>}
       <form
         className="flex items-end gap-2 border-t border-border px-3 py-2"
         onSubmit={(e) => { e.preventDefault(); void send(input); }}
@@ -101,7 +102,7 @@ export function GlobalAssistant() {
           className="min-h-10 max-h-32 flex-1 resize-none text-xs"
           rows={1}
         />
-        <Button type="submit" size="icon" disabled={!input.trim() || status === "submitted" || status === "streaming"}>
+        <Button type="submit" aria-label="Send message" size="icon" disabled={!input.trim() || status === "submitted" || status === "streaming"}>
           {status === "submitted" || status === "streaming" ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
         </Button>
       </form>
