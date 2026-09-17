@@ -1,6 +1,8 @@
-const MAX_IMAGE_DATA_URL_LENGTH = 1_500_000_000;
-const MAX_TOTAL_IMAGE_DATA_URL_LENGTH = 6_000_000_000;
+const MAX_IMAGE_DATA_URL_LENGTH = 3_800_000;
+const MAX_TOTAL_IMAGE_DATA_URL_LENGTH = 3_800_000;
 const COMPRESSION_STEPS = [
+  { maxDimension: 2560, quality: 0.95 },
+  { maxDimension: 2048, quality: 0.90 },
   { maxDimension: 1600, quality: 0.82 },
   { maxDimension: 1400, quality: 0.76 },
   { maxDimension: 1200, quality: 0.72 },
@@ -16,9 +18,9 @@ function loadImage(dataUrl: string) {
   });
 }
 
-async function compressImageDataUrl(dataUrl: string) {
+async function compressImageDataUrl(dataUrl: string, budget: number) {
   if (!dataUrl.startsWith("data:image/")) return dataUrl;
-  if (typeof document === "undefined" || dataUrl.length <= MAX_IMAGE_DATA_URL_LENGTH)
+  if (typeof document === "undefined" || dataUrl.length <= budget)
     return dataUrl;
 
   const image = await loadImage(dataUrl);
@@ -40,7 +42,7 @@ async function compressImageDataUrl(dataUrl: string) {
     context.drawImage(image, 0, 0, width, height);
     const compressed = canvas.toDataURL("image/jpeg", step.quality);
     if (compressed.length < best.length) best = compressed;
-    if (compressed.length <= MAX_IMAGE_DATA_URL_LENGTH) return compressed;
+    if (compressed.length <= budget) return compressed;
   }
 
   return best;
@@ -52,9 +54,11 @@ export async function streamImage(
   onImage: (src: string, isFinal: boolean) => void,
   sourceImages: string[] = [],
 ) {
-  const preparedSourceImage = sourceImage ? await compressImageDataUrl(sourceImage) : null;
+  const referenceCount = (sourceImage ? 1 : 0) + sourceImages.length;
+  const budget = Math.floor(MAX_IMAGE_DATA_URL_LENGTH / Math.max(1, referenceCount));
+  const preparedSourceImage = sourceImage ? await compressImageDataUrl(sourceImage, budget) : null;
   const preparedSourceImages = await Promise.all(
-    sourceImages.map((image) => compressImageDataUrl(image)),
+    sourceImages.map((image) => compressImageDataUrl(image, budget)),
   );
   const totalImagePayloadLength = [preparedSourceImage, ...preparedSourceImages].reduce(
     (sum, image) => sum + (image?.length ?? 0),
