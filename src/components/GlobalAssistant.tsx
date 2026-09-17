@@ -24,7 +24,11 @@ export function GlobalAssistant() {
   const { messages, sendMessage, status, error } = useChat({
     id: "global-assistant",
     transport,
-    onError: (e) => console.error("global assistant error", e),
+    onFinish: () => window.dispatchEvent(new Event("formai-credits-changed")),
+    onError: (e) => {
+      console.error("global assistant error", e);
+      window.dispatchEvent(new Event("formai-credits-changed"));
+    },
   });
 
   const ctx = useMemo(() => ({ route: pathname, mode: "global-helper", lang, units, region }), [pathname, lang, units, region]);
@@ -124,3 +128,4 @@ function Bubble({ msg }: { msg: UIMessage }) {
     <div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-xs ${isUser ? "bg-foreground text-background" : "bg-secondary text-foreground"}`}>{text}</div>
   </div>;
 }
+
