@@ -45,7 +45,7 @@ export default defineConfig({
   plugins: [
     tsConfigPaths(),
 
-    ...(isIosBuild ? [iosAssetUrlRewriter] : []),
+    ...iosAssetUrlRewriter,
 
     tanstackStart(
       isIosBuild
