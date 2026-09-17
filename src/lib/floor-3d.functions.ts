@@ -1974,7 +1974,10 @@ export const generateFloor3D = createServerFn({ method: "POST" })
 
     const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
-      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+      headers: {
+  Authorization: `Bearer ${key}`,
+  "Content-Type": "application/json",
+},
       // Buildings with many drawings + Gemini Pro extraction can take minutes;
       // give the model up to 5 min before aborting.
       signal: AbortSignal.timeout(5 * 60 * 1000),
@@ -2065,7 +2068,10 @@ async function runMultiFloorBuilding(
       try {
         const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
           method: "POST",
-          headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+          headers: {
+  Authorization: `Bearer ${key}`,
+  "Content-Type": "application/json",
+},
           signal: AbortSignal.timeout(timeoutMs),
           body: JSON.stringify({
             model,
@@ -2545,7 +2551,10 @@ Rules:
     }
     const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
-      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+      headers: {
+  Authorization: `Bearer ${key}`,
+  "Content-Type": "application/json",
+},
       signal: AbortSignal.timeout(2 * 60 * 1000),
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
@@ -2644,7 +2653,10 @@ Rules:
 
     const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
-      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+      headers: {
+  Authorization: `Bearer ${key}`,
+  "Content-Type": "application/json",
+},
       signal: AbortSignal.timeout(5 * 60 * 1000),
       body: JSON.stringify({
         model: "google/gemini-2.5-pro",
