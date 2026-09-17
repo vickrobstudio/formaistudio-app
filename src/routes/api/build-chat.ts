@@ -11,8 +11,9 @@ export const Route = createFileRoute("/api/build-chat")({
         if (!body || !Array.isArray(body.messages) || body.messages.length > 80) {
           return new Response("Messages are required", { status: 400 });
         }
-        if (!process.env.ANTHROPIC_API_KEY) return new Response("AI is unavailable.", { status: 500 });
-        const { anthropic } = await import("@ai-sdk/anthropic");
+        const key = process.env.OPENAI_API_KEY;
+        if (!key) return new Response("AI is unavailable.", { status: 500 });
+        const { createOpenAIChatModel } = await import("@/lib/openai-chat.server");
         const { ARCH_DIMENSIONS_REFERENCE } = await import("@/lib/arch-dimensions");
 
         const ctx = (body.context ?? {}) as Record<string, unknown>;
@@ -41,7 +42,7 @@ export const Route = createFileRoute("/api/build-chat")({
         };
         const regionLine = regionMap[region];
 
-        const system = `You are the FormAI Build Architect — an interactive assistant that co-designs a 3D building model with the user from their uploaded 2D plans. You are a CONSTRUCTION BIBLE — fluent in US and European architectural codes and use them to back every recommendation.
+        const system = `You are the FormAI Studio Build Architect — an interactive assistant that co-designs a 3D building model with the user from their uploaded 2D plans. You are a CONSTRUCTION BIBLE — fluent in US and European architectural codes and use them to back every recommendation.
 
 ${langLine}
 ${unitsLine}
@@ -99,7 +100,10 @@ CURRENT PROJECT STATE (JSON):
 ${ctxJson}`;
 
         const result = streamText({
-          model: anthropic("claude-opus-4-8"),
+      maxRetries: 0,
+          model: createOpenAIChatModel(key),
+          maxOutputTokens: 2048,
+          abortSignal: request.signal,
           system,
           messages: await convertToModelMessages(body.messages as UIMessage[]),
         });

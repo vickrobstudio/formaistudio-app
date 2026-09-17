@@ -14,6 +14,7 @@ import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloo
 import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { streamImage } from "@/lib/stream-image";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
+import { FloorAnnotator } from "@/components/FloorAnnotator";
 import { Building3DViewer } from "@/components/Building3DViewer";
 import { ScaleCalibrator } from "@/components/ScaleCalibrator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
@@ -25,6 +26,8 @@ type Recognition = {
   imageHeight: number;
   planWidthMeters: number;
   polygons: RecognizedPolygon[];
+  reviewed?: boolean;
+  calibration?: import("@/components/FloorAnnotator").AnnotatorResult["calibration"];
 };
 
 const information: ToolInfoSection[] = [
@@ -281,13 +284,11 @@ export function FloorTo3D() {
       const { width, height } = await getImageSize(f.imageDataUrl);
       // Deterministic shape tracing supplies walls + floors that hug the
       // black linework; the AI adds doors, windows, stairs and fixtures.
-      const [shapes, result, tiled] = await Promise.all([
-        import("@/lib/image-plan-shapes").then((m) => m.extractPlanShapes(f.imageDataUrl)).catch(() => null),
-        detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } }).catch(() => null),
-        // Door/window symbols are tiny on a full sheet — a 2×2 tiled pass
-        // gives the AI 4× the resolution to actually see them.
-        import("@/lib/tiled-openings").then((m) => m.detectOpeningsTiled(f.imageDataUrl, (input) => detect(input))).catch(() => []),
-      ]);
+      const shapes = await import("@/lib/image-plan-shapes").then((m) => m.extractPlanShapes(f.imageDataUrl)).catch(() => null);
+      const result = await detect({ data: { imageDataUrl: f.imageDataUrl, imageWidth: width, imageHeight: height } });
+      if (!result.ok) throw new Error(result.error);
+      const { detectOpeningsTiled } = await import("@/lib/tiled-openings");
+      const tiled = await detectOpeningsTiled(f.imageDataUrl, (input) => detect(input));
       // Arbitration: a traced region is a real room if a printed room label
       // sits inside it OR its outline runs firmly along walls. Dimension
       // slivers, title blocks and site cells fail both and are dropped
@@ -336,7 +337,7 @@ export function FloorTo3D() {
           }))
         : undefined;
       if (!polygons.length) {
-        const message = result && !result.ok ? result.error : "No enclosed shapes found — upload a sharper plan with clear walls.";
+        const message = "No enclosed shapes found — upload a sharper plan with clear walls.";
         setFloors((p) => p.map((x, j) => j === index ? { ...x, recognizing: false, recognizeError: message } : x));
         return;
       }
@@ -429,6 +430,8 @@ export function FloorTo3D() {
 
   async function buildBuilding() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
+    const unreviewed = floors.findIndex(f => !f.recognition?.reviewed);
+    if (unreviewed !== -1) { setError("Review the 2D parts and confirm the measured scale on every floor."); setRecognitionPreview(unreviewed); return; }
     if (!(await ensureConsent())) return;
     setBusy(true); setError(""); setFloorParts([]); setBuildReports([]); setStage("modeling");
     if (!(await consume())) {
@@ -619,7 +622,7 @@ export function FloorTo3D() {
                   </span>
                   <Input value={f.label} onChange={(e) => setFloors((p) => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} className="h-9 flex-1" placeholder={i === 0 ? "Ground floor" : `Floor ${i}`} />
                   {f.imageDataUrl.startsWith("data:image/") && (
-                    <button type="button" disabled={!f.recognition} onClick={() => f.recognition && setRecognitionPreview(i)}
+                    <button type="button" disabled={f.recognizing} onClick={() => setRecognitionPreview(i)}
                       className="flex items-center gap-1 rounded-full px-2 text-[10px] font-bold uppercase text-muted-foreground disabled:opacity-70"
                       title="Architectural elements the AI recognised on this floor — tap to view">
                       {f.recognizing ? <LoaderCircle className="size-3 animate-spin" /> : f.recognition ? <Eye className="size-3" /> : <ScanSearch className="size-3" />}
@@ -808,50 +811,20 @@ export function FloorTo3D() {
         onClose={() => setCalibrating(null)}
       />
     )}
-    {recognitionPreview !== null && floors[recognitionPreview]?.recognition && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setRecognitionPreview(null)}>
-        <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white text-black" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-[0.14em]">AI recognition</h2>
-              <p className="mt-0.5 text-[11px] text-neutral-600">{floors[recognitionPreview].recognition!.polygons.length} elements detected on {floors[recognitionPreview].label}</p>
-            </div>
-            <button onClick={() => setRecognitionPreview(null)} className="rounded-full p-1 text-neutral-500 hover:bg-neutral-100"><X className="h-4 w-4" /></button>
-          </div>
-          <div className="relative flex-1 overflow-auto bg-neutral-100 p-3">
-            <div className="relative mx-auto" style={{ width: "100%", aspectRatio: String(floors[recognitionPreview].recognition!.imageWidth / floors[recognitionPreview].recognition!.imageHeight) }}>
-              <img src={floors[recognitionPreview].imageDataUrl} alt="" className="absolute inset-0 h-full w-full object-contain" draggable={false} />
-              <svg viewBox="0 0 1 1" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-                {floors[recognitionPreview].recognition!.polygons.map((poly) => {
-                  const spec = MARK_LIFT_SPECS[poly.type];
-                  return (
-                    <polygon key={poly.id} points={poly.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                      fill={spec.hex} fillOpacity={0.45} stroke={spec.hex} strokeOpacity={0.95}
-                      strokeWidth={0.003} vectorEffect="non-scaling-stroke" />
-                  );
-                })}
-              </svg>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 border-t border-neutral-200 px-4 py-3">
-            {MARK_LIFT_TYPES.map((t) => {
-              const spec = MARK_LIFT_SPECS[t];
-              const count = floors[recognitionPreview]!.recognition!.polygons.filter((p) => p.type === t).length;
-              if (count === 0) return null;
-              return (
-                <span key={t} className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-[11px] font-medium">
-                  <span className="h-3 w-3 rounded" style={{ background: spec.hex }} />
-                  {spec.label} · {count}
-                </span>
-              );
-            })}
-          </div>
-          <div className="flex gap-2 border-t border-neutral-200 p-3">
-            <Button variant="outline" className="flex-1 rounded-full" onClick={() => { const i = recognitionPreview; setRecognitionPreview(null); void runRecognition(i); }}>Re-recognise</Button>
-            <Button className="flex-1 rounded-full" onClick={() => setRecognitionPreview(null)}>Use for 3D build</Button>
-          </div>
-        </div>
-      </div>
+    {recognitionPreview !== null && floors[recognitionPreview] && (
+      <FloorAnnotator
+        key={recognitionPreview}
+        imageDataUrl={floors[recognitionPreview].imageDataUrl}
+        initialResult={floors[recognitionPreview].recognition}
+        onClose={() => setRecognitionPreview(null)}
+        onApply={(result) => {
+          const index = recognitionPreview;
+          setFloors((current) => current.map((floor, i) => i === index ? { ...floor, recognition: { ...result, reviewed: true }, planWidthMetersOverride: result.planWidthMeters, scaleSource: "user" as const } : floor));
+          setRecognitionPreview(null);
+          setFloorParts([]); setBuildReports([]);
+          setStage("upload");
+        }}
+      />
     )}
     {consentDialog}
   </main>;

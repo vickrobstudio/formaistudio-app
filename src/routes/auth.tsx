@@ -9,7 +9,7 @@ import { getGuestCredits, GUEST_CREDITS_KEY, GUEST_PHOTO_CHAT_KEY } from "@/lib/
 import type { UIMessage } from "ai";
 import { activateVerifiedVipAccess } from "@/lib/credits.functions";
 
-export const Route = createFileRoute("/auth")({ head: () => ({ meta: [{ title: "Sign In — FormAI STUDIO" }, { name: "description", content: "Sign in or create your FormAI STUDIO account." }, { property: "og:title", content: "Sign In — FormAI STUDIO" }, { property: "og:description", content: "Access your designs and cloud library." }] }), component: AuthPage });
+export const Route = createFileRoute("/auth")({ head: () => ({ meta: [{ title: "Sign In — FormAI Studio" }, { name: "description", content: "Sign in or create your FormAI Studio account." }, { property: "og:title", content: "Sign In — FormAI Studio" }, { property: "og:description", content: "Access your designs and cloud library." }] }), component: AuthPage });
 function AuthPage() {
   const activateVip = useServerFn(activateVerifiedVipAccess);
   const navigate = useNavigate(); const [signup, setSignup] = useState(false); const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);

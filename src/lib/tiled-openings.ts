@@ -63,13 +63,12 @@ export async function detectOpeningsTiled(
     return { dataUrl: canvas.toDataURL("image/jpeg", 0.85), ox, oy };
   }).filter((t): t is { dataUrl: string; ox: number; oy: number } => t !== null);
 
-  const results = await Promise.all(
-    tiles.map((tile) =>
-      detect({ data: { imageDataUrl: tile.dataUrl, imageWidth: tileW, imageHeight: tileH } })
-        .then((res) => ({ tile, res }))
-        .catch(() => null),
-    ),
-  );
+  const results: Array<{ tile: typeof tiles[number]; res: DetectResult }> = [];
+  for (const tile of tiles) {
+    const res = await detect({ data: { imageDataUrl: tile.dataUrl, imageWidth: tileW, imageHeight: tileH } });
+    if (!res.ok) throw new Error(res.error);
+    results.push({ tile, res });
+  }
 
   const found: TiledOpening[] = [];
   for (const item of results) {

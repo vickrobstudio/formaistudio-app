@@ -26,7 +26,7 @@ function WalletPage() {
       <div className="rounded-3xl border border-border bg-secondary p-6 text-center">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Available credits</p>
         <p className="mt-2 text-5xl font-semibold">{vip ? "∞" : credits}</p>
-        <p className="mt-2 text-xs text-muted-foreground">{vip ? "VIP · unlimited access" : "Credits are used each time you generate with a tool."}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{vip ? "VIP · unlimited access" : "Each AI image, drawing analysis, edit review or assistant step uses one credit. Local 3D export does not use AI credits."}</p>
       </div>
 
       {!vip && <Button asChild variant="studio" className="h-12 w-full">

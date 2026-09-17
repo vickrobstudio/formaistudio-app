@@ -54,7 +54,7 @@ export function parseDaeToTriangles(dae: string): TriGroup[] {
 
     // Colour: material binding → material → effect → diffuse
     let color: [number, number, number] | undefined;
-    const matId = matBinding.replace(/-binding$/, "");
+    const matId = matBinding.replace(/(?:-binding|_sg)$/, "");
     const fxId = materialEffect.get(matId);
     if (fxId) color = effectColors.get(fxId) ?? effectColors.get(fxId.replace(/-effect$/, "") + "-effect");
 

@@ -58,8 +58,8 @@ export const detectFloorElements = createServerFn({ method: "POST" })
       ...(data.label ? [{ type: "text", text: `Drawing label: ${data.label}` }] : []),
     ];
 
-    const { claudeExtractJson } = await import("./claude.server");
-    const extraction = await claudeExtractJson({ parts: userContent });
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent });
     if (!extraction.ok) {
       console.error("floor-detect failed", extraction.status, extraction.error.slice(0, 400));
       return { ok: false, error: extraction.error };

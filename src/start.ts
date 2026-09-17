@@ -45,7 +45,7 @@ const corsMiddleware = createMiddleware().server(async ({ next, request }) => {
         "access-control-allow-origin": origin,
         "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
         "access-control-allow-headers":
-          "authorization, content-type, x-formai-client, x-requested-with",
+          "authorization, content-type, x-formai-client, x-requested-with, x-formai-operation-id, x-formai-ai-consent",
         "access-control-max-age": "86400",
         vary: "origin",
       },

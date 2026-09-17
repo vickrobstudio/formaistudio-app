@@ -28,8 +28,8 @@ export const Route = createFileRoute("/pricing")({
   head: () => ({
     meta: [
       { title: "Pricing — FormAI Studio" },
-      { name: "description", content: "Subscribe to individual FormAI tools from $5/month, or unlock everything with Pro at $45/month." },
-      { property: "og:title", content: "FormAI pricing — from $5/month" },
+      { name: "description", content: "Subscribe to individual FormAI Studio tools from $5/month, or unlock everything with Pro at $45/month." },
+      { property: "og:title", content: "FormAI Studio pricing — from $5/month" },
       { property: "og:description", content: "Per-tool subscriptions or the Pro bundle." },
       { rel: "canonical", href: "https://formaistudio.app/pricing" } as any,
     ],
@@ -90,8 +90,8 @@ function PricingPage() {
       <PaymentTestModeBanner />
       <main className="mx-auto max-w-6xl px-6 py-16">
         <header className="mb-12 text-center">
-          <Link to="/" aria-label="Back to FormAI home" className="mx-auto mb-8 inline-block">
-            <img src="/app-icon.png" alt="FormAI" className="h-14 w-14 rounded-2xl" />
+          <Link to="/" aria-label="Back to FormAI Studio home" className="mx-auto mb-8 inline-block">
+            <img src="/app-icon.png" alt="FormAI Studio" className="h-14 w-14 rounded-2xl" />
           </Link>
           <h1 className="text-4xl font-semibold tracking-tight">Pricing</h1>
           <p className="mt-3 text-muted-foreground">Subscribe to a single tool, or unlock everything with Pro. Photo to AI is free.</p>

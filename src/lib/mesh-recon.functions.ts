@@ -32,6 +32,8 @@ function dataUrlToBlob(dataUrl: string): { blob: Blob; ext: string; mime: string
 }
 
 async function uploadImageToReplicate(imageDataUrl: string): Promise<string> {
+  const { authorizeAIUpload } = await import("./generation-billing.server");
+  await authorizeAIUpload();
   const { blob, ext } = dataUrlToBlob(imageDataUrl);
   const form = new FormData();
   form.append("content", blob, `render.${ext}`);
@@ -67,7 +69,8 @@ export const startMeshReconstruction = createServerFn({ method: "POST" })
     try {
       const imageUrl = await uploadImageToReplicate(data.imageDataUrl);
       const isHigh = (data.quality ?? "high") === "high";
-      const res = await fetch(`${GATEWAY}/predictions`, {
+      const { meteredFetch } = await import("./generation-billing.server");
+      const res = await meteredFetch("mesh", `${GATEWAY}/predictions`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -109,6 +112,8 @@ export const startMeshReconstruction = createServerFn({ method: "POST" })
       }
       const json = (await res.json()) as { id?: string };
       if (!json.id) return { ok: false as const, error: "Replicate did not return a prediction id." };
+      const { registerPrediction } = await import("./generation-billing.server");
+      await registerPrediction(json.id);
       return { ok: true as const, predictionId: json.id };
     } catch (err) {
       return { ok: false as const, error: err instanceof Error ? err.message : "Mesh reconstruction failed to start." };
@@ -157,6 +162,8 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     try {
+      const { authorizePrediction } = await import("./generation-billing.server");
+      await authorizePrediction(data.predictionId);
       const res = await fetch(`${GATEWAY}/predictions/${encodeURIComponent(data.predictionId)}`, {
         headers: authHeaders(),
       });
@@ -198,7 +205,7 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         const groups = parseDaeToTriangles(dae);
         const { obj } = trianglesToObj(groups);
         objDataUrl = toDataUrl(obj, "model/obj");
-        fbxDataUrl = toDataUrl(trianglesToFbxAscii(groups), "application/octet-stream");
+        fbxDataUrl = toDataUrl(trianglesToFbxAscii(groups, data.outputUnits ?? "meters", "Y"), "application/octet-stream");
       } catch (err) {
         console.error("glb->dae conversion failed", err);
       }

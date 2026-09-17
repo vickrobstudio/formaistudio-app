@@ -347,9 +347,11 @@ type GenerateFloor3DResult =
         objDataUrl: string;
         fbxDataUrl: string;
         glbDataUrl?: string;
+      mtlDataUrl?: string;
       }>;
       /** Binary glTF of the whole model (buildings only). */
       glbDataUrl?: string;
+      mtlDataUrl?: string;
       /** Structured "formai.geometry/1" JSON download (buildings only). */
       geometryJsonDataUrl?: string;
       /** Markdown extraction report download (buildings only). */
@@ -1952,7 +1954,7 @@ ${indent}</node>`);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
   <asset>
-    <contributor><authoring_tool>FormAI STUDIO 2D to 3D</authoring_tool></contributor>
+    <contributor><authoring_tool>FormAI Studio 2D to 3D</authoring_tool></contributor>
     <created>${created}</created>
     <modified>${created}</modified>
     ${unitTag}
@@ -2025,7 +2027,7 @@ function validateMeshGeometry(
 export const generateFloor3D = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => FloorTo3DInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
-    if (!process.env.ANTHROPIC_API_KEY) return { ok: false, error: "The 2D to 3D service is unavailable." };
+    if (!process.env.OPENAI_API_KEY) return { ok: false, error: "The 2D to 3D service is unavailable." };
 
     // NEW PATH — multi-image building flow. The 3D model is built directly
     // from the per-floor plans + roof + elevations, with no master prompt
@@ -2080,8 +2082,8 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       userContent.push({ type: "image_url", image_url: { url: data.approvedRenderUrl } });
     }
 
-    const { claudeExtractJson } = await import("./claude.server");
-    const extraction = await claudeExtractJson({ parts: userContent, timeoutMs: 5 * 60 * 1000 });
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent, timeoutMs: 5 * 60 * 1000 });
     if (!extraction.ok) return { ok: false, error: extraction.error };
 
     let parsed: unknown;
@@ -2116,8 +2118,8 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       console.error(`[single] geometry validation failed — no export: ${validation.reason}`);
       return { ok: false, error: `Generated 3D geometry was empty or degenerate (${validation.reason}). Try a clearer cropped reference image.` } as GenerateFloor3DResult;
     }
-    const { obj } = trianglesToObj(groups);
-    const fbx = trianglesToFbxAscii(groups);
+    const { obj, mtl } = trianglesToObj(groups);
+    const fbx = trianglesToFbxAscii(groups, data.outputUnits, "Z");
     const objDataUrl = toDataUrl(obj, "model/obj");
     const fbxDataUrl = toDataUrl(fbx, "application/octet-stream");
     const elementCount = plan.kind === "building"
@@ -2148,7 +2150,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       const { trianglesToGlb, glbToDataUrlBinary } = await import("./glb-export.server");
       glbDataUrl = glbToDataUrlBinary(trianglesToGlb(builtGroups, data.outputUnits));
     }
-    return { ok: true, daeDataUrl, objDataUrl, fbxDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan, glbDataUrl, ...extras };
+    return { ok: true, daeDataUrl, objDataUrl, mtlDataUrl: toDataUrl(mtl, "text/plain"), fbxDataUrl, elementCount, subject: plan.kind, outputUnits: data.outputUnits, plan, glbDataUrl, ...extras };
   });
 
 // Structured JSON + markdown report extras appended to every building result.
@@ -2195,14 +2197,14 @@ async function runMultiFloorBuilding(
     label: string,
     timeoutMs = BUILDING_FLOOR_ANALYSIS_TIMEOUT_MS,
     validate?: (json: unknown) => string | null,
-    attempts = 2,
+    attempts = 1,
   ): Promise<unknown> {
-    const { claudeExtractJson } = await import("./claude.server");
+    const { openAIExtractJson } = await import("./openai-extract.server");
     let lastStatus: number | undefined;
     let lastMessage = "";
 
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      const result = await claudeExtractJson({ parts: content, timeoutMs });
+    for (let attempt = 0; attempt < Math.min(attempts, 1); attempt++) {
+      const result = await openAIExtractJson({ parts: content, timeoutMs });
       if (!result.ok) {
         lastStatus = result.status;
         lastMessage = result.error;
@@ -2302,7 +2304,7 @@ async function runMultiFloorBuilding(
     };
   };
 
-  const floorPromises = floors.map(async (floor): Promise<FloorOut | { error: string; status?: number }> => {
+  const floorTasks = floors.map((floor) => async (): Promise<FloorOut | { error: string; status?: number }> => {
     const lbl = floor.label?.trim() || (floor.index === 0 ? "Ground floor" : `Floor ${floor.index}`);
     const parts: Array<Record<string, unknown>> = [
       { type: "text", text: singleFloorExtractInstruction(data.planUnits, lbl, floor.heightMeters) },
@@ -2355,32 +2357,7 @@ async function runMultiFloorBuilding(
       if (status === 401 || status === 402 || status === 403 || status === 429) {
         return { error: `Floor ${floor.index + 1} extraction failed.`, status };
       }
-      try {
-        const fallbackParts: Array<Record<string, unknown>> = [
-          { type: "text", text: quickFloorExtractInstruction(data.planUnits, lbl, floor.heightMeters) },
-          { type: "text", text: `PRIMARY DRAWING — ${lbl}` },
-        ];
-        attachImg(fallbackParts, floor.imageDataUrl, `floor_${floor.index}_fast_a`);
-        if (floor.imageDataUrl2) {
-          fallbackParts.push({ type: "text", text: `SECONDARY DRAWING — same floor (${lbl})` });
-          attachImg(fallbackParts, floor.imageDataUrl2, `floor_${floor.index}_fast_b`);
-        }
-        const fallbackJson = coerceFloorExtractionJson(await callJson(
-          fallbackParts,
-          `floor-${floor.index}-fast-fallback`,
-          BUILDING_FAST_FALLBACK_TIMEOUT_MS,
-          validateFloorExtraction,
-          1,
-        ));
-        const fallbackParsed = floorExtractSchema.safeParse(fallbackJson);
-        if (fallbackParsed.success && floorWallCount(fallbackParsed.data) > 0) {
-          console.warn(`floor ${floor.index} used fast fallback extraction after detailed pass failed`);
-          return { ...applyUserScale(fallbackParsed.data, floor.planWidthMeters), index: floor.index, label: lbl, heightMeters: floor.heightMeters };
-        }
-      } catch (fallbackError) {
-        const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-        console.error(`floor ${floor.index} fast fallback failed`, fallbackMessage.slice(0, 300));
-      }
+      // Never start another paid extraction automatically after an uncertain failure.
       if (e instanceof DOMException && e.name === "TimeoutError") {
         return { error: `Floor ${floor.index + 1} analysis timed out.`, status: 408 };
       }
@@ -2388,7 +2365,16 @@ async function runMultiFloorBuilding(
     }
   });
 
-  // Roof + elevations pass in parallel.
+  // Analyse floors in order; do not silently omit a failed floor or exceed
+  // the account concurrency limit with a separate paid call per level.
+  const floorResults: Array<FloorOut | { error: string; status?: number }> = [];
+  for (const task of floorTasks) {
+    const result = await task();
+    if ("error" in result) return { ok: false, error: result.error + " No incomplete building was exported. Review this floor before trying again." };
+    floorResults.push(result);
+  }
+
+  // Roof and elevations are analysed after the floors.
   const roofSchema = z.object({
     floorHeightsMeters: z.array(z.number().min(1).max(10)).max(10).optional(),
     roof: z
@@ -2428,7 +2414,8 @@ async function runMultiFloorBuilding(
       })()
     : Promise.resolve(null);
 
-  const [floorResults, roofResult] = await Promise.all([Promise.all(floorPromises), roofPromise]);
+  const roofResult = await roofPromise;
+  if (hasRoofOrElev && !roofResult) return { ok: false, error: "Roof or elevation analysis was incomplete. Review those drawings before creating the final building." };
 
   // Fail fast if every floor failed.
   const goodFloors = floorResults.filter((f): f is FloorOut => !("error" in f));
@@ -2511,8 +2498,10 @@ async function runMultiFloorBuilding(
   const daeDataUrl = assembledValid
     ? `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`
     : "";
-  const objDataUrl = assembledValid ? toDataUrl(trianglesToObj(groups).obj, "model/obj") : "";
-  const fbxDataUrl = assembledValid ? toDataUrl(trianglesToFbxAscii(groups), "application/octet-stream") : "";
+  const assembledObj = assembledValid ? trianglesToObj(groups) : null;
+  const objDataUrl = assembledObj ? toDataUrl(assembledObj.obj, "model/obj") : "";
+  const mtlDataUrl = assembledObj ? toDataUrl(assembledObj.mtl, "text/plain") : undefined;
+  const fbxDataUrl = assembledValid ? toDataUrl(trianglesToFbxAscii(groups, data.outputUnits, "Z"), "application/octet-stream") : "";
   const glbDataUrl = assembledValid
     ? glbToDataUrlBinary(trianglesToGlb(assembledGroups, data.outputUnits))
     : undefined;
@@ -2531,6 +2520,7 @@ async function runMultiFloorBuilding(
     objDataUrl: string;
     fbxDataUrl: string;
     glbDataUrl?: string;
+    mtlDataUrl?: string;
   }> = [];
   const skippedParts: Array<{ label: string; reason: string }> = [];
   const emitPart = (
@@ -2564,13 +2554,14 @@ async function runMultiFloorBuilding(
       skippedParts.push({ label, reason: validation.reason });
       return;
     }
-    const { obj: partObj } = trianglesToObj(partGroups);
-    const partFbx = trianglesToFbxAscii(partGroups);
+    const { obj: partObj, mtl: partMtl } = trianglesToObj(partGroups);
+    const partFbx = trianglesToFbxAscii(partGroups, data.outputUnits, "Z");
     floorParts.push({
       index,
       label,
       daeDataUrl: `data:model/vnd.collada+xml;base64,${Buffer.from(partDae, "utf8").toString("base64")}`,
       objDataUrl: toDataUrl(partObj, "model/obj"),
+      mtlDataUrl: toDataUrl(partMtl, "text/plain"),
       fbxDataUrl: toDataUrl(partFbx, "application/octet-stream"),
       glbDataUrl: glbToDataUrlBinary(trianglesToGlb(builtPartGroups, data.outputUnits)),
     });
@@ -2689,6 +2680,7 @@ async function runMultiFloorBuilding(
     subject: "building",
     outputUnits: data.outputUnits,
     plan: flat,
+    mtlDataUrl,
     floorParts,
     ...extras,
   };
@@ -2747,8 +2739,8 @@ Rules:
       if (url === data.fileDataUrl) continue;
       userContent.push({ type: "image_url", image_url: { url } });
     }
-    const { claudeExtractJson } = await import("./claude.server");
-    const extraction = await claudeExtractJson({ parts: userContent, maxTokens: 2000, timeoutMs: 2 * 60 * 1000 });
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent, maxTokens: 2000, timeoutMs: 2 * 60 * 1000 });
     if (!extraction.ok) return { ok: false, error: extraction.error };
     let parsed: unknown;
     try {
@@ -2865,11 +2857,11 @@ OUTPUT RULES:
 - Coordinates are NORMALISED 0..1 in the image's own pixel grid (x = left→right, y = top→bottom). Polygons must be SIMPLE (no self-intersections).
 - Return ONLY the JSON object, no comments, no markdown.`;
 
-    const { claudeExtractJson } = await import("./claude.server");
+    const { openAIExtractJson } = await import("./openai-extract.server");
     // Model output is occasionally malformed — one retry rescues those runs.
     let lastError = "The AI response was not valid JSON.";
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const extraction = await claudeExtractJson({
+    for (let attempt = 0; attempt < 1; attempt++) {
+      const extraction = await openAIExtractJson({
         parts: [
           { type: "text", text: instruction },
           { type: "image_url", image_url: { url: data.imageDataUrl } },
@@ -3027,8 +3019,8 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
     if (!validation.ok) {
       return { ok: false, error: `Lift produced an empty mesh (${validation.reason}).` };
     }
-    const { obj } = trianglesToObj(tris);
-    const fbx = trianglesToFbxAscii(tris);
+    const { obj, mtl } = trianglesToObj(tris);
+    const fbx = trianglesToFbxAscii(tris, data.outputUnits, "Z");
     const { trianglesToGlb, glbToDataUrlBinary } = await import("./glb-export.server");
     const glbDataUrl = glbToDataUrlBinary(trianglesToGlb(groups, data.outputUnits));
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
@@ -3042,6 +3034,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       objDataUrl,
       fbxDataUrl,
       glbDataUrl,
+      mtlDataUrl: toDataUrl(mtl, "text/plain"),
     };
     // Rooms from vector extraction (or user annotation) — world meters, into
     // the geometry JSON + report. Named rooms were read straight from the
@@ -3090,6 +3083,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       objDataUrl,
       fbxDataUrl,
       glbDataUrl,
+      mtlDataUrl: toDataUrl(mtl, "text/plain"),
       elementCount,
       subject: "building",
       outputUnits: data.outputUnits,

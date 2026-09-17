@@ -1,3 +1,3 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { VideoStudio } from "@/components/VideoStudio";
-export const Route = createFileRoute("/ai-to-video")({ head: () => ({ meta: [{ title: "AI to Video — FormAI STUDIO" }, { name: "description", content: "Turn interior renderings into cinematic AI videos." }, { property: "og:title", content: "AI to Video" }, { property: "og:description", content: "Create smooth cinematic walkthroughs from still renderings." }] }), component: VideoStudio });
+export const Route = createFileRoute("/ai-to-video")({ head: () => ({ meta: [{ title: "AI to Video — FormAI Studio" }, { name: "description", content: "Turn interior renderings into cinematic AI videos." }, { property: "og:title", content: "AI to Video" }, { property: "og:description", content: "Create smooth cinematic walkthroughs from still renderings." }] }), component: VideoStudio });

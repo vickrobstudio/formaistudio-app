@@ -8,7 +8,7 @@ export function LegalPage({ title, updated, children }: { title: string; updated
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="fixed inset-x-0 top-0 z-50 flex h-[calc(3.25rem+env(safe-area-inset-top))] items-center border-b border-border bg-background/90 px-[max(1rem,env(safe-area-inset-left))] pt-[env(safe-area-inset-top)] shadow-sm backdrop-blur-xl">
-        <Link to="/" aria-label="FormAI home" className="absolute left-1/2 -translate-x-1/2"><FormAILogo inverse className="w-16" /></Link>
+        <Link to="/" aria-label="FormAI Studio home" className="absolute left-1/2 -translate-x-1/2"><FormAILogo inverse className="w-16" /></Link>
         <button type="button" onClick={() => router.history.back()} className="inline-flex min-h-11 items-center gap-2 rounded-xl text-xs uppercase tracking-[0.12em] text-muted-foreground"><ArrowLeft className="size-4" />Back</button>
       </header>
       <article className="mx-auto max-w-2xl px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(6.25rem+env(safe-area-inset-top))]">

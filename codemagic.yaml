@@ -1,0 +1,184 @@
+workflows:
+  ios-capacitor-workflow:
+    name: FormAI Studio iOS (Capacitor)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: codemagic_api_key
+    environment:
+      vars:
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
+        BUNDLE_ID: "app.formaistudio.formai"
+        APP_STORE_APPLE_ID: 6782088017 # replace with your numeric App Store Connect app id
+      node: 22.20.0
+      xcode: latest
+      cocoapods: default
+    cache:
+      cache_paths:
+        - $HOME/.codemagic-signing
+    scripts:
+      - name: Install dependencies
+        script: |
+          set -euo pipefail
+          npm ci
+          npm run test:critical
+          npx --no-install tsc --noEmit
+      - name: Check public app configuration
+        script: |
+          node scripts/check-ios-env.mjs
+      - name: Build SPA bundle for iOS
+        script: |
+          set -e
+          # Produces dist/client containing index.html + assets that the
+          # WKWebView loads from disk. Server functions still call the live
+          # SSR host (formaistudio.app) cross-origin at runtime.
+          npm run build:ios
+          ls -la dist/client | head -20
+      - name: Add iOS platform if missing
+        script: |
+          set -e
+          if [ ! -d "ios/App/App.xcodeproj" ]; then
+            mkdir -p dist/client
+            npx --yes cap add ios
+          fi
+          ls -la ios/App
+      - name: Sync Capacitor iOS
+        script: |
+          set -e
+          mkdir -p dist/client
+          npx --yes cap sync ios
+      - name: Generate iOS app icon
+        script: |
+          set -e
+          # Generates AppIcon.appiconset from resources/icon.png (1024x1024, no alpha)
+          npx --yes @capacitor/assets generate --ios --iconBackgroundColor '#FBF5E7' --iconBackgroundColorDark '#FBF5E7'
+      - name: Configure Info.plist (privacy + export compliance)
+        script: |
+          set -euo pipefail
+          PLIST="ios/App/App/Info.plist"
+          if [ ! -f "$PLIST" ]; then
+            echo "Info.plist not found at $PLIST"; exit 1
+          fi
+          PB=/usr/libexec/PlistBuddy
+          set_str() {
+            local key="$1" val="$2"
+            $PB -c "Set :$key $val" "$PLIST" 2>/dev/null || \
+              $PB -c "Add :$key string $val" "$PLIST"
+          }
+          set_bool() {
+            local key="$1" val="$2"
+            $PB -c "Set :$key $val" "$PLIST" 2>/dev/null || \
+              $PB -c "Add :$key bool $val" "$PLIST"
+          }
+          # Privacy usage descriptions — iOS hard-crashes any app that touches
+          # these APIs (camera, photos, mic, location) without a description.
+          set_str NSCameraUsageDescription "FormAI Studio uses the camera to capture rooms and reference photos for AI interior design."
+          set_str NSPhotoLibraryUsageDescription "FormAI Studio accesses your photo library so you can pick interior photos to redesign."
+          set_str NSPhotoLibraryAddUsageDescription "FormAI Studio saves generated renderings and videos to your photo library."
+          set_str NSMicrophoneUsageDescription "FormAI Studio uses the microphone when you record audio notes for a design."
+          # No NSUserTrackingUsageDescription — FormAI Studio does not track users across apps or websites.
+          $PB -c "Delete :NSUserTrackingUsageDescription" "$PLIST" 2>/dev/null || true
+          # Skips the App Store Connect export-compliance question on every upload.
+          set_bool ITSAppUsesNonExemptEncryption false
+          # Display name shown under the icon on the home screen.
+          set_str CFBundleDisplayName "FormAI Studio"
+          # The app no longer loads remote pages as its main document — the
+          # UI is bundled into the .ipa — so WKAppBoundDomains is removed.
+          $PB -c "Delete :WKAppBoundDomains" "$PLIST" 2>/dev/null || true
+          echo "--- Final Info.plist ---"
+          $PB -c "Print" "$PLIST" | head -80
+      - name: Install CocoaPods dependencies
+        script: |
+          set -e
+          ls -la ios/App
+          if [ -f "ios/App/Podfile" ]; then
+            cd ios/App
+            pod install --repo-update
+          else
+            echo "No Podfile found; Capacitor generated a Swift Package Manager iOS project, so CocoaPods install is skipped."
+          fi
+      - name: Set build number
+        script: |
+          set -euo pipefail
+          cd ios/App
+          LATEST=$(app-store-connect get-latest-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0")
+          if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then
+            LATEST=0
+          fi
+          NEXT=$((LATEST + 1))
+          if [[ "${CM_BUILD_NUMBER:-0}" =~ ^[0-9]+$ ]] && [ "${CM_BUILD_NUMBER:-0}" -gt "$NEXT" ]; then
+            NEXT="$CM_BUILD_NUMBER"
+          fi
+          echo "Setting build number to $NEXT"
+          agvtool new-version -all "$NEXT" || true
+          if [ -f "App.xcodeproj/project.pbxproj" ]; then
+            perl -0pi -e "s/CURRENT_PROJECT_VERSION = [^;]+;/CURRENT_PROJECT_VERSION = $NEXT;/g" App.xcodeproj/project.pbxproj
+          fi
+          if [ -f "App/Info.plist" ]; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEXT" App/Info.plist || \
+              /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEXT" App/Info.plist
+          fi
+      - name: Fetch signing files
+        script: |
+          set -euo pipefail
+          # Codemagic auto-generates a distribution certificate and provisioning
+          # profile via the App Store Connect API integration. No Mac required.
+          # A private key is needed to pair with the certificate. If Apple
+          # already has the maximum number of Distribution certificates, revoke
+          # one old/unused Distribution certificate in Apple Developer first,
+          # then rerun this build so Codemagic can create a new matching pair.
+          export SIGNING_DIR="$HOME/.codemagic-signing"
+          export CERT_KEY_PATH="$SIGNING_DIR/distribution_private_key.pem"
+          mkdir -p "$SIGNING_DIR"
+          if [ ! -s "$CERT_KEY_PATH" ]; then
+            echo "Generating new RSA private key for distribution certificate..."
+            ssh-keygen -t rsa -b 2048 -m PEM -f "$CERT_KEY_PATH" -q -N ""
+            # ssh-keygen creates a .pub sibling we don't need
+            rm -f "${CERT_KEY_PATH}.pub"
+          fi
+          chmod 600 "$CERT_KEY_PATH"
+
+          set +e
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key "@file:$CERT_KEY_PATH" \
+            --create 2>&1 | tee "$SIGNING_DIR/fetch-signing-files.log"
+          FETCH_EXIT=${PIPESTATUS[0]}
+          set -e
+          if [ "$FETCH_EXIT" -ne 0 ]; then
+            if grep -q "You already have a current Distribution certificate or a pending certificate request" "$SIGNING_DIR/fetch-signing-files.log"; then
+              echo ""
+              echo "Apple already has the maximum number of active Distribution certificates for this developer account."
+              echo "Open Apple Developer > Certificates, Identifiers & Profiles > Certificates, revoke one old/unused Distribution certificate, then rerun this Codemagic build."
+              echo "No Mac or PEM export is needed after revoking one old certificate; this build will create a new matching certificate/private-key pair."
+            fi
+            exit "$FETCH_EXIT"
+          fi
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Build .ipa
+        script: |
+          if [ -d "$XCODE_WORKSPACE" ]; then
+            xcode-project build-ipa \
+              --workspace "$XCODE_WORKSPACE" \
+              --scheme "$XCODE_SCHEME"
+          else
+            xcode-project build-ipa \
+              --project "$XCODE_PROJECT" \
+              --scheme "$XCODE_SCHEME"
+          fi
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false

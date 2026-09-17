@@ -35,7 +35,7 @@ export function ToolsHub() {
   }
 
   return <main className="dashboard-theme min-h-screen bg-background text-foreground"><FormaHeader /><PageIntro eyebrow="Tools" title="Pick a tool" description="One workflow per tool. Tap to start.">
-    <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip || sub.isActive ? "Subscribed · unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p>
+    <p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "Owner · all tools" : `${credits} ${signedIn ? "account" : "guest"} credits left`}</p>
     {!vip && !sub.isActive && <Link to="/pricing" className="mt-2 inline-block text-xs underline">Unlock every tool with Pro — ${PLAN_BY_ID.pro_monthly.priceUsd}/mo</Link>}
   </PageIntro><section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-3xl lg:max-w-4xl">
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

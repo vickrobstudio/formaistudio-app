@@ -71,8 +71,8 @@ export const classifyFloorRegions = createServerFn({ method: "POST" })
       ...(data.hint ? [{ type: "text", text: `Drawing hint: ${data.hint}` }] : []),
     ];
 
-    const { claudeExtractJson } = await import("./claude.server");
-    const extraction = await claudeExtractJson({ parts: userContent, maxTokens: 8000 });
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent, maxTokens: 8000 });
     if (!extraction.ok) {
       console.error("floor-classify failed", extraction.status, extraction.error.slice(0, 400));
       return { ok: false, error: extraction.error };
