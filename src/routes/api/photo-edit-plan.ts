@@ -14,5 +14,5 @@ export const Route = createFileRoute("/api/photo-edit-plan")({server:{handlers:{
   const key=process.env.OPENAI_API_KEY;
   if(!key) return new Response("Photo AI is unavailable.",{status:503});
   try { const {planPhotoEdit}=await import("@/lib/photo-edit-plan.server"); return Response.json(await planPhotoEdit(parsed.data,key,request.signal)); }
-  catch { return new Response("The edit could not be reviewed. Please retry; no image was generated.",{status:502}); }
+  catch(error) { console.error("photo_edit_plan_failed", error instanceof Error ? error.message : "Unknown planning failure"); return new Response("The edit could not be reviewed. Please retry; no image was generated.",{status:502}); }
 }}}});
