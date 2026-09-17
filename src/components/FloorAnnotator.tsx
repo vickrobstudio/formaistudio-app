@@ -262,7 +262,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
 
           <div className="mt-auto flex gap-2 pt-2">
             <Button variant="outline" onClick={onClose} className="flex-1 rounded-full">Cancel</Button>
-            <Button onClick={apply} className="flex-1 rounded-full">Lift to 3D</Button>
+            <Button onClick={apply} className="flex-1 rounded-full">Confirm 2D parts and scale</Button>
           </div>
         </div>
       </div>

@@ -372,6 +372,29 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
   const [orbitEnabled, setOrbitEnabled] = useState(true);
   const [downloadFormat, setDownloadFormat] = useState<"dae" | "obj" | "fbx">("dae");
   const [loadError, setLoadError] = useState("");
+  const [usdzUrl, setUsdzUrl] = useState("");
+  const [usdzBusy, setUsdzBusy] = useState(false);
+  const [usdzError, setUsdzError] = useState("");
+  const [reviewed, setReviewed] = useState(false);
+  useEffect(() => { setReviewed(false); setUsdzUrl(""); }, [parts, overrides]);
+  useEffect(() => () => { if (usdzUrl) URL.revokeObjectURL(usdzUrl); }, [usdzUrl]);
+  async function prepareUSDZ() {
+    setUsdzBusy(true); setUsdzError("");
+    try {
+      const { USDZExporter } = await import("three/addons/exporters/USDZExporter.js");
+      const scene = new THREE.Scene();
+      const model = new THREE.Group();
+      // Display groups already convert Z-up COLLADA into Three.js Y-up.
+      for (const part of loaded) model.add(part.group.clone(true));
+      model.scale.setScalar(outputUnits === "feet" ? 0.3048 : 1);
+      scene.add(model);
+      scene.updateMatrixWorld(true);
+      const data = await new USDZExporter().parseAsync(scene, { onlyVisible: true, quickLookCompatible: true });
+      setUsdzUrl(URL.createObjectURL(new Blob([data], { type: "model/vnd.usdz+zip" })));
+    } catch (error) {
+      setUsdzError(error instanceof Error ? error.message : "Could not prepare USDZ preview.");
+    } finally { setUsdzBusy(false); }
+  }
   const orbitRef = useRef<unknown>(null);
 
   useEffect(() => {
@@ -465,6 +488,7 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
   };
 
   const downloadPart = (part: LoadedPart, raw: RawPart, materialsOnly = false) => {
+    if (!reviewed) return;
     const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "part";
     let prefix: string;
     if (part.index === -1) prefix = "00_site";
@@ -618,7 +642,17 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
         </div>
       </div>
 
-      {loaded.length > 0 && (
+      {loaded.length > 0 && <div className="space-y-3 rounded-xl border border-border p-4">
+        <p className="text-sm">Drag to rotate and inspect the model. Check walls, doors, windows and scale before downloading.</p>
+        <Button disabled={usdzBusy} onClick={() => void prepareUSDZ()}>{usdzBusy ? "Preparing USDZ…" : "Prepare USDZ preview"}</Button>
+        {usdzUrl && <div className="flex flex-wrap gap-3">
+          <a rel="ar" href={usdzUrl} className="inline-flex items-center gap-2 underline"><img src="/favicon.ico" alt="" className="h-6 w-6" />Open USDZ on iPhone / iPad</a>
+          <a href={usdzUrl} download="formai-model.usdz" className="underline">Save USDZ</a>
+        </div>}
+        {usdzError && <p role="alert">{usdzError}</p>}
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />I inspected the 3D model and approve it for export.</label>
+      </div>}
+      {loaded.length > 0 && reviewed && (
         <div className="rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Download by part</p>
           <p className="mt-1 text-[10px] text-muted-foreground">{outputUnits} · DAE preserves colour, visibility, position and rotation edits · OBJ / FBX export original geometry.</p>

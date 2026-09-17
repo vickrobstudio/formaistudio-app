@@ -291,6 +291,12 @@ export function FloorTo3D() {
 
   async function buildBuilding() {
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
+    const unreviewed = floors.findIndex((floor) => !floor.recognition?.polygons.length);
+    if (unreviewed !== -1) {
+      setError("Review the 2D parts and confirm the plan scale for every floor before building.");
+      setRecognitionPreview(unreviewed);
+      return;
+    }
     setBusy(true); setError(""); setFloorParts([]); setStage("modeling");
     if (!(await consume())) {
       setBusy(false); setStage("upload");
