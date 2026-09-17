@@ -9,7 +9,7 @@ import { isNativeIOS, restorePurchases } from "@/lib/iap";
 export const Route = createFileRoute("/_authenticated/wallet")({ component: WalletPage });
 
 function WalletPage() {
-  const { credits, vip } = useCredits();
+  const { credits, vip, loading, error, reviewCredits, sandboxCredits, refresh } = useCredits();
   const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
 
@@ -25,7 +25,10 @@ function WalletPage() {
     <section className="space-y-6 pb-8">
       <div className="rounded-3xl border border-border bg-secondary p-6 text-center">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Available credits</p>
-        <p className="mt-2 text-5xl font-semibold">{vip ? "∞" : credits}</p>
+        <p className="mt-2 text-5xl font-semibold">{loading ? "…" : error ? "—" : vip ? "∞" : credits}</p>
+        {error && <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => void refresh()}>Retry balance</Button></div>}
+        {!error && reviewCredits > 0 && <p className="mt-3 text-sm">Includes {reviewCredits} temporary review credits. These are separate from subscriptions.</p>}
+        {!error && sandboxCredits > 0 && <p className="mt-3 text-sm">Apple Sandbox: {sandboxCredits} test credits recorded separately. These do not add to your production balance.</p>}
         <p className="mt-2 text-xs text-muted-foreground">{vip ? "VIP · unlimited access" : "Each AI image, drawing analysis, edit review or assistant step uses one credit. Local 3D export does not use AI credits."}</p>
       </div>
 
@@ -48,3 +51,4 @@ function WalletPage() {
     </section>
   </DashboardDetail>;
 }
+

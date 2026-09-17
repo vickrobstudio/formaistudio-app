@@ -8,7 +8,13 @@ export const getCreditAccount = createServerFn({ method: "GET" })
     const { getRequest } = await import("@tanstack/react-start/server");
     const { readBillingState } = await import("./generation-billing.server");
     const state = await readBillingState(getRequest());
-    return { credits: state.paid + state.trial, owner: state.owner, activePlans: state.activePlans as string[], expiresAt: state.expiresAt as string | null };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const sandbox = await (supabaseAdmin as any).from("billing_wallets")
+      .select("balance").eq("user_id", state.user.id).eq("provider", "apple").eq("environment", "sandbox").maybeSingle();
+    if (sandbox.error) throw new Error("Unable to load your credit balance. Please retry.");
+    return { credits: state.paid + state.trial, owner: state.owner, activePlans: state.activePlans as string[], expiresAt: state.expiresAt as string | null,
+      reviewCredits: state.provider === "review" ? state.paid : 0,
+      sandboxCredits: Number(sandbox.data?.balance ?? 0), environment: state.environment };
   });
 
 // Compatibility preflight only. The provider boundary owns the actual debit.
@@ -33,3 +39,4 @@ export const activateVerifiedVipAccess = createServerFn({ method: "POST" })
     if (error) throw new Error("Unable to activate access");
     return { activated: true };
   });
+

@@ -74,6 +74,7 @@ export async function purchasePlan(planId: PlanId): Promise<{ ok: true } | { ok:
     }
     if (!pkg) return { ok: false, error: `Product ${applePid(planId)} not found in RevenueCat offerings.` };
     await Purchases.purchasePackage({ aPackage: pkg });
+    window.dispatchEvent(new Event("formai-credits-changed"));
     return { ok: true };
   } catch (e: any) {
     if (e?.userCancelled) return { ok: false, error: "Purchase cancelled.", cancelled: true };
@@ -137,6 +138,7 @@ export async function restorePurchases(): Promise<{ ok: boolean; error?: string 
     if (!revenueCat) return { ok: false, error: "Only available in the iOS app." };
     const { Purchases } = revenueCat;
     await Purchases.restorePurchases();
+    window.dispatchEvent(new Event("formai-credits-changed"));
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "Restore failed." };
@@ -150,3 +152,4 @@ export async function identifyIAPUser(userId: string): Promise<void> {
   if (user.id !== userId) throw new Error("The purchase account must match the signed-in account.");
   await configureIAP();
 }
+

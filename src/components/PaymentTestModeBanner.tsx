@@ -1,6 +1,10 @@
+import { Capacitor } from "@capacitor/core";
+
 const clientToken = import.meta.env.VITE_PAYMENTS_CLIENT_TOKEN as string | undefined;
 
 export function PaymentTestModeBanner() {
+  // Native purchases use the app store, never Stripe checkout.
+  if (Capacitor.isNativePlatform()) return null;
   if (!clientToken) {
     return (
       <div className="w-full bg-red-100 border-b border-red-300 px-4 py-2 text-center text-sm text-red-800">
@@ -17,3 +21,4 @@ export function PaymentTestModeBanner() {
   }
   return null;
 }
+
