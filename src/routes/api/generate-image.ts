@@ -86,13 +86,17 @@ const openaiKey = process.env.OPENAI_API_KEY;
 });
         } else {
           body = JSON.stringify({
-            model: "openai/gpt-image-2",
-            prompt: renderPrompt,
-            quality: "medium",
-            size: "1536x1024",
-            stream: true,
-            partial_images: 1,
-          });
+  model: "gemini-3-pro-image-preview",
+  modalities: ["image", "text"],
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: renderPrompt },
+      ],
+    },
+  ],
+});
         }
 
         const headers: Record<string, string> = {
