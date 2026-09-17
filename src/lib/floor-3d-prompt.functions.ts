@@ -38,7 +38,7 @@ Return ONLY the paragraph as plain text — no JSON, no Markdown, no headings, n
 export const buildMasterPrompt = createServerFn({ method: "POST" })
   .validator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
-    const key = process.env.LOVABLE_API_KEY;
+    const key = process.env.GEMINI_API_KEY;
     if (!key) return { ok: false, error: "The rendering service is unavailable." };
 
     const isPdf = data.fileDataUrl.startsWith("data:application/pdf");
@@ -59,11 +59,14 @@ export const buildMasterPrompt = createServerFn({ method: "POST" })
       }
     }
 
-    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
-      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+      headers: {
+  Authorization: `Bearer ${key}`,
+  "Content-Type": "application/json",
+},
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "gemini-2.5-pro",
         messages: [{ role: "user", content: userContent }],
       }),
     });
