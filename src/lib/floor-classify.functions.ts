@@ -63,7 +63,7 @@ RULES:
 export const classifyFloorRegions = createServerFn({ method: "POST" })
   .validator((input: unknown) => Input.parse(input))
   .handler(async ({ data }): Promise<Result> => {
-    const key = process.env.LOVABLE_API_KEY;
+    const key = process.env.GEMINI_API_KEY;
     if (!key) return { ok: false, error: "The classification service is unavailable." };
 
     const regionsJson = JSON.stringify({ regions: data.regions });
@@ -74,11 +74,14 @@ export const classifyFloorRegions = createServerFn({ method: "POST" })
       ...(data.hint ? [{ type: "text", text: `Drawing hint: ${data.hint}` }] : []),
     ];
 
-    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
-      headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
+      headers: {
+  Authorization: `Bearer ${key}`,
+  "Content-Type": "application/json",
+},
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "gemini-3-flash-preview",
         messages: [{ role: "user", content: userContent }],
         response_format: { type: "json_object" },
       }),
