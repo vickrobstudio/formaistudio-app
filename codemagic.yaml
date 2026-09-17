@@ -7,6 +7,7 @@ workflows:
       app_store_connect: codemagic_api_key
     environment:
       vars:
+        VITE_API_ORIGIN: "https://formaistudio-app-git-decouple-lovable-phase1-vickrobinsonstudio.vercel.app"
         VITE_REVENUECAT_IOS_API_KEY: "appl_UrPFeyLKtLtrOENXAqGCHcTsmAr"
         VITE_SUPABASE_URL: "https://zmkeswetzswdqmruoioa.supabase.co"
         VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xWsrW2qNkFAD_Zpxza4Oag_RJtwujtV"
@@ -185,3 +186,4 @@ workflows:
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
+
