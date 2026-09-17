@@ -26,7 +26,7 @@ function HomePage() {
         Shaping the Form of the World
       </p>
       <Link
-        to="/floor-plan-to-3d"
+        to="/feed"
         className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-10 inline-flex min-h-11 min-w-36 -translate-x-1/2 items-center justify-center rounded-xl border border-white/30 bg-landing-button px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white shadow-none transition-colors hover:bg-black"
       >
         Explore FormAI
