@@ -18,7 +18,7 @@ function loadImage(dataUrl: string) {
   });
 }
 
-async function compressImageDataUrl(dataUrl: string, budget: number) {
+export async function compressImageDataUrl(dataUrl: string, budget: number) {
   if (!dataUrl.startsWith("data:image/")) return dataUrl;
   if (typeof document === "undefined" || dataUrl.length <= budget)
     return dataUrl;

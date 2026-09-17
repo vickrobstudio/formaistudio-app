@@ -11,7 +11,7 @@ import { readGuestChat, saveGuestChat, clearGuestChat } from "@/lib/guest-chat-s
 import { GUEST_PHOTO_CHAT_KEY } from "@/lib/guest-trial";
 import { supabase } from "@/integrations/supabase/client";
 import { photoInformation } from "@/lib/tool-information";
-import { streamImage } from "@/lib/stream-image";
+import { streamImage, compressImageDataUrl } from "@/lib/stream-image";
 import { FurnitureLibraryPicker } from "@/components/FurnitureLibraryPicker";
 import { useCredits } from "@/hooks/use-credits";
 import { SceneComposer } from "@/components/SceneComposer";
@@ -59,6 +59,10 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
   const [preview, setPreview] = useState<string | null>(null);
   const [lastInstruction, setLastInstruction] = useState("");
   const [editedImage, setEditedImage] = useState<string | null>(null);
+  const [editPlan, setEditPlan] = useState<{status:"ready"|"clarify";instruction:string;preserve:string[];questions:string[];request:string;image:string;refs:string[];history:Array<{role:"user"|"assistant";text:string}>;answers:Array<{question:string;answer:string}>} | null>(null);
+  const [clarification, setClarification] = useState("");
+  const [contextStart, setContextStart] = useState(initialMessages.length);
+  const renderingRef = useRef(false);
   const [rendering, setRendering] = useState(false);
   const [fileError, setFileError] = useState("");
   const [storageNotice, setStorageNotice] = useState("");
@@ -91,12 +95,17 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
 
   async function submit() {
     const text = input.trim();
-    if ((!text && !files?.length) || busy) return;
+    if ((!text && !files?.length) || busy || renderingRef.current) return;
+    setEditPlan(null); setClarification("");
     if (text) setLastInstruction(text);
     setInput("");
-    if (text && files) await sendMessage({ text, files });
-    else if (files) await sendMessage({ files });
-    else await sendMessage({ text });
+    try {
+      const currentImage = editedImage ?? preview;
+      const prepared = currentImage ? await compressImageDataUrl(currentImage, 3_700_000) : null;
+      if (prepared && prepared.length > 3_800_000) throw new Error("Use a smaller photo.");
+      const options = { body: { contextStart, currentImage: prepared } };
+      await sendMessage({text:text || "Please review this photo."}, options);
+    } catch(cause) { setFileError(cause instanceof Error ? cause.message : "The message could not be sent."); setInput(text); return; }
     setFiles(null);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -114,6 +123,7 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
       return;
     }
     setEditedImage(null);
+    setEditPlan(null); setClarification(""); setSurfaceTexture(null); setFurnitureReferences([]); setContextStart(messages.length);
     setLastInstruction("");
     setFiles(selected);
     const reader = new FileReader();
@@ -122,6 +132,8 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
   }
 
   function removeImage() {
+    if (renderingRef.current) return;
+    setEditedImage(null); setEditPlan(null); setClarification(""); setLastInstruction(""); setSurfaceTexture(null); setFurnitureReferences([]); setContextStart(messages.length);
     setFiles(null);
     setPreview(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -129,19 +141,34 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
 
   async function renderEdit() {
     const instruction = input.trim() || lastInstruction;
-    if (!preview || instruction.length < 6 || rendering) return;
-    setRendering(true);
-    setFileError("");
+    const image = editedImage ?? preview;
+    if (!image || !instruction || renderingRef.current || busy) return;
+    const refs = [...furnitureReferences, ...(surfaceTexture ? [surfaceTexture] : [])].slice(0,5);
+    const current = editPlan && editPlan.request === instruction && editPlan.image === image && JSON.stringify(editPlan.refs) === JSON.stringify(refs) ? editPlan : null;
+    if (current?.status === "clarify" && !clarification.trim()) return;
+    renderingRef.current = true; setRendering(true); setFileError("");
     try {
-      await streamImage(`${instruction}. Edit the supplied photo directly. Preserve its camera, perspective and unchanged architecture. Integrate any selected furniture references faithfully, preserving their recognizable shape, materials, proportions, color and texture. Produce a detailed editorial photograph with warm realistic color, true material response, balanced HDR illumination, controlled highlights, natural shadows and realistic varied greenery. No excess exposure, artificial saturation, strange color casts, fantasy grading, text or logos.`, preview, (image, isFinal) => { if (isFinal) setEditedImage(image); }, [...furnitureReferences, ...(surfaceTexture ? [surfaceTexture] : [])].slice(0, 5));
-    } catch (cause) {
-      setFileError(cause instanceof Error ? cause.message : "The photo edit could not be created.");
-    } finally {
-      setRendering(false);
-    }
+      if (current?.status === "ready") {
+        await streamImage(current.instruction + "\nPreserve: " + current.preserve.join("; ") + ". Edit the current supplied image; preserve all unrequested details. Aim for realistic photographic materials, light and perspective. No text or logos unless requested.", image,
+          (result, final) => { if (final) { setEditedImage(result); setEditPlan(null); setLastInstruction(""); setInput(""); setContextStart(messages.length); } }, refs);
+      } else {
+        const history = current?.history ?? messages.slice(contextStart).filter(m=>m.role==="user" || m.role==="assistant").slice(-6).map(m=>({role:m.role as "user"|"assistant",text:messageText(m).slice(-2000)}));
+        const answers = current ? [...current.answers,{question:current.questions.join("\n"),answer:clarification.trim()}] : [];
+        const prepared = await compressImageDataUrl(image, 3_700_000);
+        if (prepared.length > 3_800_000) throw new Error("Use a smaller photo to review this edit.");
+        const response = await fetch("/api/photo-edit-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:prepared,request:instruction,history,answers,referenceCount:refs.length})});
+        if (!response.ok) throw new Error(await response.text() || "Unable to review this edit.");
+        const plan = await response.json();
+        if (!["ready","clarify"].includes(plan.status) || !Array.isArray(plan.questions) || !Array.isArray(plan.preserve)) throw new Error("The edit review was incomplete. Please retry.");
+        setEditPlan({...plan,request:instruction,image,refs,history,answers}); setClarification("");
+      }
+    } catch(cause) { setFileError(cause instanceof Error ? cause.message : "The edit could not be completed."); }
+    finally { renderingRef.current = false; setRendering(false); }
   }
 
   async function clear() {
+    if (renderingRef.current || busy) return;
+    setEditPlan(null); setClarification(""); setLastInstruction(""); setInput(""); setContextStart(0);
     setMessages([]);
     persistedRef.current.clear();
     if (userId) await supabase.from("photo_ai_messages").delete().eq("user_id", userId);
@@ -155,5 +182,5 @@ function PhotoAIConversation({ userId, initialMessages, input, setInput }: { use
     catch (cause) { setFileError(cause instanceof Error ? cause.message : "The image could not be saved."); }
   }
 
-    return <main className="min-h-screen bg-background"><FormaHeader /><div className={`${PAGE_SHELL} px-5 pt-7`}><BackLink /></div><PageIntro eyebrow="Photo to AI" title="Photo AI chat" description={userId ? "Drag saved furniture into a photo, select surfaces, and render changes through AI chat." : "Upload a photo and describe the changes you want to render."} /><section className={`${PAGE_SHELL} space-y-4 px-5 pb-[calc(23rem+env(safe-area-inset-bottom))]`}><FurnitureLibraryPicker signedIn={signedIn} selected={furnitureReferences} onToggle={(imageUrl) => setFurnitureReferences((current) => current.includes(imageUrl) ? current.filter((item) => item !== imageUrl) : current.length < 5 ? [...current, imageUrl] : current)} />{preview && <SceneComposer sourceImage={editedImage ?? preview} signedIn={signedIn} onUseComposition={(image, instruction, texture) => { setPreview(image); setEditedImage(null); setInput(instruction); setSurfaceTexture(texture); }} />}{editedImage && !rendering && <ShareGeneratedImage key={editedImage} image={editedImage} signedIn={signedIn} />}{editedImage && <AiPlanGenerator sourceImage={editedImage} kind="space" />}<div className="space-y-4">{messages.length === 0 && <><p className="organic-divider py-8 text-center text-sm text-muted-foreground">Upload a room, position furniture, select a material area, or describe changes in chat.</p><ToolInformation sections={photoInformation} /></>}{messages.map((message) => <div key={message.id} className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "ml-auto bg-foreground text-background" : "bg-secondary text-foreground"}`}>{messageImages(message).map((image, index) => <img key={`${image.url}-${index}`} src={image.url} alt="Attached room" className="mb-2 max-h-72 w-full rounded-xl object-cover" />)}{messageText(message)}</div>)}{editedImage && <div className="space-y-2"><img src={editedImage} alt="AI-edited room" className="w-full rounded-2xl border border-border" /><Button type="button" variant="outline" className="w-full" onClick={() => void saveEdit()}><Download />Save to Photos</Button></div>}{status === "submitted" && <div className="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Photo AI is thinking…</div>}{error && <p role="alert" className="text-xs text-destructive">{error.message}</p>}<div ref={endRef} /></div></section><div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-background p-3 md:bottom-0"><div className="mx-auto max-w-xl md:max-w-3xl">{preview && <div className="relative mb-2 w-fit"><img src={preview} alt="Selected attachment" className="h-20 w-20 rounded-xl border border-border object-cover" /><Button type="button" variant="default" size="icon" aria-label="Remove image" className="absolute -right-2 -top-2 size-7 min-h-0 rounded-full" onClick={removeImage}><X className="size-3" /></Button></div>}{storageNotice && <p role="status" className="mb-2 text-xs text-muted-foreground">{storageNotice}</p>}{fileError && <p role="alert" className="mb-2 text-xs text-destructive">{fileError}</p>}<div className="mb-2 flex items-end gap-2"><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => selectImage(event.target.files)} /><Button type="button" variant="ghost" size="icon" aria-label="Attach photo" disabled={busy || rendering} onClick={() => fileRef.current?.click()}><ImagePlus /></Button><Textarea ref={inputRef} autoFocus value={input} maxLength={2000} rows={1} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }} placeholder="Describe your edit…" className="min-h-11 resize-none rounded-2xl" /><Button size="icon" aria-label="Send message" disabled={busy || (!input.trim() && !files?.length)} onClick={() => void submit()}>{busy ? <LoaderCircle className="animate-spin" /> : <Send />}</Button><Button variant="ghost" size="icon" aria-label="Clear conversation" onClick={clear}><Trash2 /></Button></div><Button variant="studio" className="h-11 w-full" disabled={!preview || (input.trim() || lastInstruction).length < 6 || busy || rendering} onClick={() => void renderEdit()}>{rendering ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{rendering ? "Rendering edit…" : "Render this edit"}</Button></div></div><ToolTabBar /></main>;
+    return <main className="min-h-screen bg-background"><FormaHeader /><div className={`${PAGE_SHELL} px-5 pt-7`}><BackLink /></div><PageIntro eyebrow="Photo to AI" title="Photo AI chat" description={userId ? "Drag saved furniture into a photo, select surfaces, and render changes through AI chat." : "Upload a photo and describe the changes you want to render."} /><section className={`${PAGE_SHELL} space-y-4 px-5 pb-[calc(23rem+env(safe-area-inset-bottom))]`}><FurnitureLibraryPicker signedIn={signedIn} selected={furnitureReferences} onToggle={(imageUrl) => setFurnitureReferences((current) => current.includes(imageUrl) ? current.filter((item) => item !== imageUrl) : current.length < 5 ? [...current, imageUrl] : current)} />{preview && <SceneComposer sourceImage={editedImage ?? preview} signedIn={signedIn} onUseComposition={(image, instruction, texture) => { if (renderingRef.current) return; setEditPlan(null); setContextStart(messages.length); setPreview(image); setEditedImage(null); setInput(instruction); setSurfaceTexture(texture); }} />}{editPlan && <section aria-label="Review your edit" className="rounded-2xl border border-border bg-secondary p-5"><h2 className="font-semibold">{editPlan.status === "clarify" ? "A few details before rendering" : "Confirm your edit"}</h2>{editPlan.status === "clarify" ? <><ul className="my-3 list-disc space-y-2 pl-5">{editPlan.questions.map((q:string)=><li key={q}>{q}</li>)}</ul><Textarea aria-label="Answers to edit questions" value={clarification} disabled={rendering} maxLength={2000} onChange={e=>setClarification(e.target.value)} placeholder="Tell us what you want…" /></> : <><p className="mt-3">{editPlan.instruction}</p><p className="mt-2 text-sm text-muted-foreground">Keep unchanged: {editPlan.preserve.join("; ")}</p></>}<p className="mt-3 text-xs text-muted-foreground">No final image is generated until you confirm the edit.</p></section>}{editedImage && !rendering && <ShareGeneratedImage key={editedImage} image={editedImage} signedIn={signedIn} />}{editedImage && <AiPlanGenerator sourceImage={editedImage} kind="space" />}<div className="space-y-4">{messages.length === 0 && <><p className="organic-divider py-8 text-center text-sm text-muted-foreground">Upload a room, position furniture, select a material area, or describe changes in chat.</p><ToolInformation sections={photoInformation} /></>}{messages.map((message) => <div key={message.id} className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "ml-auto bg-foreground text-background" : "bg-secondary text-foreground"}`}>{messageImages(message).map((image, index) => <img key={`${image.url}-${index}`} src={image.url} alt="Attached room" className="mb-2 max-h-72 w-full rounded-xl object-cover" />)}{messageText(message)}</div>)}{editedImage && <div className="space-y-2"><img src={editedImage} alt="AI-edited room" className="w-full rounded-2xl border border-border" /><Button type="button" variant="outline" className="w-full" onClick={() => void saveEdit()}><Download />Save to Photos</Button></div>}{status === "submitted" && <div className="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Photo AI is thinking…</div>}{error && <p role="alert" className="text-xs text-destructive">{error.message}</p>}<div ref={endRef} /></div></section><div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-background p-3 md:bottom-0"><div className="mx-auto max-w-xl md:max-w-3xl">{preview && <div className="relative mb-2 w-fit"><img src={preview} alt="Selected attachment" className="h-20 w-20 rounded-xl border border-border object-cover" /><Button type="button" variant="default" size="icon" aria-label="Remove image" className="absolute -right-2 -top-2 size-7 min-h-0 rounded-full" disabled={rendering} onClick={removeImage}><X className="size-3" /></Button></div>}{storageNotice && <p role="status" className="mb-2 text-xs text-muted-foreground">{storageNotice}</p>}{fileError && <p role="alert" className="mb-2 text-xs text-destructive">{fileError}</p>}<div className="mb-2 flex items-end gap-2"><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => selectImage(event.target.files)} /><Button type="button" variant="ghost" size="icon" aria-label="Attach photo" disabled={busy || rendering} onClick={() => fileRef.current?.click()}><ImagePlus /></Button><Textarea ref={inputRef} autoFocus value={input} maxLength={2000} rows={1} disabled={rendering} onChange={(event) => { setInput(event.target.value); setEditPlan(null); setClarification(""); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); } }} placeholder="Describe your edit…" className="min-h-11 resize-none rounded-2xl" /><Button size="icon" aria-label="Send message" disabled={busy || rendering || (!input.trim() && !files?.length)} onClick={() => void submit()}>{busy ? <LoaderCircle className="animate-spin" /> : <Send />}</Button><Button variant="ghost" size="icon" aria-label="Clear conversation" disabled={rendering || busy} onClick={clear}><Trash2 /></Button></div><Button variant="studio" className="h-11 w-full" disabled={!preview || !(input.trim() || lastInstruction) || busy || rendering || (editPlan?.status === "clarify" && !clarification.trim())} onClick={() => void renderEdit()}>{rendering ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{rendering ? (editPlan?.status === "ready" ? "Rendering edit…" : "Reviewing your edit…") : editPlan?.status === "ready" ? "Render confirmed edit" : editPlan?.status === "clarify" ? "Review my answers" : "Review this edit"}</Button></div></div><ToolTabBar /></main>;
 }
