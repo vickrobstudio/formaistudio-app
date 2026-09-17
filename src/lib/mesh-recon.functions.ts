@@ -10,15 +10,19 @@ import { z } from "zod";
  * server fn (Workers have short request budgets).
  */
 
-const GATEWAY = "https://connector-gateway.lovable.dev/replicate/v1";
+const GATEWAY = "https://api.replicate.com/v1";
 
 function authHeaders() {
-  const lov = process.env.LOVABLE_API_KEY;
-  const rep = process.env.REPLICATE_API_KEY ?? process.env.LOVABLE_CONNECTOR_REPLICATE_API_KEY;
-  if (!lov || !rep) throw new Error("Replicate connector is not linked to this project.");
+  const rep =
+    process.env.REPLICATE_API_TOKEN ??
+    process.env.REPLICATE_API_KEY;
+
+  if (!rep) {
+    throw new Error("Replicate is not configured for this project.");
+  }
+
   return {
-    Authorization: `Bearer ${lov}`,
-    "X-Connection-Api-Key": rep,
+    Authorization: `Bearer ${rep}`,
   } as const;
 }
 
@@ -104,7 +108,7 @@ export const startMeshReconstruction = createServerFn({ method: "POST" })
         if (res.status === 401 || res.status === 403) {
           return {
             ok: false as const,
-            error: "Replicate rejected the API key. Re-link the Replicate connector and try again.",
+            error: "Replicate rejected the API token. Check the Replicate token configured for this project.",
           };
         }
         return { ok: false as const, error: `Replicate rejected the request (${res.status}): ${body.slice(0, 200)}` };
