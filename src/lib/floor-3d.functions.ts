@@ -1972,7 +1972,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
       userContent.push({ type: "image_url", image_url: { url: data.approvedRenderUrl } });
     }
 
-    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       // Buildings with many drawings + Gemini Pro extraction can take minutes;
@@ -2063,7 +2063,7 @@ async function runMultiFloorBuilding(
 
     for (const model of models) {
       try {
-        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
           method: "POST",
           headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
           signal: AbortSignal.timeout(timeoutMs),
@@ -2543,7 +2543,7 @@ Rules:
       if (url === data.fileDataUrl) continue;
       userContent.push({ type: "image_url", image_url: { url } });
     }
-    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(2 * 60 * 1000),
@@ -2642,7 +2642,7 @@ Rules:
 - Ignore title blocks, dimension text, room labels, north arrows and legends — but DO trace the plan itself even when those decorations are also visible.
 - Return ONLY the JSON object, no comments, no markdown.`;
 
-    const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: { "Lovable-API-Key": key, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(5 * 60 * 1000),
