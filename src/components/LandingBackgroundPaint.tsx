@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import edenMobile from "@/assets/eden-mobile.png.asset.json";
-import edenIpad from "@/assets/eden-ipad.png.asset.json";
-import edenDesktop from "@/assets/eden-desktop.png.asset.json";
+import edenMobile from "@/assets/recovered/eden-mobile.png";
+import edenIpad from "@/assets/recovered/eden-tablet.png";
+import edenDesktop from "@/assets/recovered/eden-desktop.png";
 
 export function LandingBackgroundPaint({ enabled }: { enabled: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,9 +80,9 @@ export function LandingBackgroundPaint({ enabled }: { enabled: boolean }) {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 size-full overflow-hidden">
       <picture>
-        <source media="(min-width: 1024px)" srcSet={edenDesktop.url} />
-        <source media="(min-width: 640px)" srcSet={edenIpad.url} />
-        <img src={edenMobile.url} alt="" className="absolute inset-0 size-full object-cover" draggable={false} />
+        <source media="(min-width: 1024px)" srcSet={edenDesktop} />
+        <source media="(min-width: 640px)" srcSet={edenIpad} />
+        <img src={edenMobile} alt="" className="absolute inset-0 size-full object-cover" draggable={false} />
       </picture>
       <canvas ref={canvasRef} className="absolute inset-0 size-full" />
     </div>

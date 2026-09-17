@@ -84,7 +84,7 @@ html.keyboard-open {
 
 @font-face {
   font-family: "SF Pro";
-  src: url("/__l5e/assets-v1/8c6f0082-510b-423e-98b2-4a6600695ea4/SF-Pro.ttf") format("truetype");
+  src: url("./assets/recovered/SF-Pro-latin.woff2") format("woff2");
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;

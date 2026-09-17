@@ -1,4 +1,4 @@
-import logoAsset from "@/assets/formai-logo-bubble-cut.png.asset.json";
+import logoAsset from "@/assets/recovered/formai-logo-black.png";
 
 export function LandingPaintLogo() {
   return (
@@ -7,7 +7,7 @@ export function LandingPaintLogo() {
       style={{ width: "50vmin", height: "50vmin" }}
     >
       <img
-        src={logoAsset.url}
+        src={logoAsset}
         alt="FORM AI"
         draggable={false}
         className="absolute inset-0 size-full object-contain"
