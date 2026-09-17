@@ -17,19 +17,17 @@ type GenerateFurniture3DResult =
   | { ok: true; modelPath: string; modelUrl: string }
   | { ok: false; error: string };
 
-const gateway = "https://connector-gateway.lovable.dev/replicate/v1";
+const gateway = "https://api.replicate.com/v1";
 
 export const generateFurniture3D = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => GenerateFurniture3DInput.parse(input))
   .handler(async ({ data, context }): Promise<GenerateFurniture3DResult> => {
-    const lovableKey = process.env.LOVABLE_API_KEY;
     const replicateKey = process.env.REPLICATE_API_KEY;
-    if (!lovableKey || !replicateKey) return { ok: false, error: "The 3D generation connection is unavailable." };
+    if (!replicateKey) return { ok: false, error: "The 3D generation connection is unavailable." };
 
     const headers = {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": replicateKey,
+      Authorization: `Bearer ${replicateKey}`,
       "Content-Type": "application/json",
       Prefer: "wait=60",
     };
