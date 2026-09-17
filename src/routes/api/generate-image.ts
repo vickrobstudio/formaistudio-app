@@ -48,7 +48,7 @@ const openaiKey = process.env.OPENAI_API_KEY;
         const fidelityLock = hasSource
           ? " ABSOLUTE PERSPECTIVE & LAYOUT FIDELITY (NON-NEGOTIABLE): the FIRST attached image is the binding spatial reference. Lock the camera position, focal length, framing, viewing angle, horizon line and every vanishing point to that image exactly. Reproduce every perspective line, wall edge, floor edge, ceiling edge, window opening, door opening, structural element and architectural line in the same direction, length, slope and convergence as the source — do not redraw, straighten, re-angle, re-scale or re-compose them. Preserve the exact shape, silhouette, proportions, footprint and orientation of every piece of furniture, fixture, accessory and object visible in the source, and keep each one in the SAME location, on the same wall and at the same depth as in the source. Do not add, remove, move, rotate, resize, swap or restyle any object. Only upgrade materials, lighting and finish quality to photoreal — geometry, layout and perspective stay 100% identical to the source." : "";
         const renderPrompt = `${result.data.prompt}. ${editorialStandard} Coherent perspective and construction-ready spatial logic, no text, no logos, no watermarks.${fidelityLock}`;
-        let endpoint = "https://ai.gateway.lovable.dev/v1/images/generations";
+        let endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
         let body: BodyInit;
         let contentType: string | undefined = "application/json";
 
@@ -69,21 +69,17 @@ const openaiKey = process.env.OPENAI_API_KEY;
           }
           endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
           body = JSON.stringify({
-            model: "gemini-3-pro-image-preview",
-            modalities: ["image", "text"],
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: renderPrompt },
-                  ...references.map((image) => ({
-                    type: "image_url" as const,
-                    image_url: { url: image },
-                  })),
-                ],
-              },
-            ],
-          });
+  model: "gemini-3-pro-image-preview",
+  modalities: ["image", "text"],
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: renderPrompt },
+      ],
+    },
+  ],
+});
         } else {
           body = JSON.stringify({
             model: "openai/gpt-image-2",
