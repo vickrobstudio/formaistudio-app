@@ -18,11 +18,11 @@ export interface Plan {
 export const PLANS: Plan[] = [
   {
     id: "pro_monthly",
-    name: "FormAI Pro",
+    name: "FormAI Studio Pro",
     priceUsd: 45,
     credits: 2000,
     tools: ["/2d-to-3d", "/studio", "/model-to-ai", "/ai-edits", "/photo-to-ai", "/ai-to-video"],
-    blurb: "Every FormAI tool unlocked — the complete suite.",
+    blurb: "Every FormAI Studio tool unlocked — the complete suite.",
   },
   {
     id: "tool_2d_to_3d_monthly",

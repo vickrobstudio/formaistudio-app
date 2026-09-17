@@ -75,9 +75,6 @@ export const shareToMyInstagram = createServerFn({ method: "POST" })
 export const shareToStudioInstagram = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => ShareToMyInstagramInput.parse(input))
-  .handler(async ({ data, context }) => {
-    const { data: profile } = await context.supabase.from("profiles").select("username").eq("id", context.userId).maybeSingle();
-    const credit = profile?.username ? `\n\nBy ${profile.username} on FormAI Studio.` : "\n\nMade with FormAI Studio.";
-    await postToStudioInstagramOrThrow(context.supabase, context.userId, data.imageUrl, `${data.caption}${credit}`.slice(0, 2200));
-    return { posted: true };
+  .handler(async () => {
+    throw new Error("Submit this creation to the private Instagram approval queue first.");
   });

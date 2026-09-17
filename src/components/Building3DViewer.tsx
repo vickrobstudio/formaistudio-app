@@ -1,3 +1,4 @@
+import { cloneForUSDZ, disposeUSDZCopy } from "@/lib/usdz-scene";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls, OrthographicCamera, TransformControls } from "@react-three/drei";
@@ -27,6 +28,7 @@ type RawPart = {
   label: string;
   daeDataUrl: string;
   objDataUrl: string;
+  mtlDataUrl?: string;
   fbxDataUrl: string;
   glbDataUrl?: string;
 };
@@ -373,6 +375,29 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
   const [orbitEnabled, setOrbitEnabled] = useState(true);
   const [downloadFormat, setDownloadFormat] = useState<"dae" | "obj" | "fbx" | "glb">("dae");
   const [loadError, setLoadError] = useState("");
+  const [usdzUrl, setUsdzUrl] = useState("");
+  const [usdzBusy, setUsdzBusy] = useState(false);
+  const [usdzError, setUsdzError] = useState("");
+  const [reviewed, setReviewed] = useState(false);
+  useEffect(() => { setReviewed(false); setUsdzUrl(""); }, [parts, overrides]);
+  useEffect(() => () => { if (usdzUrl) URL.revokeObjectURL(usdzUrl); }, [usdzUrl]);
+  async function prepareUSDZ() {
+    setUsdzBusy(true); setUsdzError("");
+    try {
+      const { USDZExporter } = await import("three/addons/exporters/USDZExporter.js");
+      const scene = new THREE.Scene();
+      const model = new THREE.Group();
+      // Display groups already convert Z-up COLLADA into Three.js Y-up.
+      for (const part of loaded) model.add(cloneForUSDZ(part.group));
+      model.scale.setScalar(outputUnits === "feet" ? 0.3048 : 1);
+      scene.add(model);
+      scene.updateMatrixWorld(true);
+      const data = await new USDZExporter().parseAsync(scene, { onlyVisible: true, quickLookCompatible: true }).finally(() => disposeUSDZCopy(model));
+      setUsdzUrl(URL.createObjectURL(new Blob([data], { type: "model/vnd.usdz+zip" })));
+    } catch (error) {
+      setUsdzError(error instanceof Error ? error.message : "Could not prepare USDZ preview.");
+    } finally { setUsdzBusy(false); }
+  }
   const orbitRef = useRef<unknown>(null);
 
   useEffect(() => {
@@ -467,19 +492,24 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
     });
   };
 
-  const downloadPart = (part: LoadedPart, raw: RawPart) => {
+  const downloadPart = (part: LoadedPart, raw: RawPart, materialsOnly = false) => {
+    if (!reviewed) return;
     const slug = part.label?.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "part";
     let prefix: string;
     if (part.index === -1) prefix = "00_site";
     else if (part.index === 9999) prefix = "99_roof";
     else prefix = `${String(part.index + 1).padStart(2, "0")}_floor`;
-    const filename = `${prefix}_${slug}.${downloadFormat}`;
+    const baseName = `${prefix}_${slug}`;
+    const filename = `${baseName}.${materialsOnly ? "mtl" : downloadFormat}`;
     let href: string;
-    if (downloadFormat === "dae") {
+    if (materialsOnly) {
+      href = raw.mtlDataUrl ?? "";
+    } else if (downloadFormat === "dae") {
       const text = rewriteDae(part, overrides);
       href = URL.createObjectURL(new Blob([text], { type: "model/vnd.collada+xml" }));
     } else if (downloadFormat === "obj") {
-      href = raw.objDataUrl;
+      const text = dataUrlToText(raw.objDataUrl).replace(/^mtllib .*$/m, `mtllib ${baseName}.mtl`);
+      href = URL.createObjectURL(new Blob([text], { type: "model/obj" }));
     } else if (downloadFormat === "glb") {
       href = raw.glbDataUrl ?? "";
     } else {
@@ -489,7 +519,7 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
     const a = document.createElement("a");
     a.href = href; a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
-    if (downloadFormat === "dae") setTimeout(() => URL.revokeObjectURL(href), 1000);
+    if (href.startsWith("blob:")) setTimeout(() => URL.revokeObjectURL(href), 1000);
   };
 
   const toggleCollapsed = (key: string) => setCollapsed((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
@@ -622,7 +652,17 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
         </div>
       </div>
 
-      {loaded.length > 0 && (
+      {loaded.length > 0 && <div className="space-y-3 rounded-xl border border-border p-4">
+        <p className="text-sm">Drag to rotate and inspect the model. Check walls, doors, windows and scale before downloading.</p>
+        <Button disabled={usdzBusy} onClick={() => void prepareUSDZ()}>{usdzBusy ? "Preparing USDZ…" : "Prepare USDZ preview"}</Button>
+        {usdzUrl && <div className="flex flex-wrap gap-3">
+          <a rel="ar" href={usdzUrl} className="inline-flex items-center gap-2 underline"><img src="/favicon.ico" alt="" className="h-6 w-6" />Open USDZ on iPhone / iPad</a>
+          <a href={usdzUrl} download="formai-model.usdz" className="underline">Save USDZ</a>
+        </div>}
+        {usdzError && <p role="alert">{usdzError}</p>}
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />I inspected the 3D model and approve it for export.</label>
+      </div>}
+      {loaded.length > 0 && reviewed && (
         <div className="rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Download by part</p>
           <p className="mt-1 text-[10px] text-muted-foreground">{outputUnits} · DAE preserves colour, visibility, position and rotation edits · OBJ / FBX export original geometry.</p>
@@ -641,10 +681,13 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
               else if (part.index === 9999) title = "Roof";
               else title = `Floor ${String(part.index + 1).padStart(2, "0")} — ${part.label}`;
               return (
-                <Button key={part.index} variant="default" className="h-11 w-full justify-between" onClick={() => downloadPart(part, raw)}>
+                <div key={part.index} className="space-y-2"><Button variant="default" className="h-11 w-full justify-between" onClick={() => downloadPart(part, raw)}>
                   <span>{title}</span>
                   <Download />
                 </Button>
+                {downloadFormat === "obj" && raw.mtlDataUrl && <Button variant="outline" className="w-full" onClick={() => downloadPart(part, raw, true)}>Download materials (.mtl) — {title}</Button>}
+                {downloadFormat === "obj" && <p className="text-xs text-muted-foreground">Keep the OBJ and MTL files together in the same folder before importing.</p>}
+                </div>
               );
             })}
           </div>

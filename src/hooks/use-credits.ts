@@ -1,47 +1,25 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { getGuestCredits, spendGuestCredit } from "@/lib/guest-trial";
 import { supabase } from "@/integrations/supabase/client";
-import { consumeAccountCredit } from "@/lib/credits.functions";
-import { hasActiveIapEntitlement, isNativeIOS } from "@/lib/iap";
+import { getCreditAccount } from "@/lib/credits.functions";
 
 export function useCredits() {
-  const consumeAccountCreditFn = useServerFn(consumeAccountCredit);
-  const [credits, setCredits] = useState(4);
-  const [signedIn, setSignedIn] = useState(false);
-  const [vip, setVip] = useState(false);
-
-  useEffect(() => {
-    void (async () => {
-      // A subscription bought on this device unlocks everything even without
-      // an account — so members are never forced to register to use what
-      // they paid for (Apple 5.1.1). Login only adds cross-device sync.
-      const deviceSub = isNativeIOS() ? await hasActiveIapEntitlement() : false;
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) { setCredits(getGuestCredits()); if (deviceSub) setVip(true); return; }
-      setSignedIn(true);
-      const { data: profile } = await supabase.from("profiles").select("starter_credits, has_free_access").eq("id", data.user.id).single();
-      if (profile) { setCredits(profile.starter_credits); setVip(profile.has_free_access || deviceSub); }
-      else if (deviceSub) setVip(true);
-    })();
-  }, []);
-
-  async function consume() {
-    if (vip) return true;
-    if (!signedIn) {
-      const remaining = spendGuestCredit();
-      if (remaining === null) return false;
-      setCredits(remaining);
-      return true;
-    }
-    try {
-      const { remaining } = await consumeAccountCreditFn();
-      setCredits(remaining);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  return { credits, signedIn, vip, consume };
+  const readAccount = useServerFn(getCreditAccount);
+  const [credits,setCredits] = useState(0);
+  const [signedIn,setSignedIn] = useState(false);
+  const [vip,setVip] = useState(false);
+  const refresh = useCallback(async () => {
+    const {data} = await supabase.auth.getSession();
+    setSignedIn(!!data.session && !data.session.user.is_anonymous);
+    if (!data.session) {setCredits(0);setVip(false);return false;}
+    try {const account=await readAccount();setCredits(account.credits);setVip(account.owner);return account.owner || account.credits>0;}
+    catch {setCredits(0);setVip(false);return false;}
+  },[readAccount]);
+  useEffect(()=>{
+    const update=()=>{void refresh();};update();
+    const {data}=supabase.auth.onAuthStateChange(()=>{queueMicrotask(update);});
+    window.addEventListener("focus",update);window.addEventListener("formai-credits-changed",update);
+    return ()=>{data.subscription.unsubscribe();window.removeEventListener("focus",update);window.removeEventListener("formai-credits-changed",update);};
+  },[refresh]);
+  return {credits,signedIn,vip,consume:refresh};
 }

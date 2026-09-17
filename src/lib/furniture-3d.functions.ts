@@ -33,8 +33,9 @@ export const generateFurniture3D = createServerFn({ method: "POST" })
     };
     let created: Response | null = null;
     let createDetail = "";
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      created = await fetch(`${gateway}/models/tencent/hunyuan-3d-3.1/predictions`, {
+    for (let attempt = 0; attempt < 1; attempt += 1) {
+      const { meteredFetch } = await import("./generation-billing.server");
+      created = await meteredFetch("mesh", `${gateway}/models/tencent/hunyuan-3d-3.1/predictions`, {
         method: "POST",
         headers,
         body: JSON.stringify({ input: { image: data.imageDataUrl, enable_pbr: true, face_count: 500000, generate_type: "Normal" } }),

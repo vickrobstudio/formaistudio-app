@@ -1,77 +1,30 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-
-/**
- * SEO landing page targeting "floor plan to 3d" (Semrush: 170/mo, KDI 26 — easy).
- * Funnels the visitor to /2d-to-3d where the actual tool lives.
- */
+const title = "2D Floor Plan to 3D Model Converter | FormAI Studio";
+const description = "Explore AI-assisted floor plan conversion. Upload a plan, review the detected areas, set a known measurement and inspect your 3D model before export.";
+const faqs = [
+  ["What can I upload?", "Start with a clear PDF, PNG or JPG floor plan. Straight, high-contrast drawings with readable measurements are easier to review than blurred or angled photos."],
+  ["How do I set the scale?", "In the review editor, select two points and enter their known distance in meters or feet. Check the resulting dimensions before using the model."],
+  ["Can I correct what the AI detects?", "Review the detected parts in 2D before building. Correct missing or misplaced regions, then rotate the 3D preview to inspect the result."],
+  ["Which files can I export?", "The converter provides model export options including DAE and OBJ. Check the available formats in the tool and test the file in your destination software."],
+  ["Is the model construction-ready?", "No. This is an AI-assisted visualization workflow. Detection can miss openings or misread walls; verify geometry and dimensions independently before technical or construction use."],
+  ["Do I need to download the app?", "You can try FormAI Studio in your web browser. Check the pricing page for current plans and included tools."]
+];
 export const Route = createFileRoute("/floor-plan-to-3d")({
-  head: () => ({
-    meta: [
-      { title: "Floor Plan to 3D — Convert 2D Plans to 3D Models | FormAI" },
-      { name: "description", content: "Turn any 2D floor plan into an editable 3D model with AI. Upload a PDF, JPG or PNG and download a Collada .dae model with true plan dimensions in seconds." },
-      { property: "og:title", content: "Floor Plan to 3D — AI Converter" },
-      { property: "og:description", content: "Turn any 2D floor plan into an editable 3D Collada .dae model with AI. Real dimensions, fast, no CAD skills required." },
-      { property: "og:url", content: "https://formaistudio.app/floor-plan-to-3d" },
-      { property: "og:type", content: "website" },
-    ],
-    links: [{ rel: "canonical", href: "https://formaistudio.app/floor-plan-to-3d" }],
-    scripts: [{
-      type: "application/ld+json",
-      children: JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        name: "FormAI Floor Plan to 3D",
-        applicationCategory: "DesignApplication",
-        operatingSystem: "Web",
-        description: "AI-powered tool that converts 2D floor plans into editable 3D Collada .dae models with accurate dimensions.",
-        url: "https://formaistudio.app/floor-plan-to-3d",
-      }),
-    }],
-  }),
-  component: FloorPlanTo3DLanding,
+  head:()=>({meta:[{title},{name:"description",content:description},{property:"og:title",content:title},{property:"og:description",content:description},{property:"og:url",content:"https://www.formaistudio.app/floor-plan-to-3d"}],
+    links:[{rel:"canonical",href:"https://www.formaistudio.app/floor-plan-to-3d"}],
+    scripts:[{type:"application/ld+json",children:JSON.stringify({"@context":"https://schema.org","@type":"SoftwareApplication",name:"FormAI Studio",applicationCategory:"DesignApplication",operatingSystem:"Web",url:"https://www.formaistudio.app/floor-plan-to-3d",description})}]}),
+  component:FloorPlanLanding
 });
-
-function FloorPlanTo3DLanding() {
-  return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl bg-background px-5 py-16">
-      <article className="mx-auto max-w-3xl">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">AI Floor Plan Converter</p>
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">Floor plan to 3D, in seconds</h1>
-        <p className="mt-5 text-lg text-muted-foreground">
-          Upload any 2D floor plan — PDF, JPG or PNG — and FormAI rebuilds it as a fully editable 3D model. Walls, openings and printed dimensions are read directly from the drawing, so the exported model matches your real-world measurements.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link to="/2d-to-3d" className="inline-flex h-12 items-center rounded-full bg-foreground px-6 text-sm font-semibold text-background hover:opacity-90">Convert my floor plan</Link>
-          <Link to="/studio" className="inline-flex h-12 items-center rounded-full border border-border px-6 text-sm font-semibold text-foreground hover:bg-accent">Try the studio</Link>
-        </div>
-
-        <section className="mt-14">
-          <h2 className="text-2xl font-semibold text-foreground">How the AI floor plan to 3D converter works</h2>
-          <ol className="mt-5 space-y-3 text-sm text-muted-foreground">
-            <li><strong className="text-foreground">1 · Upload your plan</strong> — drag in a dimensioned PDF, JPG or PNG and pick your units (meters or feet & inches).</li>
-            <li><strong className="text-foreground">2 · AI reads every dimension</strong> — walls, openings and printed measurements are parsed automatically.</li>
-            <li><strong className="text-foreground">3 · Approve the photoreal render</strong> — see a 1:1 rendering before the mesh is built.</li>
-            <li><strong className="text-foreground">4 · Live 3D preview</strong> — rotate, zoom and pan the reconstructed model in your browser.</li>
-            <li><strong className="text-foreground">5 · Download a Collada .dae</strong> — opens directly in SketchUp, Blender, Rhino and AutoCAD.</li>
-          </ol>
-        </section>
-
-        <section className="mt-14">
-          <h2 className="text-2xl font-semibold text-foreground">Why architects and designers use FormAI</h2>
-          <ul className="mt-5 grid gap-4 text-sm text-muted-foreground sm:grid-cols-2">
-            <li><strong className="text-foreground">True dimensions.</strong> The exported .dae uses the width, depth and height parsed from your plan — not a generic unit cube.</li>
-            <li><strong className="text-foreground">Editable output.</strong> Grouped by material so SketchUp and Blender show separate layers you can re-skin.</li>
-            <li><strong className="text-foreground">No CAD skills required.</strong> If you can upload a PDF, you can produce a 3D model.</li>
-            <li><strong className="text-foreground">Furniture too.</strong> The same flow turns furniture drawings into reconstructed 3D meshes.</li>
-          </ul>
-        </section>
-
-        <section className="mt-14 rounded-3xl border border-border p-8 text-center">
-          <h2 className="text-2xl font-semibold text-foreground">Convert your first floor plan free</h2>
-          <p className="mt-3 text-sm text-muted-foreground">Upload a plan and download an editable .dae model in minutes.</p>
-          <Link to="/2d-to-3d" className="mt-6 inline-flex h-12 items-center rounded-full bg-foreground px-6 text-sm font-semibold text-background hover:opacity-90">Open the converter</Link>
-        </section>
-      </article>
-    </main>
-  );
-}
+function FloorPlanLanding(){return <main className="min-h-screen bg-background px-6 py-10 text-foreground"><article className="mx-auto max-w-5xl">
+  <nav aria-label="Main" className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6"><Link to="/" className="font-semibold">FormAI Studio</Link><div className="flex flex-wrap items-center gap-5 text-sm"><Link to="/feed" className="inline-flex min-h-11 items-center">Home</Link><Link to="/tools" className="inline-flex min-h-11 items-center">Tools</Link><Link to="/pricing">Plans</Link><Link to="/auth">Sign in</Link></div></nav>
+  <section className="py-16 md:py-24"><p className="text-xs uppercase tracking-widest">For architects and interior designers · Beta</p><h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">Turn a 2D floor plan into a 3D starting point.</h1><p className="mt-6 max-w-2xl text-lg text-muted-foreground">Bring your drawing into an AI-assisted workflow. Review the detected areas, calibrate a known measurement and inspect the model from every angle before you export.</p><div className="mt-8 flex flex-wrap gap-3"><Link to="/2d-to-3d" className="rounded-full bg-foreground px-6 py-4 font-semibold text-background">Try your floor plan</Link><Link to="/pricing" className="rounded-full border border-border px-6 py-4">Compare plans</Link></div><p className="mt-4 text-sm text-muted-foreground">Works in your browser. Review every result before using it.</p></section>
+  <section className="border-t border-border py-12"><h2 className="text-3xl font-semibold">From drawing to a model you can inspect</h2><ol className="mt-8 grid gap-6 md:grid-cols-3">{[
+    ["1. Upload and review","Use a clear plan. Inspect the 2D parts and correct the detection before building."],
+    ["2. Set a real measurement","Mark two points with a known distance. Choose meters or feet and check the scale."],
+    ["3. Rotate and export","Look for missing openings, misplaced walls and scale errors in the live 3D preview. Export only after reviewing."]
+  ].map(([h,p])=><li key={h} className="rounded-2xl border border-border p-6"><h3 className="font-semibold">{h}</h3><p className="mt-3 text-muted-foreground">{p}</p></li>)}</ol></section>
+  <section className="py-12"><h2 className="text-3xl font-semibold">Make your next design conversation visual</h2><p className="mt-5 max-w-3xl text-muted-foreground">Explore an early spatial idea, compare a layout or prepare a visual discussion with a client. Continue with <Link to="/studio" className="underline">Studio AI</Link> for concept images or <Link to="/photo-to-ai" className="underline">Photo AI</Link> for edits to an existing room photo. AI outputs need human review; a realistic image is not proof of geometric accuracy.</p></section>
+  <section className="border-t border-border py-12"><h2 className="text-3xl font-semibold">Questions before you start</h2><div className="mt-6 divide-y divide-border">{faqs.map(([q,a])=><details key={q} className="py-5"><summary className="cursor-pointer font-medium">{q}</summary><p className="mt-3 max-w-3xl text-muted-foreground">{a}</p></details>)}</div></section>
+  <section className="rounded-3xl border border-border p-8 md:p-12"><h2 className="text-3xl font-semibold">Start with one plan. Evaluate the result.</h2><p className="mt-4 text-muted-foreground">Try your own drawing before choosing a subscription. Review the current tools and allowances on the pricing page.</p><div className="mt-6 flex flex-wrap gap-6"><Link to="/2d-to-3d" className="font-semibold underline">Open the 2D to 3D tool</Link><Link to="/pricing" className="underline">See subscription plans</Link></div></section>
+  <footer className="mt-14 flex flex-wrap gap-5 text-sm text-muted-foreground"><span>FormAI Studio · VICK ROB, INC</span><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/contact">Contact</Link></footer>
+</article></main>}

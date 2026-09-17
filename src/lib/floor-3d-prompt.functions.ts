@@ -56,8 +56,8 @@ export const buildMasterPrompt = createServerFn({ method: "POST" })
       }
     }
 
-    const { claudeExtractJson } = await import("./claude.server");
-    const extraction = await claudeExtractJson({ parts: userContent, maxTokens: 4000 });
+    const { openAIExtractJson } = await import("./openai-extract.server");
+    const extraction = await openAIExtractJson({ parts: userContent, maxTokens: 4000 });
     if (!extraction.ok) {
       console.error("master-prompt failed", extraction.status, extraction.error.slice(0, 400));
       return { ok: false, error: extraction.error };

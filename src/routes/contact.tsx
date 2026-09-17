@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { LegalPage, LegalSection } from "@/components/LegalPage";
 
 export const Route = createFileRoute("/contact")({
-  head: () => ({ meta: [{ title: "Contact — FormAI STUDIO" }, { name: "description", content: "Contact FormAI STUDIO about support, privacy, billing, or account questions." }, { property: "og:title", content: "Contact FormAI STUDIO" }, { property: "og:description", content: "Get help with FormAI STUDIO support, privacy, billing, and account questions." }] }),
+  head: () => ({ meta: [{ title: "Contact — FormAI Studio" }, { name: "description", content: "Contact FormAI Studio about support, privacy, billing, or account questions." }, { property: "og:title", content: "Contact FormAI Studio" }, { property: "og:description", content: "Get help with FormAI Studio support, privacy, billing, and account questions." }] }),
   component: ContactPage,
 });
 

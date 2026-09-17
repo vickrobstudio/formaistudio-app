@@ -36,7 +36,7 @@ export function installIosServerFnBridge(): void {
       // Only rewrite same-origin requests that target a forwarded prefix.
       const sameOrigin = url.origin === window.location.origin;
       const shouldForward =
-        sameOrigin && FORWARD_PREFIXES.some((p) => url.pathname.startsWith(p));
+        sameOrigin && FORWARD_PREFIXES.some((p) => (url.pathname === p || url.pathname.startsWith(`${p}/`)));
 
       if (shouldForward) {
         const target = new URL(API_ORIGIN);
@@ -56,8 +56,15 @@ export function installIosServerFnBridge(): void {
           mode: "cors",
         };
 
-        if (input instanceof Request && !init) {
-          return originalFetch(new Request(target.toString(), input));
+        if (input instanceof Request) {
+          // Apply caller overrides first, then preserve method, body and signal
+          // while changing the destination and native transport settings.
+          const request = new Request(input, init);
+          return originalFetch(new Request(target.toString(), request), {
+            headers,
+            credentials: "omit",
+            mode: "cors",
+          });
         }
         return originalFetch(target.toString(), forwardedInit);
       }

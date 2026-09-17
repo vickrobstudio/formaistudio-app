@@ -6,7 +6,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 export const Route = createFileRoute("/ai-interior-rendering")({
   head: () => ({
     meta: [
-      { title: "AI Interior Rendering — Photoreal Interiors in Seconds | FormAI" },
+      { title: "AI Interior Rendering — Photoreal Interiors in Seconds | FormAI Studio" },
       { name: "description", content: "AI interior rendering for designers and homeowners. Upload a room photo, sketch or floor plan and get an 8K photorealistic interior render — warm light, real materials, editorial quality." },
       { property: "og:title", content: "AI Interior Rendering — Photoreal Interiors Fast" },
       { property: "og:description", content: "Upload a room photo, sketch or floor plan and get an 8K photorealistic interior render in seconds." },
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/ai-interior-rendering")({
       children: JSON.stringify({
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        name: "FormAI Interior Rendering",
+        name: "FormAI Studio Interior Rendering",
         applicationCategory: "DesignApplication",
         operatingSystem: "Web",
         description: "AI interior rendering studio that turns room photos, sketches and floor plans into 8K photorealistic interior renderings.",
@@ -37,7 +37,7 @@ function AiInteriorRenderingLanding() {
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">AI Interior Rendering</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">AI interior rendering, editorial quality</h1>
         <p className="mt-5 text-lg text-muted-foreground">
-          Upload a room photo, sketch or floor plan and FormAI generates an 8K photorealistic interior render — warm HDR light, accurate materials and the polished feel of a luxury architectural shoot.
+          Upload a room photo, sketch or floor plan and FormAI Studio generates an 8K photorealistic interior render — warm HDR light, accurate materials and the polished feel of a luxury architectural shoot.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Link to="/studio" className="inline-flex h-12 items-center rounded-full bg-foreground px-6 text-sm font-semibold text-background hover:opacity-90">Render an interior</Link>
@@ -55,7 +55,7 @@ function AiInteriorRenderingLanding() {
         </section>
 
         <section className="mt-14">
-          <h2 className="text-2xl font-semibold text-foreground">How AI interior rendering works in FormAI</h2>
+          <h2 className="text-2xl font-semibold text-foreground">How AI interior rendering works in FormAI Studio</h2>
           <ol className="mt-5 space-y-3 text-sm text-muted-foreground">
             <li><strong className="text-foreground">1 · Upload.</strong> A photo of the room, a sketch, or a 2D floor plan.</li>
             <li><strong className="text-foreground">2 · Describe the look.</strong> Style, mood, materials — in plain English.</li>

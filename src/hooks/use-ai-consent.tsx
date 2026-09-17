@@ -1,11 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 
 // Apple 5.1.2: before sending a user's content to a third-party AI service we
 // must disclose what is sent, who it goes to, and obtain permission. Consent
 // is remembered on the device so it's asked once.
-const CONSENT_KEY = "formai-ai-consent-v1";
+const CONSENT_KEY = "formai-ai-consent-openai-v2";
 
 export function hasAiConsent(): boolean {
   if (typeof window === "undefined") return false;
@@ -25,9 +25,20 @@ function rememberAiConsent(): void {
 export function useAiConsentGate() {
   const [open, setOpen] = useState(false);
   const resolverRef = useRef<((value: boolean) => void) | null>(null);
+  const pendingRef = useRef(false);
+
+  useEffect(() => () => {
+    resolverRef.current?.(false);
+    resolverRef.current = null;
+    pendingRef.current = false;
+  }, []);
 
   const ensureConsent = useCallback((): Promise<boolean> => {
     if (hasAiConsent()) return Promise.resolve(true);
+    // Ignore repeated clicks while permission is pending. Only the original
+    // action may continue, so accepting cannot trigger duplicate generations.
+    if (pendingRef.current) return Promise.resolve(false);
+    pendingRef.current = true;
     setOpen(true);
     return new Promise<boolean>((resolve) => { resolverRef.current = resolve; });
   }, []);
@@ -37,6 +48,7 @@ export function useAiConsentGate() {
     if (value) rememberAiConsent();
     resolverRef.current?.(value);
     resolverRef.current = null;
+    pendingRef.current = false;
   };
 
   const dialog = open ? (
@@ -44,10 +56,11 @@ export function useAiConsentGate() {
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-sm text-foreground">
         <h2 className="text-lg font-semibold">Before you continue</h2>
         <p className="mt-3 text-muted-foreground">
-          To create your result, FormAI sends the images, plans or photos you upload and the text you
-          enter to third-party AI providers — <b>Anthropic (Claude)</b>, <b>Google (Gemini)</b> and{" "}
-          <b>Replicate</b> — which process them to generate your output. Your content is used only to
-          produce your result and is not used to train their models.
+          To create your result, FormAI Studio sends the images, plans or photos you upload and the text you
+          enter to <b>OpenAI</b> for image generation and drawing analysis. If you choose mesh
+          reconstruction, the selected images are sent to <b>Replicate</b>. These providers process
+          the selected content to produce your result. Do not upload confidential material unless
+          you have permission to share it with the provider.
         </p>
         <p className="mt-3 text-muted-foreground">
           See our <Link to="/privacy" className="underline">Privacy Policy</Link> for what is collected,

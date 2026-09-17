@@ -3,6 +3,7 @@ import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { lstat, readlink } from "node:fs/promises";
 
 // BUILD_TARGET=ios switches the build into a static SPA bundle that ships
 // inside the iOS .ipa (loaded by Capacitor's WKWebView, no website fetch on
@@ -41,6 +42,12 @@ export default defineConfig(async ({ command }) => {
     const { nitro } = await import("nitro/vite");
     plugins.push(nitro({
       preset: "vercel",
+      // On Windows a regular ancestor directory can return EPERM to readlink.
+      // Inspect its type first; real symlinks and all access errors still use
+      // the normal filesystem behavior. Never suppress a failed lstat.
+      ...(process.platform === "win32" ? {
+        traceOpts: { nft: { readlink: async (path: string) => (await lstat(path)).isSymbolicLink() ? readlink(path) : null } },
+      } : {}),
       // Claude floor-plan analyses can run for minutes; without this Vercel
       // kills the function at its short default and the 2D→3D tool fails.
       vercel: { functions: { maxDuration: 300 } },

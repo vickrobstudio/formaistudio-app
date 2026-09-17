@@ -2,10 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Box, FileImage, FolderOpen } from "lucide-react";
-import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { BackLink, FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { listProjects } from "@/lib/projects.functions";
 import { listFavoriteCreations } from "@/lib/feed.functions";
-export const Route = createFileRoute("/_authenticated/cloud")({ head: () => ({ meta: [{ title: "My Cloud — FormAI STUDIO" }, { name: "description", content: "Your saved AI designs, products and materials." }, { property: "og:title", content: "My Cloud" }, { property: "og:description", content: "Access saved designs and creative assets." }] }), component: CloudPage });
+export const Route = createFileRoute("/_authenticated/cloud")({ head: () => ({ meta: [{ title: "My Cloud — FormAI Studio" }, { name: "description", content: "Your saved AI designs, products and materials." }, { property: "og:title", content: "My Cloud" }, { property: "og:description", content: "Access saved designs and creative assets." }] }), component: CloudPage });
 function CloudPage() {
   const fetchProjects = useServerFn(listProjects);
   const fetchFavorites = useServerFn(listFavoriteCreations);

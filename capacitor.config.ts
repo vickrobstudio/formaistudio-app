@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
- * Capacitor config for the FormAI iOS shell.
+ * Capacitor config for the FormAI Studio iOS shell.
  *
  * The `.ipa` now ships a pre-built SPA bundle (produced by `bun run build:ios`
  * into `dist-ios/client`). The shell loads its own UI from disk — no

@@ -8,7 +8,7 @@
  * Coordinate system: our geometry is Z-up; glTF is Y-up. A single root node
  * carries a −90° X rotation so vertex data is written untouched.
  */
-import { MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared";
+import { MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared.ts";
 
 export type GlbGroup = {
   id: string;

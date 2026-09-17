@@ -1,3 +1,3 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PhotoAIChat } from "@/components/PhotoAIChat";
-export const Route = createFileRoute("/photo-to-ai")({ head: () => ({ meta: [{ title: "Photo AI Chat — FormAI STUDIO" }, { name: "description", content: "Chat free with Photo AI about your room and interior design." }, { property: "og:title", content: "Photo AI Chat" }, { property: "og:description", content: "Free conversational AI interior design guidance." }] }), component: PhotoAIChat });
+export const Route = createFileRoute("/photo-to-ai")({ head: () => ({ meta: [{ title: "Photo AI Chat — FormAI Studio" }, { name: "description", content: "Chat free with Photo AI about your room and interior design." }, { property: "og:title", content: "Photo AI Chat" }, { property: "og:description", content: "Free conversational AI interior design guidance." }] }), component: PhotoAIChat });

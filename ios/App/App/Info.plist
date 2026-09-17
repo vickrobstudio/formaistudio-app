@@ -27,13 +27,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>FormAI uses the camera to capture rooms and reference photos for AI interior design.</string>
+	<string>FormAI Studio uses the camera to capture rooms and reference photos for AI interior design.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>FormAI uses the microphone when you record audio notes for a design.</string>
+	<string>FormAI Studio uses the microphone when you record audio notes for a design.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>FormAI saves generated renderings and videos to your photo library.</string>
+	<string>FormAI Studio saves generated renderings and videos to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>FormAI accesses your photo library so you can pick interior photos to redesign.</string>
+	<string>FormAI Studio accesses your photo library so you can pick interior photos to redesign.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

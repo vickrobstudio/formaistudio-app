@@ -1,7 +1,8 @@
+import { useSubscription } from "@/hooks/use-subscription";
 import { useRef, useState, type ChangeEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Download, Film, Instagram, LoaderCircle, Play, Upload, X } from "lucide-react";
-import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/FormaMobile";
+import { BackLink, FormaHeader, PAGE_SHELL, PageIntro, ToolTabBar } from "@/components/FormaMobile";
 import { Button } from "@/components/ui/button";
 import { ToolInformation } from "@/components/ToolInformation";
 import { videoInformation } from "@/lib/tool-information";
@@ -33,17 +34,12 @@ export function VideoStudio() {
     setVideoUrl(null);
   }
 
+  const subscription = useSubscription();
   async function createTour() {
     if (images.length < 2 || busy) return;
-    // AI to Video costs 2 credits per video (heavier than an image render).
-    // Subscribers are unlimited; anyone who can't cover it goes to Plans to
-    // subscribe — no account required.
-    if (!vip) {
-      if (credits < VIDEO_CREDIT_COST || !(await consume()) || !(await consume())) {
-        void navigate({ to: "/pricing" });
-        return;
-      }
-    }
+    if (!subscription.hasTool("/ai-to-video")) { void navigate({ to: "/pricing" }); return; }
+    // This montage is rendered on the device, with no paid AI/provider call.
+    // Subscription access is handled by the tool gate; do not double-debit.
     setBusy(true);
     setError("");
     try {
@@ -102,11 +98,5 @@ export function VideoStudio() {
     catch (cause) { setError(cause instanceof Error ? cause.message : "The video could not be saved."); }
   }
 
-  async function shareVideoToInstagram() {
-    if (!videoUrl) return;
-    try { await shareToInstagram(videoUrl, "formai-virtual-tour.webm", "video/webm"); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "The video could not be shared."); }
-  }
-
-  return <main className="min-h-screen bg-background"><FormaHeader /><div className="px-5 pt-7"><BackLink /></div><PageIntro eyebrow="AI to Video" title="Create a virtual tour" description="Combine 2–5 renderings or photos into a smooth 10-second cinematic walkthrough."><p className="mt-4 text-xs font-bold uppercase tracking-[0.14em]">{vip ? "Subscribed · unlimited" : `${credits} ${signedIn ? "account" : "guest"} credits left · 2 per video`}</p></PageIntro><section className="px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-3xl lg:max-w-4xl"><input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={selectImages} /><Button type="button" variant="outline" className="min-h-44 w-full flex-col gap-3 rounded-2xl" onClick={() => fileRef.current?.click()}><Upload /><span>{images.length ? `${images.length} views selected` : "Upload 2–5 views"}</span><span className="text-xs text-muted-foreground">JPG, PNG or WEBP</span></Button>{images.length > 0 && <div className="mt-4 grid grid-cols-3 gap-2">{images.map((image, index) => <div key={image.url} className="relative aspect-video overflow-hidden rounded-xl border border-border"><img src={image.url} alt={`Tour view ${index + 1}`} className="h-full w-full object-cover" /><Button type="button" size="icon" variant="default" aria-label={`Remove view ${index + 1}`} className="absolute right-1 top-1 size-7 min-h-0 rounded-full" onClick={() => setImages((current) => current.filter((item) => item.url !== image.url))}><X className="size-3" /></Button></div>)}</div>}{videoUrl && <video src={videoUrl} controls playsInline className="mt-5 aspect-video w-full rounded-2xl border border-border object-cover" />}{error && <p role="alert" className="mt-3 text-xs text-destructive">{error}</p>}<Button variant="studio" className="mt-5 h-12 w-full" disabled={busy || images.length < 2} onClick={() => void createTour()}>{busy ? <LoaderCircle className="animate-spin" /> : <Play />}{busy ? "Creating 10-second tour…" : "Create 10-second tour"}</Button>{videoUrl && <Button type="button" variant="outline" className="mt-3 h-12 w-full" onClick={() => void saveVideo()}><Download />Save to Camera Roll</Button>}{videoUrl && <Button type="button" variant="outline" className="mt-3 h-12 w-full" onClick={() => void shareVideoToInstagram()}><Instagram />Share to Instagram</Button>}<ToolInformation sections={videoInformation} /></section><ToolTabBar /></main>;
+  return <main className="min-h-screen bg-background"><FormaHeader /><div className={`${PAGE_SHELL} px-5 pt-7`}><BackLink /></div><PageIntro eyebrow="AI to Video" title="Create a virtual tour" description="Combine 2–5 renderings or photos into a smooth 10-second cinematic walkthrough." /><section className={`${PAGE_SHELL} px-5 pb-[calc(6rem+env(safe-area-inset-bottom))] md:grid md:grid-cols-2 md:items-start md:gap-x-10 lg:gap-x-14`}><div><input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={selectImages} /><Button type="button" variant="outline" className="min-h-44 w-full flex-col gap-3 rounded-2xl" onClick={() => fileRef.current?.click()}><Upload /><span>{images.length ? `${images.length} views selected` : "Upload 2–5 views"}</span><span className="text-xs text-muted-foreground">JPG, PNG or WEBP</span></Button>{images.length > 0 && <div className="mt-4 grid grid-cols-3 gap-2">{images.map((image, index) => <div key={image.url} className="relative aspect-video overflow-hidden rounded-xl border border-border"><img src={image.url} alt={`Tour view ${index + 1}`} className="h-full w-full object-cover" /><Button type="button" size="icon" variant="default" aria-label={`Remove view ${index + 1}`} className="absolute right-1 top-1 size-7 min-h-0 rounded-full" onClick={() => setImages((current) => current.filter((item) => item.url !== image.url))}><X className="size-3" /></Button></div>)}</div>}{error && <p role="alert" className="mt-3 text-xs text-destructive">{error}</p>}<Button variant="studio" className="mt-5 h-12 w-full" disabled={busy || images.length < 2} onClick={() => void createTour()}>{busy ? <LoaderCircle className="animate-spin" /> : <Play />}{busy ? "Creating 10-second tour…" : "Create 10-second tour"}</Button></div><div className="md:sticky md:top-24">{videoUrl && <video src={videoUrl} controls playsInline className="mt-5 aspect-video w-full rounded-2xl border border-border object-cover md:mt-0" />}{videoUrl && <Button type="button" variant="outline" className="mt-3 h-12 w-full" onClick={() => void saveVideo()}><Download />Save to Camera Roll</Button>}<ToolInformation sections={videoInformation} /></div></section><ToolTabBar /></main>;
 }
