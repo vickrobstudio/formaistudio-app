@@ -1,4 +1,5 @@
 import { groundExportGroups } from "./model-ground";
+import { placeDoorsInWalls } from "./door-wall-placement";
 import { extrudePolygonIntoGroup } from "./plan-extrusion";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -2954,9 +2955,21 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
     // Wall height override applies to walls AND shifts roof baseZ.
     const wallH = data.wallHeightMeters;
 
+    let doorPlacement: ReturnType<typeof placeDoorsInWalls>;
+    try {
+      doorPlacement = placeDoorsInWalls(data.polygons.map(p => ({ ...p, points: toWorld(p.points) })), wallH);
+    } catch (cause) {
+      return { ok: false, error: cause instanceof Error ? cause.message : "Review door positions on the 2D plan." };
+    }
+
     for (const poly of data.polygons) {
       const spec = MARK_LIFT_SPECS[poly.type];
-      const world = toWorld(poly.points);
+      const world = doorPlacement.doors.get(poly.id) ?? toWorld(poly.points);
+      const wallPieces = doorPlacement.pieces.get(poly.id);
+      if (wallPieces) {
+        for (const piece of wallPieces) extrudePolygonIntoGroup(buckets.get("wall")!.group, piece.points, piece.base, piece.base + piece.height, outputScale);
+        continue;
+      }
       // Walls and columns rise to the full storey height; everything else
       // keeps its architectural default.
       const height = poly.type === "wall" || poly.type === "column" ? wallH : spec.height;
@@ -2964,6 +2977,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       const bucket = buckets.get(poly.type)!;
       extrudePolygonIntoGroup(bucket.group, world, baseZ, baseZ + height, outputScale);
     }
+    for (const piece of doorPlacement.lintels) extrudePolygonIntoGroup(buckets.get("wall")!.group, piece.points, piece.base, piece.base + piece.height, outputScale);
 
     const groups: Group[] = [];
     for (const t of MARK_LIFT_TYPES) {
