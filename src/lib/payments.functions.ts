@@ -1,6 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type StripeEnv, createStripeClient, getStripeErrorMessage } from "@/lib/stripe.server";
+import { getRequest } from "@tanstack/react-start/server";
+import { PLANS } from "@/lib/plans";
+
+function checkoutContext(environment: StripeEnv, returnUrl?: string) {
+  const expected: StripeEnv = process.env.VERCEL_ENV === "production" ? "live" : "sandbox";
+  if (environment !== expected) throw new Error("Payment environment does not match this site.");
+  const origin = process.env.VERCEL_ENV === "production" ? "https://www.formaistudio.app" : new URL(getRequest().url).origin;
+  if (returnUrl && new URL(returnUrl).origin !== origin) throw new Error("Invalid payment return address.");
+  return origin;
+}
 
 type CheckoutSessionResult = { clientSecret: string } | { error: string };
 type PortalSessionResult = { url: string } | { error: string };
@@ -21,8 +31,8 @@ async function resolveOrCreateCustomer(
   }
   if (options.email) {
     const existing = await stripe.customers.list({ email: options.email, limit: 1 });
-    if (existing.data.length) {
-      const customer = existing.data[0];
+    const customer = existing.data.find(item => !item.metadata?.userId || item.metadata.userId === options.userId);
+    if (customer) {
       if (options.userId && customer.metadata?.userId !== options.userId) {
         await stripe.customers.update(customer.id, {
           metadata: { ...customer.metadata, userId: options.userId },
@@ -41,19 +51,22 @@ async function resolveOrCreateCustomer(
 export const createCheckoutSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: { priceId: string; returnUrl: string; environment: StripeEnv }) => {
-    if (!/^[a-zA-Z0-9_-]+$/.test(data.priceId)) throw new Error("Invalid priceId");
+    if (!PLANS.some(plan => plan.id === data.priceId)) throw new Error("Invalid plan");
     return data;
   })
   .handler(async ({ data, context }): Promise<CheckoutSessionResult> => {
     try {
+      checkoutContext(data.environment, data.returnUrl);
       const { supabase, userId } = context;
       const { data: { user } } = await supabase.auth.getUser();
       const stripe = createStripeClient(data.environment);
 
-      const prices = await stripe.prices.list({ lookup_keys: [data.priceId] });
+      if (!user?.email_confirmed_at || user.is_anonymous) throw new Error("Verify your email before subscribing.");
+      const prices = await stripe.prices.list({ lookup_keys: [data.priceId], active: true });
       if (!prices.data.length) throw new Error("Price not found");
       const stripePrice = prices.data[0];
       const isRecurring = stripePrice.type === "recurring";
+      if (!isRecurring || stripePrice.recurring?.interval !== "month") throw new Error("Monthly subscription price is not configured.");
 
       const customerId = await resolveOrCreateCustomer(stripe, {
         email: user?.email ?? undefined,
@@ -68,7 +81,6 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         customer: customerId,
         metadata: { userId },
         ...(isRecurring && { subscription_data: { metadata: { userId } } }),
-        managed_payments: { enabled: true },
       } as any);
 
       return { clientSecret: session.client_secret ?? "" };
@@ -81,6 +93,7 @@ export const createPortalSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: { returnUrl?: string; environment: StripeEnv }) => data)
   .handler(async ({ data, context }): Promise<PortalSessionResult> => {
+    checkoutContext(data.environment, data.returnUrl);
     const { supabase, userId } = context;
     const { data: sub, error: subError } = await supabase
       .from("subscriptions")
@@ -103,3 +116,4 @@ export const createPortalSession = createServerFn({ method: "POST" })
       return { error: getStripeErrorMessage(error) };
     }
   });
+
