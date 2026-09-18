@@ -60,9 +60,9 @@ function PricingPage() {
     : "";
 
   const handleSubscribe = async (planId: PlanId) => {
-    // iOS In-App Purchase works WITHOUT an account (Apple 5.1.1) — never send
-    // a guest to sign up first. Purchase runs against RevenueCat (anonymous
-    // if not signed in); the device then unlocks locally.
+    if (iapBusy) return;
+    if (signedIn === false) { void navigate({ to: "/auth", search: { redirect: "/pricing" } as any }); return; }
+    // Purchases are linked to the signed-in account.
     if (onIOS) {
       setIapBusy(planId);
       setIapMsg(null);
@@ -70,18 +70,14 @@ function PricingPage() {
       setIapBusy(null);
       if (res.ok) {
         // Reopen the tools with a fresh session so the unlocked state is picked up.
-        setIapMsg("Subscription active — unlocking your tools…");
+        setIapMsg("Purchase received. Your Wallet will update after Apple verification.");
         setTimeout(() => { window.location.assign("/tools"); }, 3000);
       } else if (!("cancelled" in res && res.cancelled)) {
         setIapMsg(res.error);
       }
       return;
     }
-    // Web only: Stripe checkout needs an account.
-    if (signedIn === false) {
-      void navigate({ to: "/auth", search: { redirect: "/pricing" } as any });
-      return;
-    }
+
     setSelected(planId);
   };
 
@@ -94,7 +90,7 @@ function PricingPage() {
             <img src="/app-icon.png" alt="FormAI Studio" className="h-14 w-14 rounded-2xl" />
           </Link>
           <h1 className="text-4xl font-semibold tracking-tight">Pricing</h1>
-          <p className="mt-3 text-muted-foreground">Subscribe to a single tool, or unlock everything with Pro. Photo to AI is free.</p>
+          <p className="mt-3 text-muted-foreground">Subscribe to a single tool, or unlock everything with Pro. Photo to AI is free and does not use credits.</p>
         </header>
 
         {selected && !onIOS ? (
@@ -115,7 +111,7 @@ function PricingPage() {
                     key={plan.id}
                     type="button"
                     onClick={() => void handleSubscribe(plan.id)}
-                    disabled={iapBusy === plan.id || owned}
+                    disabled={iapBusy !== null || signedIn === null || owned}
                     className={`group relative flex aspect-square flex-col justify-between rounded-3xl border bg-card p-7 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-90 ${isPro ? "ring-2 ring-black" : ""}`}
                   >
                     <span className="block space-y-2">
@@ -145,7 +141,7 @@ function PricingPage() {
             {onIOS && (
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => void restorePurchases()}
+                  onClick={async () => { const result = await restorePurchases(); setIapMsg(result.ok ? "Purchases restored. Check your Wallet for the verified balance." : result.error ?? "Restore failed. Please try again."); }}
                   className="text-xs text-muted-foreground underline"
                 >
                   Restore purchases
@@ -181,3 +177,4 @@ function PricingPage() {
     </div>
   );
 }
+

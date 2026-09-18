@@ -54,6 +54,7 @@ export async function streamImage(
   sourceImage: string | null,
   onImage: (src: string, isFinal: boolean) => void,
   sourceImages: string[] = [],
+  tool: "paid" | "photo" = "paid",
 ) {
   const referenceCount = (sourceImage ? 1 : 0) + sourceImages.length;
   const budget = Math.floor(MAX_IMAGE_DATA_URL_LENGTH / Math.max(1, referenceCount));
@@ -85,13 +86,14 @@ export async function streamImage(
   for (let attempt = 0; attempt < 1; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt + Math.random() * 500));
     try {
-      response = await fetch("/api/generate-image", {
+      response = await fetch(tool === "photo" ? "/api/photo-image" : "/api/generate-image", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...await aiRequestHeaders() },
         body,
+        signal: AbortSignal.timeout(270_000),
       });
     } catch {
-      lastMessage = "The network dropped while creating the image. Please try again.";
+      lastMessage = "The connection ended before the image arrived. Check your Wallet and recent work before starting another generation.";
       response = null;
       continue;
     }
@@ -161,3 +163,4 @@ export async function streamImage(
     throw new Error("The image stream ended before the final render was completed.");
   }
 }
+

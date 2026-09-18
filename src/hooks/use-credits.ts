@@ -14,10 +14,12 @@ export function useCredits() {
   const [sandboxCredits,setSandboxCredits] = useState(0);
   const refresh = useCallback(async () => {
     setError(null);
-    const {data} = await supabase.auth.getSession();
+    try {
+    const {data, error: sessionError} = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
     setSignedIn(!!data.session && !data.session.user.is_anonymous);
     if (!data.session) {setCredits(0);setVip(false);setReviewCredits(0);setSandboxCredits(0);setLoading(false);return false;}
-    try {const account=await readAccount();setCredits(account.credits);setVip(account.owner);setReviewCredits(account.reviewCredits ?? 0);setSandboxCredits(account.sandboxCredits ?? 0);return account.owner || account.credits>0;}
+    const account=await readAccount();setCredits(account.credits);setVip(account.owner);setReviewCredits(account.reviewCredits ?? 0);setSandboxCredits(account.sandboxCredits ?? 0);return account.owner || account.credits>0;}
     catch {setError("Unable to load your balance. Please retry.");setVip(false);return false;}
     finally {setLoading(false);}
   },[readAccount]);

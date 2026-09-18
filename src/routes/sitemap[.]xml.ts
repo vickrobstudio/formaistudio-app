@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
 
-const BASE_URL = "https://formaistudio.app";
+const BASE_URL = "https://www.formaistudio.app";
 
-const entries = ["/", "/2d-to-3d", "/about", "/ai-edits", "/ai-interior-rendering", "/ai-rendering", "/ai-to-video", "/auth", "/contact", "/create", "/feed", "/floor-plan-to-3d", "/model-to-ai", "/photo-to-ai", "/pricing", "/privacy", "/studio", "/terms", "/tools"];
+const entries = ["/", "/2d-to-3d", "/about", "/ai-edits", "/ai-interior-rendering", "/ai-rendering", "/ai-to-video", "/contact", "/create", "/feed", "/floor-plan-to-3d", "/model-to-ai", "/photo-to-ai", "/pricing", "/privacy", "/studio", "/terms", "/tools"];
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {

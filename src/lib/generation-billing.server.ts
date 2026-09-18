@@ -98,7 +98,9 @@ export async function meteredFetch(kind: GenerationKind, url: string | URL | Req
   const digest = createHash("sha256").update(`${root}:${counter}:${kind}`).digest("hex");
   const operationId = `${digest.slice(0,8)}-${digest.slice(8,12)}-4${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}`;
   const fingerprint = `${kind}:${await bodyFingerprint(init?.body)}`;
-  const reserved = await db().rpc("reserve_generation", { p_user_id: state.user.id, p_operation_id: operationId, p_environment: state.environment, p_provider: provider, p_fingerprint: fingerprint, p_amount: state.owner ? 0 : costs[kind] });
+  // Only server-owned Photo AI routes are free. Client headers cannot waive a fee.
+  const freePhoto = ["/api/photo-chat", "/api/photo-edit-plan", "/api/photo-image"].includes(new URL(request.url).pathname);
+  const reserved = await db().rpc("reserve_generation", { p_user_id: state.user.id, p_operation_id: operationId, p_environment: state.environment, p_provider: freePhoto ? "trial" : provider, p_fingerprint: fingerprint, p_amount: state.owner || freePhoto ? 0 : costs[kind] });
   if (reserved.error) throw new GenerationBillingError("Unable to verify credits. No new generation was started.");
   async function finish(status: "completed" | "refunded" | "uncertain") {
     const result = await db().rpc("finish_generation", { p_user_id: state.user.id, p_operation_id: operationId, p_status: status });

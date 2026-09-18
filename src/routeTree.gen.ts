@@ -34,6 +34,7 @@ import { Route as R2dTo3dRouteImport } from './routes/2d-to-3d'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CheckoutReturnRouteImport } from './routes/checkout.return'
+import { Route as ApiPhotoImageRouteImport } from './routes/api/photo-image'
 import { Route as ApiPhotoEditPlanRouteImport } from './routes/api/photo-edit-plan'
 import { Route as ApiPhotoChatRouteImport } from './routes/api/photo-chat'
 import { Route as ApiGenerateImageRouteImport } from './routes/api/generate-image'
@@ -169,6 +170,11 @@ const CheckoutReturnRoute = CheckoutReturnRouteImport.update({
   path: '/checkout/return',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPhotoImageRoute = ApiPhotoImageRouteImport.update({
+  id: '/api/photo-image',
+  path: '/api/photo-image',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPhotoEditPlanRoute = ApiPhotoEditPlanRouteImport.update({
   id: '/api/photo-edit-plan',
   path: '/api/photo-edit-plan',
@@ -254,6 +260,7 @@ export interface FileRoutesByFullPath {
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/api/photo-edit-plan': typeof ApiPhotoEditPlanRoute
+  '/api/photo-image': typeof ApiPhotoImageRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
@@ -290,6 +297,7 @@ export interface FileRoutesByTo {
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/api/photo-edit-plan': typeof ApiPhotoEditPlanRoute
+  '/api/photo-image': typeof ApiPhotoImageRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
@@ -328,6 +336,7 @@ export interface FileRoutesById {
   '/api/generate-image': typeof ApiGenerateImageRoute
   '/api/photo-chat': typeof ApiPhotoChatRoute
   '/api/photo-edit-plan': typeof ApiPhotoEditPlanRoute
+  '/api/photo-image': typeof ApiPhotoImageRoute
   '/checkout/return': typeof CheckoutReturnRoute
   '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/api/public/revenuecat/webhook': typeof ApiPublicRevenuecatWebhookRoute
@@ -366,6 +375,7 @@ export interface FileRouteTypes {
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/api/photo-edit-plan'
+    | '/api/photo-image'
     | '/checkout/return'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
@@ -402,6 +412,7 @@ export interface FileRouteTypes {
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/api/photo-edit-plan'
+    | '/api/photo-image'
     | '/checkout/return'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
@@ -439,6 +450,7 @@ export interface FileRouteTypes {
     | '/api/generate-image'
     | '/api/photo-chat'
     | '/api/photo-edit-plan'
+    | '/api/photo-image'
     | '/checkout/return'
     | '/api/public/payments/webhook'
     | '/api/public/revenuecat/webhook'
@@ -473,6 +485,7 @@ export interface RootRouteChildren {
   ApiGenerateImageRoute: typeof ApiGenerateImageRoute
   ApiPhotoChatRoute: typeof ApiPhotoChatRoute
   ApiPhotoEditPlanRoute: typeof ApiPhotoEditPlanRoute
+  ApiPhotoImageRoute: typeof ApiPhotoImageRoute
   CheckoutReturnRoute: typeof CheckoutReturnRoute
   ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
   ApiPublicRevenuecatWebhookRoute: typeof ApiPublicRevenuecatWebhookRoute
@@ -655,6 +668,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CheckoutReturnRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/photo-image': {
+      id: '/api/photo-image'
+      path: '/api/photo-image'
+      fullPath: '/api/photo-image'
+      preLoaderRoute: typeof ApiPhotoImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/photo-edit-plan': {
       id: '/api/photo-edit-plan'
       path: '/api/photo-edit-plan'
@@ -774,6 +794,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGenerateImageRoute: ApiGenerateImageRoute,
   ApiPhotoChatRoute: ApiPhotoChatRoute,
   ApiPhotoEditPlanRoute: ApiPhotoEditPlanRoute,
+  ApiPhotoImageRoute: ApiPhotoImageRoute,
   CheckoutReturnRoute: CheckoutReturnRoute,
   ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
   ApiPublicRevenuecatWebhookRoute: ApiPublicRevenuecatWebhookRoute,
@@ -791,3 +812,4 @@ declare module '@tanstack/react-start' {
     config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }
+
