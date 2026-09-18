@@ -1,3 +1,4 @@
+import { groundExportGroups } from "./model-ground";
 import { extrudePolygonIntoGroup } from "./plan-extrusion";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -1856,6 +1857,7 @@ function buildMultiFloorBuildingDae(
 }
 
 function emitDaeFromGroups(groups: Group[], outputUnits: "meters" | "feet") {
+  groundExportGroups(groups, outputUnits);
   const created = new Date().toISOString();
   const unitTag = outputUnits === "feet"
     ? '<unit name="foot" meter="0.3048"/>'
@@ -3057,6 +3059,7 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       ...extras,
     };
   });
+
 
 
 

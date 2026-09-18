@@ -206,6 +206,7 @@ export function Furniture3DPreview({ plan, daeDataUrl, glbDataUrl }: { plan?: Fu
             <Environment preset="studio" />
           </Suspense>
           <OrbitControls
+            rotateSpeed={0.35} enableDamping dampingFactor={0.08} maxPolarAngle={Math.PI / 2 - 0.02}
             makeDefault
             enablePan
             target={[0, height / 2, 0]}
@@ -247,3 +248,4 @@ export function Furniture3DPreview({ plan, daeDataUrl, glbDataUrl }: { plan?: Fu
     </div>
   );
 }
+

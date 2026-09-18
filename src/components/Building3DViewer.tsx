@@ -596,6 +596,7 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
               <Environment preset="city" />
             </Suspense>
             <OrbitControls
+            rotateSpeed={0.35} enableDamping dampingFactor={0.08} maxPolarAngle={Math.PI / 2 - 0.02}
               ref={orbitRef as React.Ref<never>}
               makeDefault
               enablePan
@@ -696,3 +697,5 @@ export function Building3DViewer({ parts, outputUnits }: { parts: RawPart[]; out
     </div>
   );
 }
+
+
