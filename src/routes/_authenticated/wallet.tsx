@@ -29,7 +29,7 @@ function WalletPage() {
         {error && <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => void refresh()}>Retry balance</Button></div>}
         {!error && reviewCredits > 0 && <p className="mt-3 text-sm">Includes {reviewCredits} temporary review credits. These are separate from subscriptions.</p>}
         {!error && sandboxCredits > 0 && <p className="mt-3 text-sm">Apple Sandbox: {sandboxCredits} test credits recorded separately. These do not add to your production balance.</p>}
-        <p className="mt-2 text-xs text-muted-foreground">{vip ? "VIP · unlimited access" : "Each AI image, drawing analysis, edit review or assistant step uses one credit. Local 3D export does not use AI credits."}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{vip ? "VIP · unlimited access" : "Photo AI is free and does not consume credits. Other AI images, drawing analyses, edit reviews and assistant steps use one credit each. Local 3D export does not use AI credits."}</p>
       </div>
 
       {!vip && <Button asChild variant="studio" className="h-12 w-full">

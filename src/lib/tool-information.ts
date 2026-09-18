@@ -26,5 +26,6 @@ export const videoInformation: ToolInfoSection[] = [
 export const photoInformation: ToolInfoSection[] = [
   { title: "What Photo AI can do", description: "Upload a real photo of an empty, raw or damaged space and transform it through conversation.", items: ["Add or replace furniture", "Change floors, walls and other materials", "Adjust natural or ambient lighting", "Add plants, artwork and decor", "Completely redesign the room in a new style"] },
   { title: "Ideas to try", items: ["Add a modern minimalist sofa in neutral tones", "Change the flooring to elegant white marble", "Add warm, cozy ambient lighting", "Add Monstera and Fiddle Leaf Fig plants", "Try Art Deco or Scandinavian styling"] },
-  { title: "Credits and access", items: ["Sign in to use your available credits", "Each AI image, analysis or assistant step uses one credit", "Your guest conversation stays on this device", "Signed-in users can save one conversation to their account"] },
+  { title: "Credits and access", items: ["Sign in to use Photo AI for free", "Photo AI chat, edit reviews and images do not consume credits", "Your guest conversation stays on this device", "Signed-in users can save one conversation to their account"] },
 ];
+
