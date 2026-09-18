@@ -1,3 +1,4 @@
+import { parseArchitecturalMeasurement, cleanPlanPolygon } from "@/lib/architectural-measurement";
 import { useAiConsentGate } from "@/hooks/use-ai-consent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { alignPlanToInk } from "@/lib/plan-alignment";
@@ -220,9 +221,10 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
     try {
       if (measurePoints.length !== 2) throw new Error("Select both ends of a known dimension on the plan.");
       const points = measurePoints as [PlanPoint, PlanPoint];
-      const result = calibratePlan(points[0], points[1], imageWidth, imageHeight, Number(distance), units);
+      const meters = parseArchitecturalMeasurement(distance, units);
+      const result = calibratePlan(points[0], points[1], imageWidth, imageHeight, meters, "meters");
       setPlanWidth(result.planWidthMeters);
-      setCalibration({ points, distance: Number(distance), units });
+      setCalibration({ points, distance: meters, units: "meters" });
       setScaleConfirmed(true); setTool("select"); setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to calibrate scale."); }
   }
@@ -231,7 +233,10 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
     if (!imageWidth || !imageHeight) return;
     if (polygons.length === 0) { setError("Add at least one element before lifting."); return; }
     if (!scaleConfirmed || !Number.isFinite(planWidth) || planWidth <= 0) { setError("Calibrate a known distance before continuing."); return; }
-    onApply({ imageWidth, imageHeight, planWidthMeters: planWidth, polygons, calibration });
+    try {
+      const cleaned = polygons.map(p => ({ ...p, points: cleanPlanPolygon(p.points) }));
+      onApply({ imageWidth, imageHeight, planWidthMeters: planWidth, polygons: cleaned, calibration });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Check the outlines."); }
   }
 
   const counts = useMemo(() => {
@@ -368,7 +373,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
             <p className="text-xs" role="status">{measurePoints.length}/2 points selected</p>
             <label htmlFor="known-distance" className="text-xs">Known distance</label>
             <div className="flex gap-2">
-              <Input id="known-distance" type="number" min="0.001" step="any" value={distance} onChange={(e) => { setDistance(e.target.value); setScaleConfirmed(false); setCalibration(undefined); }} />
+              <Input id="known-distance" type="text" placeholder="2.50 m, 600 mm, or 12 feet" value={distance} onChange={(e) => { setDistance(e.target.value); setScaleConfirmed(false); setCalibration(undefined); }} />
               <select aria-label="Measurement units" value={units} onChange={(e) => { setUnits(e.target.value as "meters" | "feet"); setScaleConfirmed(false); setCalibration(undefined); }} className="rounded border px-2">
                 <option value="meters">Meters</option><option value="feet">Feet</option>
               </select>
@@ -387,3 +392,5 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
     </div>
   );
 }
+
+

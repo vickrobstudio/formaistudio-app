@@ -1,3 +1,4 @@
+import { extrudePolygonIntoGroup } from "./plan-extrusion";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { LAYER_NAMES, MATERIAL_IDS, MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared";
@@ -13,7 +14,7 @@ const FloorTo3DInput = z.object({
     .regex(/^data:(image\/(?:png|jpeg|webp)|application\/pdf);base64,/)
     .max(2_700_000_000)
     .optional(),
-  wallHeightMeters: z.number().min(0.1).max(15).default(2.7),
+  wallHeightMeters: z.number().min(0.1).max(15).default(2.6),
   planUnits: PlanUnits.default("meters"),
   outputUnits: OutputUnits.default("meters"),
   subject: Subject.default("building"),
@@ -57,7 +58,7 @@ const FloorTo3DInput = z.object({
               .max(50_000_000)
               .optional(),
             label: z.string().max(60).optional(),
-            heightMeters: z.number().min(0.3).max(15).default(2.7),
+            heightMeters: z.number().min(0.3).max(15).default(2.6),
             // User two-point scale calibration: real-world width of the plan's
             // longer image side in meters. When set, the extracted geometry is
             // deterministically rescaled to it after parsing.
@@ -2772,10 +2773,10 @@ type MarkLiftSpec = {
 };
 
 export const MARK_LIFT_SPECS: Record<MarkLiftType, MarkLiftSpec> = {
-  wall:    { label: "Walls",    layerName: LAYER_NAMES.wallsExterior, height: 3.0,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#334155", material: "concrete_smooth" },
+  wall:    { label: "Walls",    layerName: LAYER_NAMES.wallsExterior, height: 2.6,  baseZ: 0,    color: [0.784, 0.784, 0.784], hex: "#334155", material: "concrete_smooth" },
   door:    { label: "Doors",    layerName: LAYER_NAMES.doors,         height: 2.1,  baseZ: 0,    color: [0.627, 0.322, 0.176], hex: "#A0522D", material: "wood_oak" },
   window:  { label: "Windows",  layerName: LAYER_NAMES.windows,       height: 1.2,  baseZ: 0.9,  color: [0.529, 0.808, 0.922], hex: "#87CEEB", material: "glass_clear" },
-  column:  { label: "Columns",  layerName: LAYER_NAMES.columns,       height: 3.0,  baseZ: 0,    color: [0.561, 0.561, 0.561], hex: "#8F8F8F", material: "concrete_smooth" },
+  column:  { label: "Columns",  layerName: LAYER_NAMES.columns,       height: 2.6,  baseZ: 0,    color: [0.561, 0.561, 0.561], hex: "#8F8F8F", material: "concrete_smooth" },
   stair:   { label: "Stairs",   layerName: LAYER_NAMES.stairs,        height: 1.5,  baseZ: 0,    color: [0.855, 0.647, 0.125], hex: "#DAA520", material: "concrete_polished" },
   cabinet: { label: "Cabinets", layerName: LAYER_NAMES.millwork,      height: 0.9,  baseZ: 0,    color: [0.871, 0.722, 0.529], hex: "#DEB887", material: "wood_oak" },
   floor:   { label: "Floor",    layerName: LAYER_NAMES.slab,          height: 0.15, baseZ: -0.15, color: [0.545, 0.451, 0.333], hex: "#8B7355", material: "concrete_polished" },
@@ -2901,16 +2902,16 @@ const LiftPolygon = z.object({
   id: z.string().max(40),
   type: z.enum(MARK_LIFT_TYPES),
   // Normalised 0..1 image coordinates.
-  points: z.array(z.tuple([z.number(), z.number()])).min(3).max(400),
+  points: z.array(z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)])).min(3).max(400),
 });
 const LiftInput = z.object({
   label: z.string().max(60).default("Floor"),
   imageWidth: z.number().positive(),
   imageHeight: z.number().positive(),
   // Real-world width of the plan in METRES (longer image side maps to this).
-  planWidthMeters: z.number().min(1).max(500).default(12),
+  planWidthMeters: z.number().min(0.01).max(500),
   outputUnits: z.enum(["meters", "feet"]).default("meters"),
-  wallHeightMeters: z.number().min(0.3).max(15).default(2.7),
+  wallHeightMeters: z.number().min(0.3).max(15).default(2.6),
   polygons: z.array(LiftPolygon).min(1).max(800),
   // Room boundaries (normalized 0..1) with names read from the drawing —
   // vector CAD extraction fills these; they feed the geometry JSON + report.
@@ -2918,7 +2919,7 @@ const LiftInput = z.object({
     .array(
       z.object({
         name: z.string().max(60).optional(),
-        points: z.array(z.tuple([z.number(), z.number()])).min(3).max(400),
+        points: z.array(z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)])).min(3).max(400),
       }),
     )
     .max(120)
@@ -2929,42 +2930,6 @@ const LiftInput = z.object({
 
 // Triangulate a simple polygon in 2D (x,y) and build a vertical prism between
 // z0 and z1. Side faces wind so the prism is closed and watertight.
-function extrudePolygonIntoGroup(
-  group: { positions: number[]; indices: number[] },
-  poly: Array<[number, number]>,
-  z0: number,
-  z1: number,
-  scale: number,
-) {
-  if (poly.length < 3) return;
-  const flat: number[] = [];
-  for (const [x, y] of poly) flat.push(x, y);
-  const tris = earcut(flat);
-  if (tris.length === 0) return;
-  const baseIndex = group.positions.length / 3;
-  // Bottom ring
-  for (const [x, y] of poly) group.positions.push(x * scale, y * scale, z0 * scale);
-  // Top ring
-  for (const [x, y] of poly) group.positions.push(x * scale, y * scale, z1 * scale);
-  const n = poly.length;
-  // Bottom (reversed for outward normal)
-  for (let i = 0; i < tris.length; i += 3) {
-    group.indices.push(baseIndex + tris[i + 2], baseIndex + tris[i + 1], baseIndex + tris[i]);
-  }
-  // Top
-  for (let i = 0; i < tris.length; i += 3) {
-    group.indices.push(baseIndex + n + tris[i], baseIndex + n + tris[i + 1], baseIndex + n + tris[i + 2]);
-  }
-  // Sides
-  for (let i = 0; i < n; i += 1) {
-    const a = baseIndex + i;
-    const b = baseIndex + ((i + 1) % n);
-    const c = baseIndex + n + ((i + 1) % n);
-    const d = baseIndex + n + i;
-    group.indices.push(a, b, c, a, c, d);
-  }
-}
-
 export const liftAnnotatedFloor = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => LiftInput.parse(input))
   .handler(async ({ data }): Promise<GenerateFloor3DResult> => {
@@ -3092,3 +3057,6 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       ...extras,
     };
   });
+
+
+

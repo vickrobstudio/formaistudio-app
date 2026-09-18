@@ -1,3 +1,4 @@
+import { parseArchitecturalMeasurement } from "@/lib/architectural-measurement";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export function ScaleCalibrator({
   const [distance, setDistance] = useState("");
   const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null);
 
+  const [error, setError] = useState("");
   const unitLabel = planUnits === "feet-inches" ? "feet" : "meters";
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -36,12 +38,13 @@ export function ScaleCalibrator({
   };
 
   const apply = () => {
-    const value = parseFloat(distance);
-    if (!imgSize || points.length !== 2 || !isFinite(value) || value <= 0) return;
-    const meters = planUnits === "feet-inches" ? value * 0.3048 : value;
+    let meters: number;
+    try { meters = parseArchitecturalMeasurement(distance, unitLabel); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Invalid dimension"); return; }
+    if (!imgSize || points.length !== 2) return;
     const [[x1, y1], [x2, y2]] = points;
     const distPx = Math.hypot((x2 - x1) * imgSize.w, (y2 - y1) * imgSize.h);
-    if (distPx < 4) return;
+    if (distPx < 4) { setError("Select points farther apart."); return; }
     const mPerPx = meters / distPx;
     onCalibrated(Math.max(imgSize.w, imgSize.h) * mPerPx);
     onClose();
@@ -121,10 +124,11 @@ export function ScaleCalibrator({
             </svg>
           </div>
         </div>
+        {error && <p role="alert" className="px-4 text-sm text-red-700">{error}</p>}
         <div className="flex items-center gap-2 border-t border-neutral-200 px-4 py-3">
           <Input
-            type="number"
-            inputMode="decimal"
+            type="text"
+            aria-label="Known dimension"
             min="0"
             step="any"
             placeholder={`Real distance in ${unitLabel}`}
@@ -144,7 +148,7 @@ export function ScaleCalibrator({
           </Button>
           <Button
             type="button"
-            disabled={points.length !== 2 || !(parseFloat(distance) > 0)}
+            disabled={points.length !== 2 || !distance.trim()}
             onClick={apply}
           >
             Apply
@@ -154,3 +158,5 @@ export function ScaleCalibrator({
     </div>
   );
 }
+
+

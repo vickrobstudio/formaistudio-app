@@ -1,3 +1,4 @@
+import { PlanInterpretationReview } from "@/components/PlanInterpretationReview";
 import { useNavigate } from "@tanstack/react-router";
 import { shrinkImageDataUrl } from "@/lib/shrink-image";
 import { useServerFn } from "@tanstack/react-start";
@@ -248,6 +249,8 @@ export function FloorTo3D() {
   const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
   const [calibrating, setCalibrating] = useState<number | null>(null);
 
+  const [approvedInterpretation, setApprovedInterpretation] = useState("");
+  const interpretationKey = JSON.stringify({ floors: floors.map(({ label, heightMeters, recognition, planWidthMetersOverride }) => ({ label, heightMeters, recognition, planWidthMetersOverride })), outputUnits });
   function reset() {
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
     setFloorParts([]); setBuildReports([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
@@ -372,7 +375,7 @@ export function FloorTo3D() {
           next.push({
             imageDataUrl: sheet.dataUrl,
             label,
-            heightMeters: 3.0,
+            heightMeters: 2.6,
             fileName: sheets.length > 1 ? `${file.name} — ${label}` : file.name,
             ...(sheet.vector
               ? {
@@ -429,6 +432,7 @@ export function FloorTo3D() {
   }, [stage]);
 
   async function buildBuilding() {
+    if (approvedInterpretation !== interpretationKey) { setError("Approve the plan interpretation report before building."); return; }
     if (floors.length === 0) { setError("Add at least one floor plan."); return; }
     const unreviewed = floors.findIndex(f => !f.recognition?.reviewed);
     if (unreviewed !== -1) { setError("Review the 2D parts and confirm the measured scale on every floor."); setRecognitionPreview(unreviewed); return; }
@@ -454,7 +458,7 @@ export function FloorTo3D() {
                   imageHeight: f.recognition.imageHeight,
                   planWidthMeters: f.planWidthMetersOverride ?? f.recognition.planWidthMeters,
                   outputUnits,
-                  wallHeightMeters: f.heightMeters || 3.0,
+                  wallHeightMeters: f.heightMeters || 2.6,
                   polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ id: p.id, type: p.type, points: p.points })),
                   rooms: f.vectorRooms ?? [],
                   scaleMethod: f.scaleSource === "cad" ? "cad_units" as const : "user_calibration" as const,
@@ -462,11 +466,11 @@ export function FloorTo3D() {
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`)
             : await withTimeout(generate({
                 data: {
-                  wallHeightMeters: f.heightMeters || 3.0,
+                  wallHeightMeters: f.heightMeters || 2.6,
                   planUnits, outputUnits, subject: "building",
                   building: {
                     scope: "floor",
-                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 3.0, planWidthMeters: f.planWidthMetersOverride }],
+                    floors: [{ imageDataUrl: f.imageDataUrl, label, heightMeters: f.heightMeters || 2.6, planWidthMeters: f.planWidthMetersOverride }],
                   },
                 },
               }), CLIENT_TIMEOUT_MS, `${label} took too long.`);
@@ -616,11 +620,12 @@ export function FloorTo3D() {
           : <>
               <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Floors · ground first</p>
               <ul className="space-y-2">
-                {floors.map((f, i) => <li key={i} className="flex items-center gap-2 rounded-xl border border-border bg-background p-2">
+                {floors.map((f, i) => <li key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background p-2">
                   <span className="grid h-12 w-14 place-items-center overflow-hidden rounded border border-border bg-secondary text-[9px] text-muted-foreground">
                     {f.imageDataUrl.startsWith("data:image/") ? <img src={f.imageDataUrl} alt="" className="size-full object-contain" /> : "PDF"}
                   </span>
                   <Input value={f.label} onChange={(e) => setFloors((p) => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} className="h-9 flex-1" placeholder={i === 0 ? "Ground floor" : `Floor ${i}`} />
+                  <label className="text-[10px]">Height (m)<Input aria-label={`Ceiling height for floor ${i + 1} in meters`} type="number" min="0.3" max="15" step="0.01" value={f.heightMeters} onChange={(e) => setFloors(p => p.map((x,j) => j === i ? { ...x, heightMeters: Number(e.target.value) } : x))} className="h-9 w-20" /></label>
                   {f.imageDataUrl.startsWith("data:image/") && (
                     <button type="button" disabled={f.recognizing} onClick={() => setRecognitionPreview(i)}
                       className="flex items-center gap-1 rounded-full px-2 text-[10px] font-bold uppercase text-muted-foreground disabled:opacity-70"
@@ -706,6 +711,7 @@ export function FloorTo3D() {
 
       {error && <p role="alert" className="mt-3 text-xs text-destructive">{error}</p>}
 
+      {subject === "building" && floors.length > 0 && <PlanInterpretationReview floors={floors} approved={approvedInterpretation === interpretationKey} onApprove={(approved) => setApprovedInterpretation(approved ? interpretationKey : "")} />}
       {/* Build */}
       <Button variant="default" className="mt-5 h-12 w-full justify-between" disabled={!canBuild || busy}
         onClick={() => void (subject === "building" ? buildBuilding() : buildFurniture())}>
@@ -804,7 +810,7 @@ export function FloorTo3D() {
                 ...x,
                 planWidthMetersOverride: planWidthMeters,
                 scaleSource: "user" as const,
-                recognition: x.recognition ? { ...x.recognition, planWidthMeters } : x.recognition,
+                recognition: x.recognition ? { ...x.recognition, planWidthMeters, reviewed: false, calibration: undefined } : x.recognition,
               }
             : x));
         }}
@@ -829,3 +835,6 @@ export function FloorTo3D() {
     {consentDialog}
   </main>;
 }
+
+
+
