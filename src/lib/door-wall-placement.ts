@@ -20,13 +20,15 @@ function rect(f:Frame,start:number,end:number,thickness=f.thickness):Point[]{
   return [[start,-thickness/2],[end,-thickness/2],[end,thickness/2],[start,thickness/2]].map(([x,y])=>[f.center[0]+f.u[0]*x+f.v[0]*y,f.center[1]+f.u[1]*x+f.v[1]*y]);
 }
 
-/** Work in meters. Align only nearby rectangular wall runs; ambiguous doors stop the build. */
+/** Work in meters. Align nearby rectangular wall runs; ambiguous openings stop the build. */
 export function placeDoorsInWalls(polygons: Polygon[], wallHeight:number, doorHeight=2.1) {
   const walls=polygons.filter(p=>p.type==="wall").map(p=>({p,f:frame(p.points)}));
   const doors=new Map<string,Point[]>();
-  const openings: {f:Frame;start:number;end:number}[]=[];
-  for(const door of polygons.filter(p=>p.type==="door")){
-    if(wallHeight<=doorHeight) throw new Error("The ceiling must be above the door head. Correct the height before building.");
+  const openings: {f:Frame;start:number;end:number;base:number;top:number}[]=[];
+  for(const door of polygons.filter(p=>p.type==="door" || p.type==="window")){
+    const base=door.type==="window" ? .9 : 0;
+    const top=door.type==="window" ? 2.1 : doorHeight;
+    if(wallHeight<=top) throw new Error("The ceiling must be above the door or window head. Correct the height before building.");
     const center:Point=[door.points.reduce((s,p)=>s+p[0],0)/door.points.length,door.points.reduce((s,p)=>s+p[1],0)/door.points.length];
     const candidates=walls.flatMap(({f})=>{
       if(!f) return [];
@@ -38,34 +40,38 @@ export function placeDoorsInWalls(polygons: Polygon[], wallHeight:number, doorHe
       return [{f,start:along-width/2,end:along+width/2,score:distance+gap*.1}];
     }).sort((a,b)=>a.score-b.score);
     const host=candidates[0];
-    if(!host) throw new Error(`Door ${door.id} is not on a supported wall run. In the 2D review, draw its width over the wall opening, not over the swing arc or a note.`);
-    if(candidates.slice(1).some(c=>Math.abs(c.score-host.score)<.05 && Math.abs(dot(c.f.u,host.f.u))<.95)) throw new Error(`Door ${door.id} is ambiguous at a wall corner. Correct its 2D position before building.`);
+    if(!host) throw new Error(`${door.type} ${door.id} is not on a supported wall run. In the 2D review, draw its width over the wall opening, not over a swing arc or a note.`);
+    if(candidates.slice(1).some(c=>Math.abs(c.score-host.score)<.05 && Math.abs(dot(c.f.u,host.f.u))<.95)) throw new Error(`${door.type} ${door.id} is ambiguous at a wall corner. Correct its 2D position before building.`);
+    if(openings.some(o=>Math.abs(dot(o.f.u,host.f.u))>.999 && Math.abs(dot(delta(host.f.center,o.f.center),o.f.v))<.05 && (()=>{const c=dot(delta(host.f.center,o.f.center),o.f.u);const sign=dot(host.f.u,o.f.u);const ends=[c+host.start*sign,c+host.end*sign];return Math.min(o.end,Math.max(...ends))-Math.max(o.start,Math.min(...ends))>.01;})())) throw new Error("Door and window outlines overlap. Separate their widths in the 2D review.");
     doors.set(door.id,rect(host.f,host.start,host.end,Math.min(.04,host.f.thickness)));
-    openings.push(host);
+    openings.push({...host,base,top});
   }
   const pieces=new Map<string,WallPiece[]>();
   for(const {p,f} of walls){
     if(!f) {
       // Irregular outlines are safe only when no door is being placed in them.
-      if(openings.length) throw new Error("For door openings, split irregular wall outlines into rectangular wall runs in the 2D review.");
+      if(openings.length) throw new Error("For door and window openings, split irregular wall outlines into rectangular wall runs in the 2D review.");
       continue;
     }
     const cuts=openings.flatMap(o=>{
       if(Math.abs(dot(f.u,o.f.u))<.999 || Math.abs(dot(delta(o.f.center,f.center),f.v))>(f.thickness+o.f.thickness)/2+.01) return [];
       const ends=[o.start,o.end].map(t=>dot(delta([o.f.center[0]+o.f.u[0]*t,o.f.center[1]+o.f.u[1]*t],f.center),f.u));
       const start=Math.max(-f.length/2,Math.min(...ends)),end=Math.min(f.length/2,Math.max(...ends));
-      return end-start>.001 ? [{start,end}] : [];
+      return end-start>.001 ? [{start,end,base:o.base,top:o.top}] : [];
     }).sort((a,b)=>a.start-b.start);
     if(!cuts.length) continue;
-    const merged:typeof cuts=[];
-    for(const cut of cuts){const prev=merged.at(-1);if(prev&&cut.start<=prev.end)prev.end=Math.max(prev.end,cut.end);else merged.push({...cut});}
-    const result:WallPiece[]=[];let cursor=-f.length/2;
-    for(const cut of merged){
-      if(cut.start-cursor>.001)result.push({points:rect(f,cursor,cut.start),base:0,height:doorHeight});
-      cursor=cut.end;
+    const levels=[...new Set([0,wallHeight,...cuts.flatMap(c=>[c.base,c.top])])].sort((a,b)=>a-b);
+    const result:WallPiece[]=[];
+    for(let i=0;i<levels.length-1;i++){
+      const base=levels[i],top=levels[i+1];
+      const active=cuts.filter(c=>c.base<top && c.top>base);
+      let cursor=-f.length/2;
+      for(const cut of active){
+        if(cut.start-cursor>.001)result.push({points:rect(f,cursor,cut.start),base,height:top-base});
+        cursor=Math.max(cursor,cut.end);
+      }
+      if(f.length/2-cursor>.001)result.push({points:rect(f,cursor,f.length/2),base,height:top-base});
     }
-    if(f.length/2-cursor>.001)result.push({points:rect(f,cursor,f.length/2),base:0,height:doorHeight});
-    result.push({points:rect(f,-f.length/2,f.length/2),base:doorHeight,height:wallHeight-doorHeight});
     pieces.set(p.id,result);
   }
   const lintels:WallPiece[]=[];
@@ -75,9 +81,18 @@ export function placeDoorsInWalls(polygons: Polygon[], wallHeight:number, doorHe
       const middle=dot(delta(f.center,o.f.center),o.f.u);
       return [{start:Math.max(o.start,middle-f.length/2),end:Math.min(o.end,middle+f.length/2)}];
     }).filter(c=>c.end>c.start).sort((a,b)=>a.start-b.start);
+    if(!coverage.length || coverage[0].start>o.start+.02 || Math.max(...coverage.map(c=>c.end))<o.end-.02) {
+      // A gap is valid only between actual wall jambs; do not extend a facade to chase a misplaced opening.
+      const supported=walls.filter(({f})=>f && Math.abs(dot(f.u,o.f.u))>.999 && Math.abs(dot(delta(f.center,o.f.center),o.f.v))<.01).map(({f})=>({start:dot(delta(f!.center,o.f.center),o.f.u)-f!.length/2,end:dot(delta(f!.center,o.f.center),o.f.u)+f!.length/2}));
+      if(!supported.some(c=>c.start<=o.start+.02 && c.end>=o.start-.02) || !supported.some(c=>c.start<=o.end+.02 && c.end>=o.end-.02)) throw new Error("An opening extends beyond its wall. Align both jambs in the 2D review.");
+    }
     let cursor=o.start;
-    for(const c of coverage){if(c.start-cursor>.001)lintels.push({points:rect(o.f,cursor,c.start),base:doorHeight,height:wallHeight-doorHeight});cursor=Math.max(cursor,c.end);}
-    if(o.end-cursor>.001)lintels.push({points:rect(o.f,cursor,o.end),base:doorHeight,height:wallHeight-doorHeight});
+    const fillGap=(start:number,end:number)=>{
+      lintels.push({points:rect(o.f,start,end),base:o.top,height:wallHeight-o.top});
+      if(o.base>0)lintels.push({points:rect(o.f,start,end),base:0,height:o.base});
+    };
+    for(const c of coverage){if(c.start-cursor>.001)fillGap(cursor,c.start);cursor=Math.max(cursor,c.end);}
+    if(o.end-cursor>.001)fillGap(cursor,o.end);
   }
   return {doors,pieces,lintels};
 }

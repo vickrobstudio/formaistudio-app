@@ -20,4 +20,18 @@ const rotate=(points:[number,number][])=>points.map(([x,y])=>[(x-y)/Math.sqrt(2)
 const rotated=placeDoorsInWalls([{...wall,points:rotate(wall.points)},{...door,points:rotate(door.points)}],2.6);
 assert.equal(rotated.pieces.get("wall")!.length,3);
 console.log("Door alignment, full-depth opening, lintel, gap and rotated-wall tests passed");
+const window={id:"window",type:"window",points:rectangle(4,.04,1,.08)};
+const mixed=placeDoorsInWalls([wall,door,window],2.6);
+const spans=mixed.pieces.get("wall")!;
+const solidAt=(x:number,z:number)=>spans.some(p=>{const xs=p.points.map(v=>v[0]);return x>Math.min(...xs)&&x<Math.max(...xs)&&z>p.base&&z<p.base+p.height;});
+assert.equal(solidAt(4.5,.5),true,"Window sill preserved");
+assert.equal(solidAt(4.5,1.5),false,"Window cuts full wall depth");
+assert.equal(solidAt(4.5,2.4),true,"Window lintel preserved");
+assert.equal(solidAt(2.5,.5),false,"Door rests on ground without a sill");
+assert.equal(solidAt(2.5,2.4),true,"Door lintel preserved");
+assert.ok(Math.abs(mixed.doors.get("window")!.reduce((s,p)=>s+p[1],0))<1e-8);
+assert.throws(()=>placeDoorsInWalls([wall,door,{...window,points:door.points}],2.6),/overlap/);
+const windowGap=placeDoorsInWalls([{...wall,points:rectangle(0,-.1,2,.2)},{...wall,id:"right",points:rectangle(3,-.1,3,.2)},{...door,type:"window"}],2.6);
+assert.deepEqual(windowGap.lintels.map(p=>p.base).sort(),[0,2.1]);
+console.log("Mixed door/window sill, head, grounding and overlap tests passed");
 

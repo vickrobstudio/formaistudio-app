@@ -24,18 +24,19 @@ export function PlanInterpretationReview({ floors, approved, onApprove }: { floo
     invalid ||= warnings.length > 0;
     return <div key={index} className="space-y-1 border-t py-3 text-sm">
       <h3 className="font-semibold">{floor.label || `Floor ${index + 1}`}</h3>
-      <p>Measured scale: {scale > 0 ? `${scale.toFixed(6)} m / pixel` : "Not confirmed"}. Ceiling: {floor.heightMeters} m.</p>
+      <p>Measured scale: {r?.reviewed && scale > 0 ? `${scale.toFixed(6)} m / pixel` : "Not confirmed"}. Ceiling: {floor.heightMeters} m.</p>
       <p>{Object.entries(counts).map(([type,count]) => `${type}: ${count}`).join(" · ") || "Awaiting interpretation"}</p>
       {area > 0 && <p>Selected floor area: {area.toFixed(2)} m² (overlapping regions count separately).</p>}
       {warnings.map((warning,i)=><p key={i} role="alert" className="text-destructive">{warning}</p>)}
     </div>;
   });
   return <section aria-label="Plan interpretation report" className="mt-5 rounded-xl border p-4">
-    <h2 className="font-bold">Plan interpretation · Build 69</h2>
+    <h2 className="font-bold">Plan interpretation · Build 70</h2>
     <p className="my-2 text-xs text-muted-foreground">Check the outlines against the drawing. Use written dimensions for calibration. A printed scale ratio alone is insufficient on a resized image. N.P.T. is floor elevation, not ceiling height.</p>
     {reports}
     <p className="mb-3 text-xs text-muted-foreground">Assumed unless edited: ceiling 2.60 m; doors 2.10 m; windows 1.20 m high at 0.90 m; cabinets 0.90 m high. Verify openings, wall intersections and fixed furniture in the 3D preview. This reconstruction is not a certified construction model.</p>
     <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={approved && !invalid} disabled={invalid} onChange={e=>onApprove(e.target.checked)} />I reviewed the parts, measured scale and heights. Build this interpretation.</label>
   </section>;
 }
+
 
