@@ -49,3 +49,26 @@ for (const outputUnits of ['meters','feet']) {
 }
 console.log('Material-separated DAE and FBX round-trip, independent editing and unknown material tests passed');
 
+// Furniture uses the same editable geometry route as the downloaded model.
+const geometryFunctions = ast.statements.filter(n => ts.isFunctionDeclaration(n)).map(n => n.getText(ast).replace(/^export /, "")).join("\n");
+const furnitureCode = ts.transpile(geometryFunctions + "\nreturn { buildDae };", { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None });
+const furnitureApi = new Function('MATERIAL_PALETTE', 'LAYER_NAMES', 'groundExportGroups', furnitureCode)(MATERIAL_PALETTE, LAYER_NAMES, groundExportGroups);
+for (const units of ['meters', 'feet']) {
+  const part = { shape: 'box', cx: 0, cy: 0, cz: .35, width: .1, depth: .1, height: .7, rotationDegZ: 0, material: 'wood_oak' };
+  const model = { kind: 'furniture', parts: [
+    { ...part, name: 'Left leg', cx: -.4 },
+    { ...part, name: 'Right leg', cx: .4 },
+    { ...part, name: 'Marble top', material: 'stone_marble_carrara', cz: .725, width: 1, depth: .6, height: .05 },
+  ] };
+  const { dae, groups } = furnitureApi.buildDae(model, 2.6, units);
+  const parsed = parseDaeToTriangles(dae);
+  assert.equal(groups.length, 4, 'Three furniture parts and a separate ground plane');
+  assert.equal(parsed.length, 4);
+  assert.ok(dae.includes('Furniture'));
+  assert.notEqual(parsed[0].name, parsed[1].name, 'Legs with the same material stay separate');
+  assert.notDeepEqual(parsed[0].color, parsed[2].color);
+  const scene = new FBXLoader().parse(new TextEncoder().encode(trianglesToFbxAscii(parsed, units, 'Z')).buffer, '');
+  const meshes: any[] = []; scene.traverse((o:any) => { if (o.isMesh) meshes.push(o); });
+  assert.equal(meshes.length, 4);
+}
+console.log('Furniture part separation, material assignment and ground plane export passed');

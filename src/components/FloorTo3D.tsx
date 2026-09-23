@@ -12,9 +12,7 @@ import { BackLink, FormaHeader, PageIntro, ToolTabBar } from "@/components/Forma
 import { ToolInformation, type ToolInfoSection } from "@/components/ToolInformation";
 import { useCredits } from "@/hooks/use-credits";
 import { useAiConsentGate } from "@/hooks/use-ai-consent";
-import { generateFloor3D, extractFurnitureBounds, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
-import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
-import { streamImage } from "@/lib/stream-image";
+import { generateFloor3D, liftAnnotatedFloor, detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { Furniture3DPreview } from "@/components/Furniture3DPreview";
 import { FloorAnnotator } from "@/components/FloorAnnotator";
 import { Building3DViewer } from "@/components/Building3DViewer";
@@ -38,7 +36,7 @@ const information: ToolInfoSection[] = [
     description: "Upload a floor plan (one image per floor) or a furniture drawing. Tap Build. Download the 3D file.",
     items: [
       "Buildings: add one image per floor — each floor becomes its own group at real-world scale.",
-      "Furniture: upload one clear reference (drawing, sketch or photo) — the AI designs it into one solid piece, then builds the 3D model.",
+      "Furniture: upload one clear reference (drawing, sketch or photo) — the AI builds separate named parts and material groups for editing after export.",
       "Export: .fbx, .obj, or .dae — opens in SketchUp, Blender, Rhino, Maya, 3ds Max.",
     ],
   },
@@ -208,11 +206,8 @@ type BuildReport = {
 export function FloorTo3D() {
   const navigate = useNavigate();
   const generate = useServerFn(generateFloor3D);
-  const fetchBounds = useServerFn(extractFurnitureBounds);
   const lift = useServerFn(liftAnnotatedFloor);
   const detect = useServerFn(detectFloorElements);
-  const startRecon = useServerFn(startMeshReconstruction);
-  const pollRecon = useServerFn(pollMeshReconstruction);
   const { credits, signedIn, vip, consume } = useCredits();
   const { ensureConsent, dialog: consentDialog } = useAiConsentGate();
 
@@ -515,63 +510,20 @@ export function FloorTo3D() {
       void navigate({ to: "/pricing" }); return;
     }
     try {
-      let bounds: { width: number; depth: number; height: number } | undefined;
-      try {
-        const b = await fetchBounds({ data: { fileDataUrl: furnitureUrl, planUnits, referenceImages: [] } });
-        if (b.ok) bounds = { width: b.width, depth: b.depth, height: b.height };
-      } catch { /* fallback unscaled */ }
-
-      // The AI reads the reference (line drawing, sketch or photo) and
-      // renders ONE complete solid furniture piece — a clean product photo,
-      // NOT extruded linework. Mesh reconstruction then runs on that solid
-      // render, so the 3D model is a real object, not a flattened drawing.
-      setStatus("Isolating the furniture and designing the solid piece…");
-      let solidRender = furnitureUrl;
-      try {
-        const materialLine = furnitureMaterials.length
-          ? ` Make it out of these materials: ${furnitureMaterials.join(", ")} — apply them faithfully to the correct parts (frame, legs, seat, top, upholstery) with realistic grain, weave, veining and reflectance.`
-          : "";
-        const descLine = furnitureDesc.trim()
-          ? ` The user describes it as: "${furnitureDesc.trim()}". Honour that description for style, function and details while keeping the shape of the reference.`
-          : "";
-        const renderPrompt =
-          "This is a raw reference PHOTOGRAPH. Find the SINGLE main piece of furniture in it and IGNORE everything else — remove the background completely, and remove any people, walls, floor, other furniture, clutter, plants and props. Reconstruct ONLY that one furniture piece as accurately as possible: keep its exact shape, silhouette, proportions, structure and design details. Render it as ONE complete, solid, manufacturable object — a clean studio product photograph on a plain seamless neutral background, isolated with generous margins, three-quarter view, fully solid with real thickness and volume, evenly lit, sharp, no shadows cast on other objects."
-          + materialLine + descLine
-          + " Strictly photoreal — NOT a line drawing, NOT a wireframe, no outlines, no annotations, no text, no extra objects. A single real physical object ready to be turned into a 3D model.";
-        let out: string | null = null;
-        await streamImage(renderPrompt, furnitureUrl, (image, isFinal) => { if (isFinal || !out) out = image; });
-        if (out) solidRender = out;
-      } catch {
-        // If the render step fails, fall back to reconstructing the reference
-        // directly rather than blocking the whole build.
-      }
-
-      setStatus("Reconstructing textured mesh — this takes 1–5 minutes…");
-      const started = await startRecon({ data: { imageDataUrl: solidRender, quality: "high" } });
-      if (!started.ok) { setError(started.error); setStage("upload"); return; }
-      const deadline = Date.now() + 10 * 60 * 1000;
-      while (true) {
-        if (Date.now() > deadline) { setError("Reconstruction timed out after 10 minutes."); setStage("upload"); return; }
-        await new Promise((r) => setTimeout(r, 6000));
-        const polled = await pollRecon({ data: { predictionId: started.predictionId, outputUnits, targetBoundsMeters: bounds } });
-        if (!polled.ok) { setError(polled.error); setStage("upload"); return; }
-        if (polled.status && polled.status !== "succeeded") {
-          setStatus(`Reconstructing — ${polled.status}…`);
-          continue;
-        }
-        if (polled.glbDataUrl) {
-          setGlb(polled.glbDataUrl);
-          if (polled.daeDataUrl) setDae(polled.daeDataUrl);
-          if (polled.objDataUrl) setObj(polled.objDataUrl);
-          if (polled.fbxDataUrl) setFbx(polled.fbxDataUrl);
-          setStage("ready"); setStatus("");
-          return;
-        }
-      }
+      setStatus("Reading the drawing and separating furniture parts and materials…");
+      const result = await generate({ data: {
+        fileDataUrl: furnitureUrl, subject: "furniture", planUnits, outputUnits,
+        wallHeightMeters: 2.6,
+        furnitureInstructions: [furnitureDesc.trim(), furnitureMaterials.length ? `Requested materials: ${furnitureMaterials.join(", ")}. Apply to the appropriate parts.` : ""].filter(Boolean).join("\n"),
+      } });
+      if (!result.ok) throw new Error(result.error);
+      setDae(result.daeDataUrl); setObj(result.objDataUrl ?? null); setFbx(result.fbxDataUrl ?? null); setGlb(result.glbDataUrl ?? null);
+      setPlan(result.plan?.kind === "furniture" ? result.plan : null);
+      setStage("ready");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Mesh reconstruction failed.");
+      setError(cause instanceof Error ? cause.message : "The editable furniture model could not be generated.");
       setStage("upload");
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setStatus(""); }
   }
 
   function downloadDataUrl(href: string, filename: string) {
@@ -836,6 +788,5 @@ export function FloorTo3D() {
     {consentDialog}
   </main>;
 }
-
 
 

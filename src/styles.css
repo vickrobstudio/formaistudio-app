@@ -260,3 +260,17 @@ html.keyboard-open {
   --input: var(--dashboard-border);
 }
 @media (prefers-reduced-motion: reduce) { .studio-in { animation: none; } }
+
+/* A single scroll area keeps the Photo AI composer inside the visible iOS viewport. */
+main.photo-chat-screen {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.photo-chat-screen > header:first-child { position: relative; flex-shrink: 0; }
+.photo-chat-screen > header:first-child + div { display: none; }

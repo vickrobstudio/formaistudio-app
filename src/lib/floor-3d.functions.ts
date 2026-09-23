@@ -30,6 +30,7 @@ const FloorTo3DInput = z.object({
     .max(50_000_000)
     .optional(),
   masterPrompt: z.string().max(8000).optional(),
+  furnitureInstructions: z.string().max(4000).optional(),
   referenceOnly: z.boolean().default(false).optional(),
   // Additional reference renderings/photographs the user attached. In
   // referenceOnly mode every one of these is sent to the modeler so the
@@ -2054,6 +2055,9 @@ export const generateFloor3D = createServerFn({ method: "POST" })
         ? { type: "file", file: { filename: "source.pdf", file_data: data.fileDataUrl } }
         : { type: "image_url", image_url: { url: data.fileDataUrl } },
     ];
+    if (data.subject === "furniture") {
+      userContent.push({type: "text", text: "EDITABLE PARTS: create a separately named part for each physical leg, top, shelf, drawer front, door, handle, frame member and upholstery panel visible in the reference. Never merge disconnected parts just because they share a material. Assign materials using the drawing labels, legend, hatch or user instructions; use other for unknown materials. Preserve written dimensions. Do not invent hidden construction. " + (data.furnitureInstructions ?? "")});
+    }
     // In referenceOnly mode the source IS a finished rendering. Attach every
     // additional reference the user supplied so the modeler can triangulate
     // the silhouette, materials and grouping from multiple angles at 100%
@@ -2151,7 +2155,7 @@ export const generateFloor3D = createServerFn({ method: "POST" })
         })
       : {};
     let glbDataUrl: string | undefined;
-    if (plan.kind === "building") {
+    {
       const { trianglesToGlb, glbToDataUrlBinary } = await import("./glb-export.server");
       glbDataUrl = glbToDataUrlBinary(trianglesToGlb(builtGroups, data.outputUnits));
     }
@@ -3090,7 +3094,6 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       ...extras,
     };
   });
-
 
 
 
