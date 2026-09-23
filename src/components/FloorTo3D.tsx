@@ -1,3 +1,4 @@
+import { type MaterialId } from "@/lib/floor-3d-shared";
 import { PlanInterpretationReview } from "@/components/PlanInterpretationReview";
 import { useNavigate } from "@tanstack/react-router";
 import { shrinkImageDataUrl } from "@/lib/shrink-image";
@@ -21,7 +22,7 @@ import { ScaleCalibrator } from "@/components/ScaleCalibrator";
 import type { FurniturePlan } from "@/lib/floor-3d-shared";
 import type { VectorRecognition } from "@/lib/dwg-vector-plan";
 
-type RecognizedPolygon = { id: string; type: MarkLiftType; points: Array<[number, number]> };
+type RecognizedPolygon = { material?: MaterialId; materialEvidence?: string; label?: string; id: string; type: MarkLiftType; points: Array<[number, number]> };
 type Recognition = {
   imageWidth: number;
   imageHeight: number;
@@ -315,7 +316,7 @@ export function FloorTo3D() {
       const ai: RecognizedPolygon[] = (result && result.ok ? result.polygons : []).map((p, k) => ({
         id: p.id ?? `det_${k}`,
         type: p.type as MarkLiftType,
-        points: p.points as Array<[number, number]>,
+        points: p.points as Array<[number, number]>, material: p.material, materialEvidence: p.materialEvidence, label: p.label,
       }));
       // Openings: tiled detections first (sharper), full-sheet extras that
       // aren't duplicates second.
@@ -323,16 +324,16 @@ export function FloorTo3D() {
         pts.reduce((s, p) => s + p[0], 0) / pts.length,
         pts.reduce((s, p) => s + p[1], 0) / pts.length,
       ];
-      const openings: RecognizedPolygon[] = tiled.map((p, k) => ({ id: `tile_${k}`, type: p.type as MarkLiftType, points: p.points }));
+      const openings: RecognizedPolygon[] = tiled.map((p, k) => ({ ...p, id: `tile_${k}`, type: p.type as MarkLiftType }));
       for (const p of ai.filter((q) => q.type !== "wall" && q.type !== "floor")) {
         const [cx, cy] = centerOf(p.points);
         const dupe = openings.some((o) => o.type === p.type && (([ox, oy]) => Math.hypot(cx - ox, cy - oy) < 0.015)(centerOf(o.points)));
         if (!dupe) openings.push(p);
       }
-      const useTraced = traced.some((p) => p.type === "floor");
+      const useTraced = traced.some((p) => p.type === "floor") && !ai.some(p => p.material && p.material !== "other" && (p.type === "wall" || p.type === "floor"));
       const polygons: RecognizedPolygon[] = useTraced
         ? [...traced, ...openings]
-        : [...ai, ...openings.filter((o) => o.id.startsWith("tile_"))];
+        : [...ai.filter(p => p.type === "wall" || p.type === "floor"), ...openings];
       const namedRooms = useTraced
         ? keptRooms.map((room) => ({
             points: room.points,
@@ -459,7 +460,7 @@ export function FloorTo3D() {
                   planWidthMeters: f.planWidthMetersOverride ?? f.recognition.planWidthMeters,
                   outputUnits,
                   wallHeightMeters: f.heightMeters || 2.6,
-                  polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ id: p.id, type: p.type, points: p.points })),
+                  polygons: f.recognition.polygons.map((p: RecognizedPolygon) => ({ ...p })),
                   rooms: f.vectorRooms ?? [],
                   scaleMethod: f.scaleSource === "cad" ? "cad_units" as const : "user_calibration" as const,
                 },

@@ -1536,12 +1536,12 @@ function buildGroups(
     ) => {
       const color = parseHexColor(colorHex);
       const colorKey = color ? `_${color.map((c) => Math.round(c * 255)).join("-")}` : "";
-      const full = `${key}__${matId}${colorKey}`;
+      const full = `${key}__${matId}${colorKey}__part_${cache.size + 1}`;
       let b = cache.get(full);
       if (!b) {
         const matLabel = MATERIAL_PALETTE[matId]?.label ?? matId;
         const safe = full.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-        const niceLabel = colorHex ? `${label} — ${matLabel} (${colorHex.startsWith("#") ? colorHex : `#${colorHex}`})` : `${label} — ${matLabel}`;
+        const niceLabel = `${cache.size + 1}_` + (colorHex ? `${label} — ${matLabel} (${colorHex.startsWith("#") ? colorHex : `#${colorHex}`})` : `${label} — ${matLabel}`);
         b = makeGroupBuilder(`group_${safe}`, niceLabel, scale, matId, color);
         cache.set(full, b);
       }
@@ -1641,16 +1641,17 @@ function buildGroups(
     // selectable layer on .dae import (Stone — White, Wood — Oak, Metal —
     // Brass, …).
     const byMaterial = new Map<string, ReturnType<typeof makeGroupBuilder>>();
-    plan.parts.forEach((part) => {
+    plan.parts.forEach((part, partIndex) => {
       const matId = part.material;
       const color = parseHexColor(part.colorHex);
       const colorKey = color ? `_${color.map((c) => Math.round(c * 255)).join("-")}` : "";
-      const bucketKey = `${matId}${colorKey}`;
+      const bucketKey = `${matId}${colorKey}_part_${partIndex + 1}`;
       let bucket = byMaterial.get(bucketKey);
       if (!bucket) {
         const spec = MATERIAL_PALETTE[matId];
         const label = part.colorHex ? `${spec.label} (${part.colorHex.startsWith("#") ? part.colorHex : `#${part.colorHex}`})` : spec.label;
-        bucket = makeGroupBuilder(`group_mat_${bucketKey}`, label, scale, matId, color);
+        bucket = makeGroupBuilder(`group_mat_${bucketKey}`, `${partIndex + 1}_${part.name || "Part"}_${label}`, scale, matId, color);
+        bucket.group.parentPath = ["Furniture", spec.label];
         byMaterial.set(bucketKey, bucket);
       }
       const g = bucket;
@@ -2797,6 +2798,10 @@ const DetectInput = z.object({
 });
 
 const DetectedPolygon = z.object({
+  material: z.enum(MATERIAL_IDS).optional(),
+  materialEvidence: z.string().max(160).optional(),
+  label: z.string().max(60).optional(),
+
   type: z.enum(MARK_LIFT_TYPES),
   // Points in NORMALISED image coordinates 0..1 (origin top-left, y-down).
   points: z.array(z.tuple([z.number(), z.number()])).min(3).max(200),
@@ -2822,6 +2827,12 @@ export const detectFloorElements = createServerFn({ method: "POST" })
   > => {
     const instruction = `You are an architectural drawing recognition AI. Read the uploaded 2D plan the way an architect reads it, then report classified geometry.
 Return STRICT JSON in the exact shape: {"polygons":[{"type":"wall|door|window|column|stair|cabinet|floor|roof|fixture","points":[[x,y],...],"confidence":0..1}, ...], "roomLabels":[{"name":"<room name exactly as printed>","at":[x,y]}, ...]}.
+
+MATERIAL REGIONS:
+- Return optional material, materialEvidence and label for EACH polygon. Allowed material values: ${MATERIAL_IDS.join(", ")}.
+- Read material notes, legends and hatch boundaries. Split adjacent regions with different documented materials into separate non-overlapping polygons; keep disconnected objects separate even when their material matches.
+- Never infer a physical material from annotation color alone. If not identifiable, use material "other" and materialEvidence "Unspecified — review required". Evidence must quote the note/legend or describe the visible material cue. No invented certainty.
+- Keep wall segments rectangular and openings intact. Do not turn hatch strokes into geometry.
 
 STEP 1 — READ AND CLEAN THE PLAN (mentally):
 - Detect all black or dark linework. Separate useful architectural geometry from: text, dimensions, furniture symbols, hatch patterns, shadows, title blocks, notes, logos, annotations.
@@ -2902,6 +2913,10 @@ OUTPUT RULES:
 // ── Lift annotated polygons into a per-type grouped 3D model ────────────────
 
 const LiftPolygon = z.object({
+  material: z.enum(MATERIAL_IDS).optional(),
+  materialEvidence: z.string().max(160).optional(),
+  label: z.string().max(60).optional(),
+
   id: z.string().max(40),
   type: z.enum(MARK_LIFT_TYPES),
   // Normalised 0..1 image coordinates.
@@ -2945,12 +2960,19 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
     const toWorld = (pts: Array<[number, number]>): Array<[number, number]> =>
       pts.map(([px, py]) => [px * data.imageWidth * mPerPx, (data.imageHeight - py * data.imageHeight) * mPerPx]);
 
-    // Bucket by type → one group per type.
-    const buckets = new Map<MarkLiftType, ReturnType<typeof makeGroupBuilder>>();
-    for (const t of MARK_LIFT_TYPES) {
-      const spec = MARK_LIFT_SPECS[t];
-      buckets.set(t, makeGroupBuilder(`mark_${t}`, spec.layerName, outputScale, spec.material, spec.color));
-    }
+    // Each source polygon remains an independently editable mesh.
+    const groups: Group[] = [];
+    const groupFor = (poly: z.infer<typeof LiftPolygon>, suffix = "") => {
+      const spec = MARK_LIFT_SPECS[poly.type];
+      const material = poly.material ?? "other";
+      const number = groups.length + 1;
+      const materialLabel = material === "other" ? "Unspecified material" : MATERIAL_PALETTE[material].label;
+      const name = `${String(number).padStart(3, "0")}_${poly.label || spec.label}_${material}${suffix}`;
+      const b = makeGroupBuilder(`mark_element_${number}`, name, outputScale, material);
+      b.group.parentPath = [data.label.trim() || "Floor", spec.layerName, materialLabel];
+      groups.push(b.group);
+      return b.group;
+    };
 
     // Wall height override applies to walls AND shifts roof baseZ.
     const wallH = data.wallHeightMeters;
@@ -2966,26 +2988,21 @@ export const liftAnnotatedFloor = createServerFn({ method: "POST" })
       const spec = MARK_LIFT_SPECS[poly.type];
       const world = doorPlacement.doors.get(poly.id) ?? toWorld(poly.points);
       const wallPieces = doorPlacement.pieces.get(poly.id);
+      const group = groupFor(poly);
       if (wallPieces) {
-        for (const piece of wallPieces) extrudePolygonIntoGroup(buckets.get("wall")!.group, piece.points, piece.base, piece.base + piece.height, outputScale);
+        for (const piece of wallPieces) extrudePolygonIntoGroup(group, piece.points, piece.base, piece.base + piece.height, outputScale);
         continue;
       }
       // Walls and columns rise to the full storey height; everything else
       // keeps its architectural default.
       const height = poly.type === "wall" || poly.type === "column" ? wallH : spec.height;
       const baseZ = poly.type === "roof" ? wallH : spec.baseZ;
-      const bucket = buckets.get(poly.type)!;
-      extrudePolygonIntoGroup(bucket.group, world, baseZ, baseZ + height, outputScale);
+      extrudePolygonIntoGroup(group, world, baseZ, baseZ + height, outputScale);
     }
-    for (const piece of doorPlacement.lintels) extrudePolygonIntoGroup(buckets.get("wall")!.group, piece.points, piece.base, piece.base + piece.height, outputScale);
-
-    const groups: Group[] = [];
-    for (const t of MARK_LIFT_TYPES) {
-      const b = buckets.get(t)!;
-      if (b.group.positions.length) {
-        b.group.parentPath = [data.label.trim() || "Floor"];
-        groups.push(b.group);
-      }
+    for (const piece of doorPlacement.lintels) {
+      const host = data.polygons.find(p => p.id === piece.hostId);
+      const group = groupFor({ id: "infill", type: "wall", points: piece.points, material: host?.material, label: host?.label }, "_opening_infill");
+      extrudePolygonIntoGroup(group, piece.points, piece.base, piece.base + piece.height, outputScale);
     }
 
     if (groups.length === 0) {

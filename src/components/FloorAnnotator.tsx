@@ -1,3 +1,4 @@
+import { MATERIAL_PALETTE, MATERIAL_IDS, type MaterialId } from "@/lib/floor-3d-shared";
 import { parseArchitecturalMeasurement, cleanPlanPolygon } from "@/lib/architectural-measurement";
 import { useAiConsentGate } from "@/hooks/use-ai-consent";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -10,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { detectFloorElements, MARK_LIFT_SPECS, MARK_LIFT_TYPES, type MarkLiftType } from "@/lib/floor-3d.functions";
 import { extractPlanShapes, pointInPolygon } from "@/lib/image-plan-shapes";
 
-export type AnnotatedPolygon = {
+export type AnnotatedPolygon = { material?: MaterialId; materialEvidence?: string; label?: string;
   id: string;
   type: MarkLiftType;
   // Normalised 0..1 image coordinates (origin top-left).
@@ -53,6 +54,8 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
   const [imageWidth, setImageWidth] = useState(initialResult?.imageWidth ?? 0);
   const [imageHeight, setImageHeight] = useState(initialResult?.imageHeight ?? 0);
   const [polygons, setPolygons] = useState<AnnotatedPolygon[]>(initialResult?.polygons ?? []);
+  const [materialPartId, setMaterialPartId] = useState("");
+  const materialPart = polygons.find(p => p.id === materialPartId) ?? polygons[0];
   const [activeType, setActiveType] = useState<MarkLiftType>("wall");
   const [tool, setTool] = useState<Tool>("select");
   const [drawingPoints, setDrawingPoints] = useState<Array<[number, number]>>([]);
@@ -126,7 +129,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
       const ai = (result && result.ok ? result.polygons : []).map((p, i) => ({
         id: `det_${Date.now()}_${i}`,
         type: p.type as MarkLiftType,
-        points: p.points as Array<[number, number]>,
+        points: p.points as Array<[number, number]>, material: p.material, materialEvidence: p.materialEvidence, label: p.label,
       }));
       // Same arbitration as the main flow: keep regions with a printed room
       // label inside or a firmly wall-bounded outline.
@@ -148,14 +151,20 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
         })
         .map((p) => ({ id: p.id, type: p.type as MarkLiftType, points: p.points }));
       const tiledOpenings = tiled.map((p, i) => ({
-        id: `tile_${Date.now()}_${i}`,
+        ...p, id: `tile_${Date.now()}_${i}`,
         type: p.type as MarkLiftType,
         points: p.points,
       }));
-      const useTraced = traced.some((p) => p.type === "floor");
-      const merged = useTraced
+      const useTraced = traced.some((p) => p.type === "floor") && !ai.some(p => p.material && p.material !== "other" && (p.type === "wall" || p.type === "floor"));
+      const candidates = useTraced
         ? [...traced, ...tiledOpenings, ...ai.filter((p) => p.type !== "wall" && p.type !== "floor")]
         : [...ai, ...tiledOpenings];
+      const merged = candidates.filter((p, index) => {
+        if (p.type === "wall" || p.type === "floor") return true;
+        const center = (points: Array<[number, number]>) => [points.reduce((s, v) => s + v[0], 0) / points.length, points.reduce((s, v) => s + v[1], 0) / points.length];
+        const [x, y] = center(p.points);
+        return !candidates.slice(0, index).some(q => q.type === p.type && Math.hypot(center(q.points)[0] - x, center(q.points)[1] - y) < .015);
+      });
       if (!merged.length) {
         setError("No enclosed shapes found — draw the outline manually or try a sharper image.");
         return;
@@ -205,6 +214,7 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
   }
 
   function onPolyClick(id: string) {
+    setMaterialPartId(id);
     setAlignmentBackup(null);
     if (tool === "delete") {
       setPolygons((prev) => prev.filter((p) => p.id !== id));
@@ -269,9 +279,9 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
                     points={pts}
                     fill={spec.hex}
                     fillOpacity={0.45}
-                    stroke={spec.hex}
+                    stroke={poly.id === materialPart?.id ? "#ffffff" : spec.hex}
                     strokeOpacity={0.95}
-                    strokeWidth={0.003}
+                    strokeWidth={poly.id === materialPart?.id ? 3 : 1}
                     vectorEffect="non-scaling-stroke"
                     onClick={(e) => { if (tool === "draw" || tool === "measure") return; e.stopPropagation(); onPolyClick(poly.id); }}
                   />
@@ -363,6 +373,21 @@ export function FloorAnnotator({ imageDataUrl, initialResult, defaultPlanWidth =
               Tip: pick a color above, then click a region to reassign it. Use Draw to add anything the AI missed.
             </p>
           </div>
+
+          <details className="rounded-lg border p-3" open>
+            <summary className="text-sm font-semibold">Editable parts and materials</summary>
+            <p className="text-xs text-neutral-600">Each part exports as a separate object. Review uncertain materials; plan colors alone do not identify a finish.</p>
+            <select aria-label="Part to edit" className="w-full rounded border p-1 text-xs" value={materialPart?.id ?? ""} onChange={e => setMaterialPartId(e.target.value)}>
+              {polygons.map((p, i) => <option key={p.id} value={p.id}>{i + 1}. {p.label || MARK_LIFT_SPECS[p.type].label} — {p.material || "unspecified"}</option>)}
+            </select>
+            {materialPart && <>
+              <select aria-label="Part material" className="w-full rounded border p-1 text-xs" value={materialPart.material ?? "other"} onChange={e => setPolygons(prev => prev.map(q => q.id === materialPart.id ? { ...q, material: e.target.value as MaterialId, materialEvidence: "Selected by user" } : q))}>
+                <option value="other">Unspecified — review material</option>
+                {MATERIAL_IDS.filter(m => m !== "other").map(m => <option key={m} value={m}>{MATERIAL_PALETTE[m].label}</option>)}
+              </select>
+              <p className="text-[11px] text-neutral-500">{materialPart.materialEvidence || "No material evidence in this region"}</p>
+            </>}
+          </details>
 
           <div className="space-y-2 rounded-lg border p-3">
             <h3 className="text-sm font-semibold">Calibrate with a known distance</h3>

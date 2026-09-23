@@ -1,3 +1,4 @@
+import type { MaterialId } from "./floor-3d-shared";
 /**
  * Tiled AI detection for small plan symbols.
  *
@@ -11,11 +12,12 @@
 export type TiledOpening = {
   type: string;
   points: Array<[number, number]>;
+  material?: MaterialId; materialEvidence?: string; label?: string;
   confidence?: number;
 };
 
 type DetectResult =
-  | { ok: true; polygons: Array<{ type: string; points: Array<[number, number]>; confidence?: number }> }
+  | { ok: true; polygons: Array<{ type: string; points: Array<[number, number]>; confidence?: number; material?: MaterialId; materialEvidence?: string; label?: string }> }
   | { ok: false; error: string };
 
 const OPENING_TYPES = new Set(["door", "window", "stair", "column", "fixture", "cabinet"]);
@@ -80,7 +82,7 @@ export async function detectOpeningsTiled(
         (item.tile.ox + x * tileW) / W,
         (item.tile.oy + y * tileH) / H,
       ] as [number, number]);
-      found.push({ type: poly.type, points, confidence: poly.confidence });
+      found.push({ ...poly, points });
     }
   }
 
@@ -98,3 +100,4 @@ export async function detectOpeningsTiled(
   }
   return kept;
 }
+

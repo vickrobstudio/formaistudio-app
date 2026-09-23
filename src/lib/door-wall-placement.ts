@@ -1,6 +1,6 @@
 type Point = [number, number];
 type Polygon = { id: string; type: string; points: Point[] };
-export type WallPiece = { points: Point[]; base: number; height: number };
+export type WallPiece = { points: Point[]; base: number; height: number; hostId?: string };
 type Frame = { center: Point; u: Point; v: Point; length: number; thickness: number };
 const dot = (a: Point, b: Point) => a[0]*b[0]+a[1]*b[1];
 const delta = (a: Point,b: Point): Point => [a[0]-b[0],a[1]-b[1]];
@@ -24,20 +24,20 @@ function rect(f:Frame,start:number,end:number,thickness=f.thickness):Point[]{
 export function placeDoorsInWalls(polygons: Polygon[], wallHeight:number, doorHeight=2.1) {
   const walls=polygons.filter(p=>p.type==="wall").map(p=>({p,f:frame(p.points)}));
   const doors=new Map<string,Point[]>();
-  const openings: {f:Frame;start:number;end:number;base:number;top:number}[]=[];
+  const openings: {hostId:string;f:Frame;start:number;end:number;base:number;top:number}[]=[];
   for(const door of polygons.filter(p=>p.type==="door" || p.type==="window")){
     const base=door.type==="window" ? .9 : 0;
     const top=door.type==="window" ? 2.1 : doorHeight;
     if(wallHeight<=top) throw new Error("The ceiling must be above the door or window head. Correct the height before building.");
     const center:Point=[door.points.reduce((s,p)=>s+p[0],0)/door.points.length,door.points.reduce((s,p)=>s+p[1],0)/door.points.length];
-    const candidates=walls.flatMap(({f})=>{
+    const candidates=walls.flatMap(({p,f})=>{
       if(!f) return [];
       const projected=door.points.map(p=>dot(delta(p,f.center),f.u));
       const width=Math.max(...projected)-Math.min(...projected);
       const along=dot(delta(center,f.center),f.u), distance=Math.abs(dot(delta(center,f.center),f.v));
       const gap=Math.max(0,Math.abs(along)-f.length/2);
       if(width<.3||width>3||distance>Math.max(.35,f.thickness)||gap>width/2+.1) return [];
-      return [{f,start:along-width/2,end:along+width/2,score:distance+gap*.1}];
+      return [{hostId:p.id,f,start:along-width/2,end:along+width/2,score:distance+gap*.1}];
     }).sort((a,b)=>a.score-b.score);
     const host=candidates[0];
     if(!host) throw new Error(`${door.type} ${door.id} is not on a supported wall run. In the 2D review, draw its width over the wall opening, not over a swing arc or a note.`);
@@ -76,7 +76,7 @@ export function placeDoorsInWalls(polygons: Polygon[], wallHeight:number, doorHe
   }
   const lintels:WallPiece[]=[];
   for(const o of openings){
-    const coverage=walls.flatMap(({f})=>{
+    const coverage=walls.flatMap(({p,f})=>{
       if(!f || Math.abs(dot(f.u,o.f.u))<.999 || Math.abs(dot(delta(f.center,o.f.center),o.f.v))>.01)return [];
       const middle=dot(delta(f.center,o.f.center),o.f.u);
       return [{start:Math.max(o.start,middle-f.length/2),end:Math.min(o.end,middle+f.length/2)}];
@@ -88,8 +88,8 @@ export function placeDoorsInWalls(polygons: Polygon[], wallHeight:number, doorHe
     }
     let cursor=o.start;
     const fillGap=(start:number,end:number)=>{
-      lintels.push({points:rect(o.f,start,end),base:o.top,height:wallHeight-o.top});
-      if(o.base>0)lintels.push({points:rect(o.f,start,end),base:0,height:o.base});
+      lintels.push({hostId:o.hostId,points:rect(o.f,start,end),base:o.top,height:wallHeight-o.top});
+      if(o.base>0)lintels.push({hostId:o.hostId,points:rect(o.f,start,end),base:0,height:o.base});
     };
     for(const c of coverage){if(c.start-cursor>.001)fillGap(cursor,c.start);cursor=Math.max(cursor,c.end);}
     if(o.end-cursor>.001)fillGap(cursor,o.end);
