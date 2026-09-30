@@ -172,8 +172,14 @@ export function Furniture3DPreview({ plan, daeDataUrl, glbDataUrl }: { plan?: Fu
 
   const usedMaterials = useMemo(() => {
     if (!plan) return [];
-    const set = new Set(plan.parts.map((p) => p.material));
-    return Array.from(set).map((id) => MATERIAL_PALETTE[id]);
+    const finishes = new Map<string, { id: string; label: string; cssColor: string }>();
+    for (const part of plan.parts) {
+      const spec = MATERIAL_PALETTE[part.material];
+      const hex = part.colorHex ? `#${part.colorHex.replace(/^#/, "")}` : undefined;
+      const id = `${part.material}_${hex ?? "default"}`;
+      finishes.set(id, { id, label: part.materialNote || spec.label, cssColor: hex ?? `rgb(${spec.color.map(c => Math.round(c * 255)).join(",")})` });
+    }
+    return [...finishes.values()];
   }, [plan]);
 
   return (
@@ -216,7 +222,7 @@ export function Furniture3DPreview({ plan, daeDataUrl, glbDataUrl }: { plan?: Fu
         </Canvas>
         {!scene && !error && (
           <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Loading .dae geometry…
+            <Loader2 className="size-4 animate-spin" /> Loading 3D geometry…
           </div>
         )}
         {error && (
@@ -238,7 +244,7 @@ export function Furniture3DPreview({ plan, daeDataUrl, glbDataUrl }: { plan?: Fu
               aria-hidden
               className="size-3 rounded-full border border-foreground/20"
               style={{
-                backgroundColor: `rgb(${Math.round(spec.color[0] * 255)},${Math.round(spec.color[1] * 255)},${Math.round(spec.color[2] * 255)})`,
+                backgroundColor: spec.cssColor,
               }}
             />
             {spec.label}
@@ -248,4 +254,3 @@ export function Furniture3DPreview({ plan, daeDataUrl, glbDataUrl }: { plan?: Fu
     </div>
   );
 }
-

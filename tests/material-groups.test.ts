@@ -1,3 +1,7 @@
+import earcut from "earcut";
+import { addFurniturePiping } from "../src/lib/furniture-detail-geometry.ts";
+import { trianglesToGlb } from "../src/lib/glb-export.server.ts";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
@@ -52,7 +56,7 @@ console.log('Material-separated DAE and FBX round-trip, independent editing and 
 // Furniture uses the same editable geometry route as the downloaded model.
 const geometryFunctions = ast.statements.filter(n => ts.isFunctionDeclaration(n)).map(n => n.getText(ast).replace(/^export /, "")).join("\n");
 const furnitureCode = ts.transpile(geometryFunctions + "\nreturn { buildDae };", { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None });
-const furnitureApi = new Function('MATERIAL_PALETTE', 'LAYER_NAMES', 'groundExportGroups', furnitureCode)(MATERIAL_PALETTE, LAYER_NAMES, groundExportGroups);
+const furnitureApi = new Function('MATERIAL_PALETTE', 'LAYER_NAMES', 'groundExportGroups', 'earcut', 'addFurniturePiping', furnitureCode)(MATERIAL_PALETTE, LAYER_NAMES, groundExportGroups, earcut, addFurniturePiping);
 for (const units of ['meters', 'feet']) {
   const part = { shape: 'box', cx: 0, cy: 0, cz: .35, width: .1, depth: .1, height: .7, rotationDegZ: 0, material: 'wood_oak' };
   const model = { kind: 'furniture', parts: [
@@ -72,3 +76,37 @@ for (const units of ['meters', 'feet']) {
   assert.equal(meshes.length, 4);
 }
 console.log('Furniture part separation, material assignment and ground plane export passed');
+
+// Loveseat regression: side-profile arms and cream piping must not become white boxes.
+const arm = { name: 'Emerald curved arm', shape: 'custom_extrusion', profilePlane: 'yz',
+  cx: .06, cy: .2794, cz: .4, width: .12, depth: .5588, height: .8, rotationDegZ: 0,
+  material: 'fabric_neutral', colorHex: '#205B43', edgeRadius: 0,
+  outline: [[-.5,-.5],[.5,-.5],[.5,.5],[.3,.5],[.1,.3],[-.1,.05],[-.3,0],[-.5,0]] };
+const trim = { name: 'Warm cream piping', shape: 'piping', cx: .125, cy: .2794, cz: .4,
+  width: .001, depth: .5588, height: .8, rotationDegZ: 0, tubeDiameter: .004,
+  material: 'fabric_neutral', colorHex: '#E8DDC3', closed: false,
+  path: [[0,-.5,-.5],[0,-.5,0],[0,-.3,0],[0,-.1,.05],[0,.1,.3],[0,.3,.5],[0,.5,.5]] };
+for (const units of ['meters','feet']) {
+  const {groups, dae} = furnitureApi.buildDae({kind:'furniture',parts:[arm,{...arm,cx:1.1592,name:'Right arm'},trim]},2.6,units);
+  const scale = units === 'feet' ? 1 / .3048 : 1;
+  const armGroup = groups[0];
+  const ys = armGroup.positions.filter((_:number,i:number)=>i%3===1);
+  const zs = armGroup.positions.filter((_:number,i:number)=>i%3===2);
+  assert.ok(Math.abs(Math.max(...ys)-Math.min(...ys)-.5588*scale)<1e-6);
+  assert.ok(Math.abs(Math.max(...zs)-Math.min(...zs)-.8*scale)<1e-6);
+  const front = armGroup.positions.flatMap((_:number,i:number)=>i%3===0 && Math.abs(armGroup.positions[i+1])<1e-8 ? [armGroup.positions[i+2]]:[]);
+  assert.ok(Math.max(...front) < Math.max(...zs)*.75, 'Front arm is lower than back, not a box');
+  assert.notDeepEqual(groups[0].colorOverride, groups[2].colorOverride);
+  const glb=trianglesToGlb(groups,units);
+  const scene=(await new GLTFLoader().parseAsync(glb.buffer,'')).scene;
+  const meshes:any[]=[];scene.traverse((o:any)=>{if(o.isMesh)meshes.push(o);});
+  assert.equal(meshes.length,4);
+  assert.equal(meshes[0].material.color.getHexString(),'205b43','Exact green survives the actual preview loader');
+  assert.equal(meshes[2].material.color.getHexString(),'e8ddc3','Piping retains its separate cream color');
+  const imported = parseDaeToTriangles(dae);
+  assert.ok(Math.abs(imported[0].color[1] - 91/255)<0.00051);
+  assert.equal(imported.length,4);
+}
+console.log('Loveseat curved side profiles, editable piping, and GLB color round-trip passed');
+
+

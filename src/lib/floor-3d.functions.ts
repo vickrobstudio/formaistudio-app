@@ -5,6 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { LAYER_NAMES, MATERIAL_IDS, MATERIAL_PALETTE, type MaterialId } from "./floor-3d-shared";
 import earcut from "earcut";
+import { addFurniturePiping } from "./furniture-detail-geometry";
 
 const Subject = z.enum(["building", "furniture"]);
 const PlanUnits = z.enum(["meters", "feet-inches"]);
@@ -244,12 +245,16 @@ const PartSchema = z.object({
     "torus",
     "rounded_box",
     "custom_extrusion",
+    "piping",
   ]).default("box"),
   cx: z.number(), cy: z.number(), cz: z.number(),
   width: z.number().positive(),   // along X
   depth: z.number().positive(),   // along Y
   height: z.number().positive(),  // along Z
   rotationDegZ: z.number().default(0),
+  profilePlane: z.enum(["xy", "yz", "xz"]).default("xy"),
+  path: z.array(z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1), z.number().min(-1).max(1)])).min(2).max(96).optional(),
+  closed: z.boolean().default(false),
   // custom_extrusion only: normalized plan-view outline points where [0,0]
   // is part center and extents fit inside -0.5..0.5. Used for scalloped,
   // kidney, boomerang, freeform, arched and asymmetric silhouettes from the
@@ -828,19 +833,35 @@ Return JSON ONLY in this exact shape:
   "parts": [
     {
       "name": "<part name>",
-      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box" | "custom_extrusion",
+      "shape": "box" | "cylinder" | "ellipse_cylinder" | "tapered_cylinder" | "torus" | "rounded_box" | "custom_extrusion" | "piping",
       "cx": <m>, "cy": <m>, "cz": <m>,
       "width": <X m>, "depth": <Y m>, "height": <Z m>,
       "rotationDegZ": <deg>,
-      "outline": [[<x>, <y>], ...],
+      "outline": [[<u>, <v>], ...],
+      "profilePlane": "xy" | "yz" | "xz",
+      "path": [[<normalized x>, <normalized y>, <normalized z>], ...],
+      "closed": false,
       "topDiameter": <m, tapered_cylinder only — diameter at the TOP>,
       "tubeDiameter": <m, torus only — thickness of the ring>,
       "edgeRadius": <m, optional bullnose/fillet radius>,
       "material": "stone_white" | "stone_dark" | "wood_oak" | "wood_walnut" | "wood_dark" | "metal_brass" | "metal_chrome" | "metal_black" | "fabric_neutral" | "leather_dark" | "glass" | "plastic_white" | "plastic_black" | "other",
-      "materialNote": "<optional free-text material description, e.g. 'Calacatta marble', 'white oak'>"
+      "materialNote": "<surface finish / fabric / pattern visible on this part>",
+      "colorHex": "#RRGGBB"
     }
   ]
 }
+
+COLORS AND FINISHES:
+- Include colorHex for EVERY part. Read labeled color swatches first, then the representative surface color in the photograph. Material family is NOT color: emerald green upholstery is fabric_neutral with a green colorHex, NEVER the default beige.
+- Keep contrast trims, piping and cushions as separately named colored parts. Do not model the sheet background, text, dimension lines or swatch circles.
+- Record textile/pattern descriptions in materialNote. A solid color is only an approximation of a printed textile; do not claim photographic texture reproduction.
+- Read dimension extension-line endpoints: seat/front-arm height is NOT automatically full back height. Infer unspecified dimensions conservatively from the other views.
+
+ELEVATION PROFILES AND SOFT FURNITURE:
+- custom_extrusion supports profilePlane: xy (top outline, extrude height), yz (SIDE outline in depth/height, extrude width), xz (FRONT outline in width/height, extrude depth). Normalized outline coordinates span -0.5..0.5. Default xy is only for plan silhouettes.
+- Swept/downsloping sofa arms MUST trace the SIDE silhouette using yz, including curved top edges with sufficient points, not rectangular boxes. +Y is rear, +Z is up. Left/right arms have the same side silhouette at different cx positions.
+- Use rounded_box with an appropriate small edgeRadius for upholstered seat, back and pillows. Keep each visible pillow separately positioned and colored. Include the visible base/skirt, continuous or divided seat as shown; do not add visible legs if concealed.
+- piping: a thin round cord following path, normalized 3D points relative to the part center and its width/depth/height. tubeDiameter is in meters (typically 0.003–0.008). Use closed:true for loops, false for open trim; include enough path points to follow the silhouette. Model cream piping separately from green fabric. Path extents and part bounds must match the actual seam, not the whole sofa unnecessarily.
 
 MATERIALS — assign a "material" id to EVERY part using the visible finish/material in the drawing or reference photo:
   * stone_white      — white/cream marble or stone (e.g. Calacatta, Carrara, white quartz)
@@ -1350,17 +1371,23 @@ function addCustomExtrusion(
   part: z.infer<typeof PartSchema>,
   scale: number,
 ) {
-  const outline = part.outline?.length ? part.outline : [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
-  const localOutline: [number, number][] = outline.map(([nx, ny]) => [nx * part.width, ny * part.depth]);
-  addFilletedExtrusion(
-    group,
-    localOutline,
-    part.cx, part.cy, part.cz,
-    part.height,
-    part.edgeRadius ?? 0,
-    part.rotationDegZ,
-    scale,
-  );
+  if (!part.outline || part.outline.length < 3) throw new Error("A custom profile requires an outline");
+  const plane = part.profilePlane ?? "xy";
+  const uSize = plane === "yz" ? part.depth : part.width;
+  const vSize = plane === "xy" ? part.depth : part.height;
+  const thickness = plane === "yz" ? part.width : plane === "xz" ? part.depth : part.height;
+  const start = group.positions.length;
+  const localOutline: [number, number][] = part.outline.map(([u, v]) => [u * uSize, v * vSize]);
+  addFilletedExtrusion(group, localOutline, 0, 0, 0, thickness, part.edgeRadius ?? 0, 0, scale);
+  const angle = part.rotationDegZ * Math.PI / 180;
+  for (let i = start; i < group.positions.length; i += 3) {
+    const [u, v, w] = group.positions.slice(i, i + 3);
+    // Proper rotations preserve winding/normals (xz maps extrusion to -Y).
+    const [x, y, z] = plane === "yz" ? [w, u, v] : plane === "xz" ? [u, -w, v] : [u, v, w];
+    group.positions[i] = part.cx * scale + x * Math.cos(angle) - y * Math.sin(angle);
+    group.positions[i + 1] = part.cy * scale + x * Math.sin(angle) + y * Math.cos(angle);
+    group.positions[i + 2] = part.cz * scale + z;
+  }
 }
 
 /**
@@ -1407,10 +1434,16 @@ function addFilletedExtrusion(
 ) {
   const n = outlineLocal.length;
   if (n < 3) return;
+  // Normalize winding before offsets and side faces.
+  let signedArea = 0;
+  for (let i = 0; i < n; i++) { const a = outlineLocal[i], b = outlineLocal[(i + 1) % n]; signedArea += a[0] * b[1] - b[0] * a[1]; }
+  if (signedArea < 0) outlineLocal = [...outlineLocal].reverse();
   const hz = height / 2;
   const theta = (rotationDegZ * Math.PI) / 180;
   const cos = Math.cos(theta), sin = Math.sin(theta);
-  const r = Math.max(0, Math.min(edgeRadius, height / 2));
+  const extentX = Math.max(...outlineLocal.map(p => p[0])) - Math.min(...outlineLocal.map(p => p[0]));
+  const extentY = Math.max(...outlineLocal.map(p => p[1])) - Math.min(...outlineLocal.map(p => p[1]));
+  const r = Math.max(0, Math.min(edgeRadius, height / 2, extentX / 4, extentY / 4));
 
   const ringDefs: Array<{ inset: number; z: number }> = [];
   if (r > 0.0005) {
@@ -1447,9 +1480,18 @@ function addFilletedExtrusion(
   }
   const first = base;
   const last = base + (ringDefs.length - 1) * n;
-  for (let i = 1; i < n - 1; i++) {
-    group.indices.push(first, first + i + 1, first + i);
-    group.indices.push(last, last + i, last + i + 1);
+  // Concave arm profiles cannot be capped with a triangle fan.
+  for (const [baseIndex, reverse] of [[first, true], [last, false]] as const) {
+    const points = Array.from({ length: n }, (_, i) => {
+      const offset = (baseIndex + i) * 3;
+      const dx = group.positions[offset] / scale - cx, dy = group.positions[offset + 1] / scale - cy;
+      return [dx * cos + dy * sin, -dx * sin + dy * cos];
+    });
+    const triangles = earcut(points.flat());
+    for (let i = 0; i < triangles.length; i += 3) {
+      const [a, b, c] = triangles.slice(i, i + 3).map(v => baseIndex + v);
+      group.indices.push(a, reverse ? c : b, reverse ? b : c);
+    }
   }
 }
 
@@ -1678,6 +1720,8 @@ function buildGroups(
           8,
           edge || Math.min(0.01, part.height / 2),
         );
+      } else if (part.shape === "piping") {
+        addFurniturePiping(g.group, part, scale);
       } else if (part.shape === "custom_extrusion") {
         addCustomExtrusion(g.group, part, scale);
       } else {
@@ -2112,6 +2156,9 @@ export const generateFloor3D = createServerFn({ method: "POST" })
     const plan = planResult.data.kind === "furniture"
       ? enforcePromptShapeTraits(planResult.data, data.masterPrompt, data.approvedRenderUrl)
       : planResult.data;
+    if (plan.kind === "furniture" && plan.parts.some(part => !part.colorHex || (part.shape === "custom_extrusion" && !part.outline) || (part.shape === "piping" && !part.path))) {
+      return { ok: false, error: "Some furniture colors or profiles could not be read. Add a clear color reference and side view, then retry." };
+    }
     const { dae, groups: builtGroups } = buildDae(plan, data.wallHeightMeters, data.outputUnits);
     const daeDataUrl = `data:model/vnd.collada+xml;base64,${Buffer.from(dae, "utf8").toString("base64")}`;
     // Reuse the same triangle data to emit OBJ and ASCII FBX so users can

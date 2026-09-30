@@ -423,7 +423,8 @@ export type PartShape =
   | "tapered_cylinder"
   | "torus"
   | "rounded_box"
-  | "custom_extrusion";
+  | "custom_extrusion"
+  | "piping";
 
 export type FurniturePart = {
   name?: string;
@@ -432,6 +433,10 @@ export type FurniturePart = {
   width: number; depth: number; height: number;
   rotationDegZ: number;
   outline?: Array<[number, number]>;
+  profilePlane?: "xy" | "yz" | "xz";
+  path?: Array<[number, number, number]>;
+  closed?: boolean;
+  colorHex?: string;
   topDiameter?: number;
   tubeDiameter?: number;
   edgeRadius?: number;

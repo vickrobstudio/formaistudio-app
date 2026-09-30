@@ -99,7 +99,9 @@ export function trianglesToGlb(
     });
 
     const spec = MATERIAL_PALETTE[g.materialId];
-    const [r, gr, b] = g.colorOverride ?? spec.color;
+    // Palette values and extracted hex colors are sRGB; glTF factors are linear.
+    // Writing sRGB directly here washes dark fabric into a pale material.
+    const [r, gr, b] = (g.colorOverride ?? spec.color).map(value => value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4));
     const alpha = spec.transmission && spec.transmission > 0 ? 1 - spec.transmission : 1;
     materials.push({
       name: g.name,
