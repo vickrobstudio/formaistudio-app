@@ -1,3 +1,5 @@
+import { locateFurniturePhoto } from "@/lib/furniture-photo.functions";
+import { startMeshReconstruction, pollMeshReconstruction } from "@/lib/mesh-recon.functions";
 import { type MaterialId } from "@/lib/floor-3d-shared";
 import { PlanInterpretationReview } from "@/components/PlanInterpretationReview";
 import { useNavigate } from "@tanstack/react-router";
@@ -36,7 +38,7 @@ const information: ToolInfoSection[] = [
     description: "Upload a floor plan (one image per floor) or a furniture drawing. Tap Build. Download the 3D file.",
     items: [
       "Buildings: add one image per floor — each floor becomes its own group at real-world scale.",
-      "Furniture: upload one clear reference (drawing, sketch or photo) — the AI builds separate named parts and material groups for editing after export.",
+      "Furniture: photo reconstruction keeps photographic detail; editable approximation creates simplified parts with solid colors.",
       "Export: .fbx, .obj, or .dae — opens in SketchUp, Blender, Rhino, Maya, 3ds Max.",
     ],
   },
@@ -206,6 +208,9 @@ type BuildReport = {
 export function FloorTo3D() {
   const navigate = useNavigate();
   const generate = useServerFn(generateFloor3D);
+  const locatePhoto = useServerFn(locateFurniturePhoto);
+  const startMesh = useServerFn(startMeshReconstruction);
+  const pollMesh = useServerFn(pollMeshReconstruction);
   const lift = useServerFn(liftAnnotatedFloor);
   const detect = useServerFn(detectFloorElements);
   const { credits, signedIn, vip, consume } = useCredits();
@@ -221,6 +226,11 @@ export function FloorTo3D() {
 
   // Furniture state
   const [furnitureUrl, setFurnitureUrl] = useState<string | null>(null);
+  const [furnitureMode, setFurnitureMode] = useState<"photo" | "editable">("photo");
+  const [referencePhoto, setReferencePhoto] = useState<string | null>(null);
+  const [referenceDescription, setReferenceDescription] = useState("");
+  const meshRun = useRef(0);
+  useEffect(() => () => { meshRun.current++; }, []);
   const [furnitureName, setFurnitureName] = useState("");
   const [furnitureDesc, setFurnitureDesc] = useState("");
   const [furnitureMaterials, setFurnitureMaterials] = useState<string[]>([]);
@@ -240,7 +250,7 @@ export function FloorTo3D() {
   const [fbx, setFbx] = useState<string | null>(null);
   const [glb, setGlb] = useState<string | null>(null);
   const [plan, setPlan] = useState<FurniturePlan | null>(null);
-  const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae">("fbx");
+  const [downloadFormat, setDownloadFormat] = useState<"fbx" | "obj" | "dae" | "glb">("fbx");
   const previewRef = useRef<HTMLDivElement>(null);
   const [recognitionPreview, setRecognitionPreview] = useState<number | null>(null);
   const [calibrating, setCalibrating] = useState<number | null>(null);
@@ -248,6 +258,7 @@ export function FloorTo3D() {
   const [approvedInterpretation, setApprovedInterpretation] = useState("");
   const interpretationKey = JSON.stringify({ floors: floors.map(({ label, heightMeters, recognition, planWidthMetersOverride }) => ({ label, heightMeters, recognition, planWidthMetersOverride })), outputUnits });
   function reset() {
+    meshRun.current++; setReferencePhoto(null); setReferenceDescription("");
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
     setFloorParts([]); setBuildReports([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
   }
@@ -501,6 +512,7 @@ export function FloorTo3D() {
   }
 
   async function buildFurniture() {
+    if (furnitureMode === "photo") { await buildFurniturePhoto(); return; }
     if (!furnitureUrl) return;
     if (!(await ensureConsent())) return;
     setBusy(true); setError(""); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null); setStage("modeling");
@@ -524,6 +536,53 @@ export function FloorTo3D() {
       setError(cause instanceof Error ? cause.message : "The editable furniture model could not be generated.");
       setStage("upload");
     } finally { setBusy(false); setStatus(""); }
+  }
+
+  async function buildFurniturePhoto() {
+    if (!furnitureUrl || !(await ensureConsent())) return;
+    if (!(await consume())) { void navigate({ to: "/pricing" }); return; }
+    const run = ++meshRun.current;
+    setBusy(true); setError(""); setStage("modeling");
+    try {
+      if (!referencePhoto) {
+        if (!furnitureUrl.startsWith("data:image/")) throw new Error("For photo reconstruction, upload the furniture photo as JPG or PNG.");
+        setStatus("Locating the original photo, without redesigning it…");
+        const located = await locatePhoto({ data: { imageDataUrl: furnitureUrl } });
+        if (!located.ok) throw new Error(located.error);
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error("Could not read reference")); img.src = furnitureUrl; });
+        if (run !== meshRun.current) return;
+        const r = located.region;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(r.width * img.naturalWidth));
+        canvas.height = Math.max(1, Math.round(r.height * img.naturalHeight));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Could not prepare reference");
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, r.x * img.naturalWidth, r.y * img.naturalHeight, r.width * img.naturalWidth, r.height * img.naturalHeight, 0, 0, canvas.width, canvas.height);
+        setReferencePhoto(canvas.toDataURL("image/jpeg", .95));
+        setReferenceDescription(r.description); setStage("upload");
+        return;
+      }
+      setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
+      setStatus("Reconstructing the selected photo in 3D with Replicate…");
+      const started = await startMesh({ data: { imageDataUrl: referencePhoto, quality: "high" } });
+      if (!started.ok) throw new Error(started.error);
+      for (let attempt = 0; attempt < 120; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        if (run !== meshRun.current) return;
+        const result = await pollMesh({ data: { predictionId: started.predictionId, outputUnits } });
+        if (!result.ok) throw new Error(result.error);
+        if (result.glbDataUrl) {
+          setGlb(result.glbDataUrl); setDae(result.daeDataUrl); setObj(result.objDataUrl); setFbx(result.fbxDataUrl);
+          setDownloadFormat("glb"); setStage("ready"); return;
+        }
+        setStatus("Reconstructing geometry and textures… This can take several minutes.");
+      }
+      throw new Error("The 3D job is still processing. Contact support before starting another paid generation.");
+    } catch (cause) {
+      if (run === meshRun.current) { setError(cause instanceof Error ? cause.message : "Reconstruction failed"); setStage("upload"); }
+    } finally { if (run === meshRun.current) { setBusy(false); setStatus(""); } }
   }
 
   function downloadDataUrl(href: string, filename: string) {
@@ -624,6 +683,18 @@ export function FloorTo3D() {
         </Button>
         {furnitureName && <Button type="button" variant="ghost" size="sm" onClick={() => { setFurnitureUrl(null); setFurnitureName(""); setFurnitureDesc(""); setFurnitureMaterials([]); reset(); }}><X />Remove</Button>}
         {furnitureUrl && <div className="space-y-3 rounded-2xl border border-border p-4">
+          <div className="flex gap-2">
+            <Button disabled={busy} variant={furnitureMode === "photo" ? "default" : "outline"} onClick={() => { setFurnitureMode("photo"); reset(); }}>Photo reconstruction</Button>
+            <Button disabled={busy} variant={furnitureMode === "editable" ? "default" : "outline"} onClick={() => { setFurnitureMode("editable"); reset(); }}>Editable approximation</Button>
+          </div>
+          <p className="text-xs text-muted-foreground">{furnitureMode === "photo" ? "Reconstruct the original photo with textures. Review the selected photo first. Analysis and 3D reconstruction each use one credit; VIP is unlimited. Separate editable parts and exact dimensions are not guaranteed." : "Simplified parts with solid colors, suitable for schematic editing. Does not reproduce upholstery or photographic detail."}</p>
+          {referencePhoto && furnitureMode === "photo" && <div className="space-y-2">
+            <img src={referencePhoto} alt="Selected original furniture photo" className="max-h-80 w-full rounded-xl object-contain bg-white" />
+            <p className="text-xs">{referenceDescription}</p>
+            <p className="text-xs">Check that the entire piece is visible. This photo will be sent to Replicate. If the crop is wrong, upload a photo cropped to the complete piece instead.</p>
+          </div>}
+          {furnitureMode === "editable" && <>
+
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Guide the model (optional)</p>
           <label className="block text-xs">
             <span className="font-bold uppercase tracking-[0.14em]">Describe the piece</span>
@@ -635,6 +706,7 @@ export function FloorTo3D() {
               {FURNITURE_MATERIALS.map((m) => <Button key={m} type="button" size="sm" variant={furnitureMaterials.includes(m) ? "default" : "outline"} onClick={() => setFurnitureMaterials((cur) => cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m])}>{m}</Button>)}
             </div>
           </div>
+          </>}
         </div>}
       </div>}
 
@@ -668,7 +740,7 @@ export function FloorTo3D() {
       {/* Build */}
       <Button variant="default" className="mt-5 h-12 w-full justify-between" disabled={!canBuild || busy}
         onClick={() => void (subject === "building" ? buildBuilding() : buildFurniture())}>
-        <span>{busy ? "Building 3D model…" : subject === "building" ? `Build 3D model${floors.length ? ` from ${floors.length} floor${floors.length === 1 ? "" : "s"}` : ""}` : "Build 3D model"}</span>
+        <span>{busy ? "Building 3D model…" : subject === "building" ? `Build 3D model${floors.length ? ` from ${floors.length} floor${floors.length === 1 ? "" : "s"}` : ""}` : furnitureMode === "photo" ? (referencePhoto ? "Use this photo to build 3D" : "Prepare photo reference") : "Build 3D model"}</span>
         {busy ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
       </Button>
 
@@ -736,9 +808,10 @@ export function FloorTo3D() {
 
         {subject === "furniture" && (dae || glb || obj || fbx) && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">Textured mesh · {outputUnits} · opens in SketchUp, Blender, Rhino, Maya, 3ds Max</p>
+          <p className="mt-2 text-xs text-muted-foreground">{plan ? `Editable approximation · ${outputUnits} · solid colors` : "Photo reconstruction · approximate scale · GLB retains textures. DAE/FBX/OBJ may lose textures and do not guarantee separate parts."}</p>
           <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
           <div className="mt-2 flex rounded-xl border border-foreground p-1">
+            <Button type="button" size="sm" variant={downloadFormat === "glb" ? "default" : "ghost"} className="flex-1" disabled={!glb} onClick={() => setDownloadFormat("glb")}>.glb</Button>
             <Button type="button" size="sm" variant={downloadFormat === "fbx" ? "default" : "ghost"} className="flex-1" disabled={!fbx} onClick={() => setDownloadFormat("fbx")}>.fbx</Button>
             <Button type="button" size="sm" variant={downloadFormat === "obj" ? "default" : "ghost"} className="flex-1" disabled={!obj} onClick={() => setDownloadFormat("obj")}>.obj</Button>
             <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae} onClick={() => setDownloadFormat("dae")}>.dae</Button>

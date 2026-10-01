@@ -163,7 +163,17 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const { authorizePrediction } = await import("./generation-billing.server");
-      await authorizePrediction(data.predictionId);
+      const user = await authorizePrediction(data.predictionId);
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const saveModel = async (content: Uint8Array | string, extension: string, contentType: string) => {
+        const path = `${user.id}/furniture/${data.predictionId}.${extension}`;
+        const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
+        const { error } = await supabaseAdmin.storage.from("user-outputs").upload(path, bytes, { contentType, upsert: true });
+        if (error) throw new Error("The reconstructed model could not be saved. Do not start another generation.");
+        const signed = await supabaseAdmin.storage.from("user-outputs").createSignedUrl(path, 3600, { download: `furniture.${extension}` });
+        if (signed.error || !signed.data?.signedUrl) throw new Error("Could not prepare model download");
+        return signed.data.signedUrl;
+      };
       const res = await fetch(`${GATEWAY}/predictions/${encodeURIComponent(data.predictionId)}`, {
         headers: authHeaders(),
       });
@@ -183,9 +193,7 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       const fileRes = await fetch(glbUrl);
       if (!fileRes.ok) return { ok: false as const, error: `Could not fetch mesh (${fileRes.status}).` };
       const buf = new Uint8Array(await fileRes.arrayBuffer());
-      let binary = "";
-      for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
-      const base64 = btoa(binary);
+      const modelUrl = await saveModel(buf, "glb", "model/gltf-binary");
       // Convert the SAME mesh to a Collada .dae so the downloadable file is a
       // true 1:1 representation of the reconstructed render — not a primitive
       // approximation.
@@ -198,21 +206,20 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
           units: data.outputUnits ?? "meters",
           targetBoundsMeters: data.targetBoundsMeters,
         });
-        const daeB64 = Buffer.from(dae, "utf8").toString("base64");
-        daeDataUrl = `data:model/vnd.collada+xml;base64,${daeB64}`;
+        daeDataUrl = await saveModel(dae, "dae", "model/vnd.collada+xml");
         const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
-        const { trianglesToObj, trianglesToFbxAscii, toDataUrl } = await import("./mesh-export.server");
+        const { trianglesToObj, trianglesToFbxAscii } = await import("./mesh-export.server");
         const groups = parseDaeToTriangles(dae);
         const { obj } = trianglesToObj(groups);
-        objDataUrl = toDataUrl(obj, "model/obj");
-        fbxDataUrl = toDataUrl(trianglesToFbxAscii(groups, data.outputUnits ?? "meters", "Y"), "application/octet-stream");
+        objDataUrl = await saveModel(obj, "obj", "model/obj");
+        fbxDataUrl = await saveModel(trianglesToFbxAscii(groups, data.outputUnits ?? "meters", "Y"), "fbx", "application/octet-stream");
       } catch (err) {
         console.error("glb->dae conversion failed", err);
       }
       return {
         ok: true as const,
         status: "succeeded",
-        glbDataUrl: `data:model/gltf-binary;base64,${base64}`,
+        glbDataUrl: modelUrl,
         daeDataUrl,
         objDataUrl,
         fbxDataUrl,

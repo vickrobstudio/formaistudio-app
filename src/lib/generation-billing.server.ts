@@ -42,6 +42,7 @@ export async function authorizePrediction(predictionId: string) {
   const user = await billingIdentity(getRequest());
   const { data, error } = await db().from("generation_predictions").select("prediction_id").eq("prediction_id", predictionId).eq("user_id", user.id).maybeSingle();
   if (error || !data) throw new GenerationBillingError("This 3D job is not available for your account.");
+  return user;
 }
 
 export async function readBillingState(request: Request) {
@@ -108,4 +109,3 @@ export async function meteredFetch(kind: GenerationKind, url: string | URL | Req
   }
   return executeMeteredOperation(async () => reserved.data, finish, () => fetch(url, init));
 }
-
