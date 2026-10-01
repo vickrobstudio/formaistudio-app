@@ -231,6 +231,31 @@ export function FloorTo3D() {
   const [referenceDescription, setReferenceDescription] = useState("");
   const [photoCrop, setPhotoCrop] = useState({left:0, top:0, right:100, bottom:100});
   const [cropDirty, setCropDirty] = useState(false);
+  const [completedMesh, setCompletedMesh] = useState<string | null>(null);
+  const [measurements, setMeasurements] = useState({ width: "", depth: "", height: "" });
+  const [measurementUnit, setMeasurementUnit] = useState<"inches" | "meters">("inches");
+  const [appliedScale, setAppliedScale] = useState("");
+  function confirmedBounds() {
+    const factor = measurementUnit === "inches" ? 0.0254 : 1;
+    const width = Number(measurements.width) * factor;
+    const depth = measurements.depth.trim() ? Number(measurements.depth) * factor : undefined;
+    const height = measurements.height.trim() ? Number(measurements.height) * factor : undefined;
+    if (![width, depth ?? width, height ?? width].every(v => Number.isFinite(v) && v > 0 && v <= 1000)) throw new Error("Enter a known overall width. Optional depth and overall height must be positive.");
+    return { width, depth, height };
+  }
+  async function applyFurnitureScale() {
+    if (!completedMesh) return;
+    setBusy(true); setError("");
+    try {
+      const bounds = confirmedBounds();
+      const result = await pollMesh({ data: { predictionId: completedMesh, outputUnits, targetBoundsMeters: bounds } });
+      if (!result.ok) throw new Error(result.error);
+      if (!result.glbDataUrl) throw new Error("The existing model is not available yet.");
+      setGlb(result.glbDataUrl); setDae(result.daeDataUrl); setObj(result.objDataUrl); setFbx(result.fbxDataUrl);
+      setAppliedScale(`Width ${bounds.width.toFixed(4)} m${bounds.depth ? ` · depth ${bounds.depth.toFixed(4)} m` : ""}${bounds.height ? ` · height ${bounds.height.toFixed(4)} m` : " · height proportional, not measured"}`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Calibration failed"); }
+    finally { setBusy(false); }
+  }
   const [pendingMesh, setPendingMesh] = useState<string | null>(null);
   const meshRun = useRef(0);
   useEffect(() => () => { meshRun.current++; }, []);
@@ -261,7 +286,7 @@ export function FloorTo3D() {
   const [approvedInterpretation, setApprovedInterpretation] = useState("");
   const interpretationKey = JSON.stringify({ floors: floors.map(({ label, heightMeters, recognition, planWidthMetersOverride }) => ({ label, heightMeters, recognition, planWidthMetersOverride })), outputUnits });
   function reset() {
-    meshRun.current++; setReferencePhoto(null); setReferenceDescription(""); setPendingMesh(null); setCropDirty(false);
+    meshRun.current++; setReferencePhoto(null); setCompletedMesh(null); setAppliedScale(""); setMeasurements({width:"",depth:"",height:""}); setReferenceDescription(""); setPendingMesh(null); setCropDirty(false);
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
     setFloorParts([]); setBuildReports([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
   }
@@ -579,6 +604,7 @@ export function FloorTo3D() {
       }
       setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
       setStatus("Reconstructing the selected photo in 3D with Replicate…");
+      const targetBoundsMeters = measurements.width.trim() ? confirmedBounds() : undefined;
       let predictionId = pendingMesh;
       if (!predictionId) {
         const started = await startMesh({ data: { imageDataUrl: referencePhoto, quality: "high" } });
@@ -588,11 +614,11 @@ export function FloorTo3D() {
       for (let attempt = 0; attempt < 120; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 5000));
         if (run !== meshRun.current) return;
-        const result = await pollMesh({ data: { predictionId, outputUnits } });
+        const result = await pollMesh({ data: { predictionId, outputUnits, targetBoundsMeters } });
         if (!result.ok) throw new Error(result.error);
         if (result.glbDataUrl) {
           setGlb(result.glbDataUrl); setDae(result.daeDataUrl); setObj(result.objDataUrl); setFbx(result.fbxDataUrl);
-          setPendingMesh(null); setDownloadFormat("glb"); setStage("ready"); return;
+          setCompletedMesh(predictionId); setAppliedScale(targetBoundsMeters ? `Width ${targetBoundsMeters.width.toFixed(4)} m · ${targetBoundsMeters.height ? "confirmed height" : "height proportional, not measured"}` : ""); setPendingMesh(null); setDownloadFormat("glb"); setStage("ready"); return;
         }
         setStatus("Reconstructing geometry and textures… This can take several minutes.");
       }
@@ -705,6 +731,14 @@ export function FloorTo3D() {
             <Button disabled={busy} variant={furnitureMode === "editable" ? "default" : "outline"} onClick={() => { setFurnitureMode("editable"); reset(); }}>Editable approximation</Button>
           </div>
           <p className="text-xs text-muted-foreground">{furnitureMode === "photo" ? "Reconstruct the original photo with textures. Review the selected photo first. Analysis and 3D reconstruction each use one credit; VIP is unlimited. Separate editable parts and exact dimensions are not guaranteed." : "Simplified parts with solid colors, suitable for schematic editing. Does not reproduce upholstery or photographic detail."}</p>
+          {furnitureMode === "photo" && <div className="space-y-3 rounded-xl border p-4">
+            <p className="font-medium">Real-world size</p>
+            <p className="text-sm text-muted-foreground">Enter the overall width from the drawing. Add depth or total height only when known. Unspecified dimensions keep the model’s proportions. Seat or arm height is not total height.</p>
+            <label className="text-sm">Measurement units <select disabled={busy} value={measurementUnit} onChange={e => {setMeasurementUnit(e.target.value as "inches" | "meters"); setMeasurements({width:"",depth:"",height:""});}}><option value="inches">Inches</option><option value="meters">Meters</option></select></label>
+            <div className="grid grid-cols-3 gap-2">{(["width", "depth", "height"] as const).map(axis => <label key={axis} className="text-sm">{axis === "height" ? "Overall height" : axis}<Input aria-label={`Known ${axis} (${measurementUnit})`} type="number" min="0" step="any" disabled={busy} value={measurements[axis]} onChange={e => setMeasurements(previous => ({...previous, [axis]:e.target.value}))} placeholder={axis === "width" ? "Required to calibrate" : "Optional"} /></label>)}</div>
+            {completedMesh && <Button type="button" variant="outline" disabled={busy} onClick={() => void applyFurnitureScale()}>Apply size to preview and downloads — no new generation</Button>}
+            {appliedScale && <p className="text-sm">{appliedScale}</p>}
+          </div>}
           {referencePhoto && furnitureMode === "photo" && <div className="space-y-2">
             <img src={referencePhoto} alt="Selected original furniture photo" className="max-h-80 w-full rounded-xl object-contain bg-white" />
             <details className="text-xs">
@@ -835,7 +869,7 @@ export function FloorTo3D() {
 
         {subject === "furniture" && (dae || glb || obj || fbx) && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{plan ? `Editable approximation · ${outputUnits} · solid colors` : "Photo reconstruction · approximate scale · GLB retains textures. DAE/FBX/OBJ may lose textures and do not guarantee separate parts."}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{plan ? `Editable approximation · ${outputUnits} · solid colors` : (appliedScale || "Photo reconstruction · uncalibrated scale — apply a known width above") + " · GLB retains textures. DAE/FBX/OBJ may lose textures and do not guarantee separate parts."}</p>
           <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
           <div className="mt-2 flex rounded-xl border border-foreground p-1">
             <Button type="button" size="sm" variant={downloadFormat === "glb" ? "default" : "ghost"} className="flex-1" disabled={!glb} onClick={() => setDownloadFormat("glb")}>.glb</Button>

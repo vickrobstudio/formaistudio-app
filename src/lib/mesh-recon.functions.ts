@@ -153,8 +153,8 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         targetBoundsMeters: z
           .object({
             width: z.number().positive().max(1000),
-            depth: z.number().positive().max(1000),
-            height: z.number().positive().max(1000),
+            depth: z.number().positive().max(1000).optional(),
+            height: z.number().positive().max(1000).optional(),
           })
           .optional(),
       })
@@ -192,7 +192,11 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       if (!glbUrl) return { ok: false as const, error: "Reconstruction finished but no .glb file was produced." };
       const fileRes = await fetch(glbUrl);
       if (!fileRes.ok) return { ok: false as const, error: `Could not fetch mesh (${fileRes.status}).` };
-      const buf = new Uint8Array(await fileRes.arrayBuffer());
+      let buf: Uint8Array = new Uint8Array(await fileRes.arrayBuffer());
+      if (data.targetBoundsMeters) {
+        const { calibrateGlb } = await import("./calibrate-glb.server");
+        buf = calibrateGlb(buf, data.targetBoundsMeters);
+      }
       const modelUrl = await saveModel(buf, "glb", "model/gltf-binary");
       // Convert the SAME mesh to a Collada .dae so the downloadable file is a
       // true 1:1 representation of the reconstructed render — not a primitive
@@ -204,7 +208,7 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
         const { glbToDae } = await import("./glb-to-dae.server");
         const dae = glbToDae(buf, {
           units: data.outputUnits ?? "meters",
-          targetBoundsMeters: data.targetBoundsMeters,
+
         });
         daeDataUrl = await saveModel(dae, "dae", "model/vnd.collada+xml");
         const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
@@ -228,3 +232,4 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
       return { ok: false as const, error: err instanceof Error ? err.message : "Polling failed." };
     }
   });
+
