@@ -229,6 +229,9 @@ export function FloorTo3D() {
   const [furnitureMode, setFurnitureMode] = useState<"photo" | "editable">("photo");
   const [referencePhoto, setReferencePhoto] = useState<string | null>(null);
   const [referenceDescription, setReferenceDescription] = useState("");
+  const [photoCrop, setPhotoCrop] = useState({left:0, top:0, right:100, bottom:100});
+  const [cropDirty, setCropDirty] = useState(false);
+  const [pendingMesh, setPendingMesh] = useState<string | null>(null);
   const meshRun = useRef(0);
   useEffect(() => () => { meshRun.current++; }, []);
   const [furnitureName, setFurnitureName] = useState("");
@@ -258,7 +261,7 @@ export function FloorTo3D() {
   const [approvedInterpretation, setApprovedInterpretation] = useState("");
   const interpretationKey = JSON.stringify({ floors: floors.map(({ label, heightMeters, recognition, planWidthMetersOverride }) => ({ label, heightMeters, recognition, planWidthMetersOverride })), outputUnits });
   function reset() {
-    meshRun.current++; setReferencePhoto(null); setReferenceDescription("");
+    meshRun.current++; setReferencePhoto(null); setReferenceDescription(""); setPendingMesh(null); setCropDirty(false);
     setStage("upload"); setBusy(false); setProgress(0); setStatus(""); setError("");
     setFloorParts([]); setBuildReports([]); setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
   }
@@ -538,9 +541,26 @@ export function FloorTo3D() {
     } finally { setBusy(false); setStatus(""); }
   }
 
+  async function updatePhotoCrop(crop = photoCrop) {
+    if (!furnitureUrl) return;
+    if (crop.left < 0 || crop.top < 0 || crop.right > 100 || crop.bottom > 100 || crop.left >= crop.right || crop.top >= crop.bottom) {
+      setError("Crop edges must enclose the complete piece within 0–100%."); return;
+    }
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error("Could not read reference")); img.src = furnitureUrl; });
+    const canvas = document.createElement("canvas");
+    const width = (crop.right-crop.left)/100*img.naturalWidth, height = (crop.bottom-crop.top)/100*img.naturalHeight;
+    canvas.width = Math.max(1,Math.round(width)); canvas.height = Math.max(1,Math.round(height));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not prepare reference");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,crop.left/100*img.naturalWidth,crop.top/100*img.naturalHeight,width,height,0,0,canvas.width,canvas.height);
+    setReferencePhoto(canvas.toDataURL("image/jpeg",.95)); setCropDirty(false); setError("");
+  }
+
   async function buildFurniturePhoto() {
     if (!furnitureUrl || !(await ensureConsent())) return;
-    if (!(await consume())) { void navigate({ to: "/pricing" }); return; }
+    if (!pendingMesh && !(await consume())) { void navigate({ to: "/pricing" }); return; }
     const run = ++meshRun.current;
     setBusy(true); setError(""); setStage("modeling");
     try {
@@ -549,33 +569,30 @@ export function FloorTo3D() {
         setStatus("Locating the original photo, without redesigning it…");
         const located = await locatePhoto({ data: { imageDataUrl: furnitureUrl } });
         if (!located.ok) throw new Error(located.error);
-        const img = new Image();
-        await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error("Could not read reference")); img.src = furnitureUrl; });
         if (run !== meshRun.current) return;
         const r = located.region;
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(r.width * img.naturalWidth));
-        canvas.height = Math.max(1, Math.round(r.height * img.naturalHeight));
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Could not prepare reference");
-        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, r.x * img.naturalWidth, r.y * img.naturalHeight, r.width * img.naturalWidth, r.height * img.naturalHeight, 0, 0, canvas.width, canvas.height);
-        setReferencePhoto(canvas.toDataURL("image/jpeg", .95));
+        const crop = {left:r.x*100, top:r.y*100, right:(r.x+r.width)*100, bottom:(r.y+r.height)*100};
+        setPhotoCrop(crop);
+        await updatePhotoCrop(crop);
         setReferenceDescription(r.description); setStage("upload");
         return;
       }
       setDae(null); setObj(null); setFbx(null); setGlb(null); setPlan(null);
       setStatus("Reconstructing the selected photo in 3D with Replicate…");
-      const started = await startMesh({ data: { imageDataUrl: referencePhoto, quality: "high" } });
-      if (!started.ok) throw new Error(started.error);
+      let predictionId = pendingMesh;
+      if (!predictionId) {
+        const started = await startMesh({ data: { imageDataUrl: referencePhoto, quality: "high" } });
+        if (!started.ok) throw new Error(started.error);
+        predictionId = started.predictionId; setPendingMesh(predictionId);
+      }
       for (let attempt = 0; attempt < 120; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 5000));
         if (run !== meshRun.current) return;
-        const result = await pollMesh({ data: { predictionId: started.predictionId, outputUnits } });
+        const result = await pollMesh({ data: { predictionId, outputUnits } });
         if (!result.ok) throw new Error(result.error);
         if (result.glbDataUrl) {
           setGlb(result.glbDataUrl); setDae(result.daeDataUrl); setObj(result.objDataUrl); setFbx(result.fbxDataUrl);
-          setDownloadFormat("glb"); setStage("ready"); return;
+          setPendingMesh(null); setDownloadFormat("glb"); setStage("ready"); return;
         }
         setStatus("Reconstructing geometry and textures… This can take several minutes.");
       }
@@ -690,6 +707,16 @@ export function FloorTo3D() {
           <p className="text-xs text-muted-foreground">{furnitureMode === "photo" ? "Reconstruct the original photo with textures. Review the selected photo first. Analysis and 3D reconstruction each use one credit; VIP is unlimited. Separate editable parts and exact dimensions are not guaranteed." : "Simplified parts with solid colors, suitable for schematic editing. Does not reproduce upholstery or photographic detail."}</p>
           {referencePhoto && furnitureMode === "photo" && <div className="space-y-2">
             <img src={referencePhoto} alt="Selected original furniture photo" className="max-h-80 w-full rounded-xl object-contain bg-white" />
+            <details className="text-xs">
+              <summary className="cursor-pointer">Adjust photo crop</summary>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {(["left","top","right","bottom"] as const).map(edge => <label key={edge}>
+                  {edge} edge (%)
+                  <Input type="number" min="0" max="100" step="0.1" aria-label={`${edge} edge (%)`} disabled={busy || Boolean(pendingMesh)} value={Number(photoCrop[edge].toFixed(2))} onChange={e => { setPhotoCrop(prev => ({...prev,[edge]:Number(e.target.value)})); setCropDirty(true); }} />
+                </label>)}
+              </div>
+              <Button type="button" variant="outline" disabled={busy || Boolean(pendingMesh)} onClick={() => void updatePhotoCrop().catch(() => setError("Could not update crop"))}>Update photo crop</Button>
+            </details>
             <p className="text-xs">{referenceDescription}</p>
             <p className="text-xs">Check that the entire piece is visible. This photo will be sent to Replicate. If the crop is wrong, upload a photo cropped to the complete piece instead.</p>
           </div>}
@@ -738,9 +765,9 @@ export function FloorTo3D() {
 
       {subject === "building" && floors.length > 0 && <PlanInterpretationReview floors={floors} approved={approvedInterpretation === interpretationKey} onApprove={(approved) => setApprovedInterpretation(approved ? interpretationKey : "")} />}
       {/* Build */}
-      <Button variant="default" className="mt-5 h-12 w-full justify-between" disabled={!canBuild || busy}
+      <Button variant="default" className="mt-5 h-12 w-full justify-between" disabled={!canBuild || busy || (subject === "furniture" && furnitureMode === "photo" && cropDirty)}
         onClick={() => void (subject === "building" ? buildBuilding() : buildFurniture())}>
-        <span>{busy ? "Building 3D model…" : subject === "building" ? `Build 3D model${floors.length ? ` from ${floors.length} floor${floors.length === 1 ? "" : "s"}` : ""}` : furnitureMode === "photo" ? (referencePhoto ? "Use this photo to build 3D" : "Prepare photo reference") : "Build 3D model"}</span>
+        <span>{busy ? "Building 3D model…" : subject === "building" ? `Build 3D model${floors.length ? ` from ${floors.length} floor${floors.length === 1 ? "" : "s"}` : ""}` : furnitureMode === "photo" ? (pendingMesh ? "Resume 3D reconstruction" : referencePhoto ? "Use this photo to build 3D" : "Prepare photo reference") : "Build 3D model"}</span>
         {busy ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
       </Button>
 
