@@ -640,7 +640,7 @@ export function FloorTo3D() {
     if (!href) return;
     const baseName = subject === "furniture" ? (furnitureName.replace(/\.[^.]+$/, "") || "furniture") : "floorplan";
     const a = document.createElement("a");
-    a.href = href; a.download = `${baseName}.${format}`;
+    a.href = href; a.download = `${baseName}.${format === "dae" && !plan && subject === "furniture" ? "zip" : format}`;
     document.body.appendChild(a); a.click(); a.remove();
   }
 
@@ -869,7 +869,7 @@ export function FloorTo3D() {
 
         {subject === "furniture" && (dae || glb || obj || fbx) && <div className="mt-4 rounded-2xl border border-border p-4">
           <p className="text-xs font-bold uppercase tracking-[0.14em]">Ready to download</p>
-          <p className="mt-2 text-xs text-muted-foreground">{plan ? `Editable approximation · ${outputUnits} · solid colors` : (appliedScale || "Photo reconstruction · uncalibrated scale — apply a known width above") + " · GLB retains textures. DAE/FBX/OBJ may lose textures and do not guarantee separate parts."}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{plan ? `Editable approximation · ${outputUnits} · solid colors` : (appliedScale || "Photo reconstruction · uncalibrated scale — apply a known width above") + " · GLB retains textures. DAE downloads as a ZIP with its textures: extract everything before importing into SketchUp. FBX/OBJ may lose textures. Separate parts are not guaranteed."}</p>
           <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em]">Format</p>
           <div className="mt-2 flex rounded-xl border border-foreground p-1">
             <Button type="button" size="sm" variant={downloadFormat === "glb" ? "default" : "ghost"} className="flex-1" disabled={!glb} onClick={() => setDownloadFormat("glb")}>.glb</Button>
@@ -878,7 +878,7 @@ export function FloorTo3D() {
             <Button type="button" size="sm" variant={downloadFormat === "dae" ? "default" : "ghost"} className="flex-1" disabled={!dae} onClick={() => setDownloadFormat("dae")}>.dae</Button>
           </div>
           <Button variant="default" className="mt-3 h-11 w-full justify-between" onClick={() => download(downloadFormat)}>
-            <span>Download .{downloadFormat}</span><Download />
+            <span>{downloadFormat === "dae" && !plan ? "Download SketchUp DAE + textures (.zip)" : `Download .${downloadFormat}`}</span><Download />
           </Button>
         </div>}
       </div>}

@@ -210,7 +210,13 @@ export const pollMeshReconstruction = createServerFn({ method: "POST" })
           units: data.outputUnits ?? "meters",
 
         });
-        daeDataUrl = await saveModel(dae, "dae", "model/vnd.collada+xml");
+        const { glbTextureFiles } = await import("./glb-to-dae.server");
+        const { zipSync, strToU8 } = await import("fflate");
+        const assets = glbTextureFiles(buf);
+        const texturedDae = glbToDae(buf, { units: data.outputUnits ?? "meters", texturePaths: assets.paths });
+        const bundle = zipSync({ "furniture.dae": strToU8(texturedDae), ...assets.files,
+          "README.txt": strToU8("Extract the entire ZIP. Keep the textures folder beside furniture.dae, then import furniture.dae into SketchUp. Photo reconstruction may contain a single mesh; this is not automatic semantic part separation. Physical dimensions are calibrated only when you provide a known measurement.") });
+        daeDataUrl = await saveModel(bundle, "zip", "application/zip");
         const { parseDaeToTriangles } = await import("./dae-to-triangles.server");
         const { trianglesToObj, trianglesToFbxAscii } = await import("./mesh-export.server");
         const groups = parseDaeToTriangles(dae);

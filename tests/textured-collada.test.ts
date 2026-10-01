@@ -1,0 +1,36 @@
+import assert from "node:assert/strict";
+import { glbToDae, glbTextureFiles } from "../src/lib/glb-to-dae.server.ts";
+import { zipSync, unzipSync, strToU8 } from "fflate";
+// Interleaved position/UV data and unsigned-byte indices exercise the actual
+// accessor formats that used to lose UVs and divide indices by 255.
+const bin = new Uint8Array(68), dv = new DataView(bin.buffer);
+const verts = [[0,0,0,0,0],[2,0,0,1,0],[0,1,1,0,1]];
+verts.forEach((v,i)=>v.forEach((n,j)=>dv.setFloat32(i*20+j*4,n,true)));
+bin.set([0,1,2],60); bin.set([137,80,78,71],64);
+const doc = {asset:{version:"2.0"},buffers:[{byteLength:68}],bufferViews:[{buffer:0,byteOffset:0,byteLength:60,byteStride:20},{buffer:0,byteOffset:60,byteLength:3},{buffer:0,byteOffset:64,byteLength:4}],accessors:[{bufferView:0,componentType:5126,count:3,type:"VEC3"},{bufferView:0,byteOffset:12,componentType:5126,count:3,type:"VEC2"},{bufferView:1,componentType:5121,count:3,type:"SCALAR"}],images:[{bufferView:2,mimeType:"image/png"}],textures:[{source:0}],materials:[{pbrMetallicRoughness:{baseColorTexture:{index:0}}}],meshes:[{name:"Upholstery",primitives:[{attributes:{POSITION:0,TEXCOORD_0:1},indices:2,material:0}]}]};
+const json=strToU8(JSON.stringify(doc)),len=(json.length+3)&~3,glb=new Uint8Array(28+len+bin.length),header=new DataView(glb.buffer);
+header.setUint32(0,0x46546c67,true);header.setUint32(4,2,true);header.setUint32(8,glb.length,true);header.setUint32(12,len,true);header.setUint32(16,0x4e4f534a,true);glb.fill(32,20,20+len);glb.set(json,20);header.setUint32(20+len,bin.length,true);header.setUint32(24+len,0x004e4942,true);glb.set(bin,28+len);
+const assets=glbTextureFiles(glb),dae=glbToDae(glb,{texturePaths:assets.paths});
+assert.match(dae,/<texture texture="sampler_0" texcoord="UVSET0"\/>/);
+assert.match(dae,/<p>0 0 1 1 2 2<\/p>/);
+assert.match(dae,/<float_array id="geom_0-uv-array" count="6">0 1 1 1 0 0<\/float_array>/);
+assert.match(dae,/<float_array id="geom_0-pos-array" count="9">-1 0 -0.5 1 0 -0.5 -1 1 0.5<\/float_array>/);
+assert.match(dae,/bind_vertex_input semantic="UVSET0"/);
+assert.match(dae,/name="Upholstery_p0"/);
+const archive=unzipSync(zipSync({"furniture.dae":strToU8(dae),...assets.files}));
+assert.deepEqual(archive["textures/material_0.png"],bin.slice(64));
+assert.match(glbToDae(glb,{units:"feet"}),/meter="0.3048"/);
+console.log("PASS textured Collada archive, interleaved UVs, byte indices and geometry names");
+import { calibrateGlb } from '../src/lib/calibrate-glb.server.ts';
+const scaled=calibrateGlb(glb,{width:1.2192,depth:0.5588});
+const scaledAssets=glbTextureFiles(scaled);
+assert.deepEqual(scaledAssets.files,assets.files);
+const scaledDae=glbToDae(scaled,{texturePaths:scaledAssets.paths});
+const coordinateText=scaledDae.match(/id="geom_0-pos-array" count="9">([^<]+)/)![1];
+const coordinates=coordinateText.split(' ').map(Number);
+const xs=coordinates.filter((_,i)=>i%3===0), ys=coordinates.filter((_,i)=>i%3===1), zs=coordinates.filter((_,i)=>i%3===2);
+assert.ok(Math.abs(Math.max(...xs)-Math.min(...xs)-1.2192)<1e-6);
+assert.ok(Math.abs(Math.max(...zs)-Math.min(...zs)-.5588)<1e-6);
+assert.equal(Math.min(...ys),0);
+assert.match(scaledDae,/<float_array id="geom_0-uv-array" count="6">0 1 1 1 0 0<\/float_array>/);
+console.log('PASS calibrated export retains UVs and textures, correct width/depth and grounded vertices');

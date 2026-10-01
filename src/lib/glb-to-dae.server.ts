@@ -1,20 +1,8 @@
-/**
- * Minimal GLB → Collada (.dae) converter.
- *
- * Trellis returns a binary glTF (GLB) mesh that is a 1:1 reconstruction of
- * the approved rendering. We want the downloadable .dae to be that SAME
- * triangle mesh — not a primitive approximation. This converter parses the
- * GLB on the server, extracts every triangle primitive's POSITION, NORMAL,
- * TEXCOORD_0 and COLOR_0 (when present) plus indices, and emits a Collada
- * 1.4.1 document containing the exact same geometry.
- *
- * Limitations: textures embedded as PNG inside the GLB are NOT re-embedded
- * into the .dae (Collada lacks a single-file binary asset story). Per-vertex
- * colour from Trellis (generate_color=true) is preserved, so the .dae opens
- * in SketchUp/Blender showing the same colours as the rendering.
- */
+/** Export the reconstructed mesh; a photo reconstruction is not an exact replica.
+ * Texture files are supplied separately in the SketchUp ZIP download. */
 
 type Accessor = {
+  normalized?: boolean;
   bufferView: number;
   byteOffset?: number;
   componentType: number;
@@ -76,31 +64,20 @@ function readAccessor(json: Record<string, unknown>, bin: Uint8Array, index: num
   const elements = TYPE_ELEMENTS[accessor.type];
   const compSize = COMPONENT_SIZE[accessor.componentType] ?? 4;
   const byteOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
-  const totalBytes = accessor.count * elements * compSize;
-  const slice = bin.subarray(byteOffset, byteOffset + totalBytes);
-  // Copy to an aligned ArrayBuffer (subarray may be unaligned for typed-array views)
-  const aligned = new Uint8Array(slice.length);
-  aligned.set(slice);
-  const buf = aligned.buffer;
-  let values: Float32Array | Uint32Array;
-  switch (accessor.componentType) {
-    case 5126: values = new Float32Array(buf); break;
-    case 5125: values = new Uint32Array(buf); break;
-    case 5123: {
-      const src = new Uint16Array(buf);
-      values = Uint32Array.from(src);
-      break;
+  const values = accessor.componentType === 5126 || accessor.normalized ? new Float32Array(accessor.count * elements) : new Uint32Array(accessor.count * elements);
+  const dv = new DataView(bin.buffer, bin.byteOffset, bin.byteLength);
+  const stride = view.byteStride ?? elements * compSize;
+  for (let i=0;i<accessor.count;i++) for(let j=0;j<elements;j++) {
+    const offset=byteOffset+i*stride+j*compSize;
+    let value: number;
+    switch(accessor.componentType) {
+      case 5126: value=dv.getFloat32(offset,true); break;
+      case 5125: value=dv.getUint32(offset,true); break;
+      case 5123: value=dv.getUint16(offset,true); if(accessor.normalized) value/=65535; break;
+      case 5121: value=dv.getUint8(offset); if(accessor.normalized) value/=255; break;
+      default: throw new Error(`Unsupported component type ${accessor.componentType}`);
     }
-    case 5121: {
-      const src = new Uint8Array(buf);
-      // Treat as normalised colour 0..1
-      const f = new Float32Array(src.length);
-      for (let i = 0; i < src.length; i++) f[i] = src[i] / 255;
-      values = f;
-      break;
-    }
-    default:
-      throw new Error(`Unsupported componentType ${accessor.componentType}.`);
+    values[i*elements+j]=value;
   }
   return { values, elements, count: accessor.count };
 }
@@ -118,6 +95,7 @@ export function glbToDae(
   glbBytes: Uint8Array,
   options: {
     units?: "meters" | "feet";
+    texturePaths?: Record<number, string>;
     /**
      * Target real-world bounding box in METERS, taken from the 2D plan.
      * Trellis returns a normalised mesh (~unit cube). When supplied, the
@@ -139,6 +117,7 @@ export function glbToDae(
     colors: Float32Array | null;
     indices: Uint32Array;
     name: string;
+    material?: number;
   };
   const tris: Tri[] = [];
 
@@ -168,6 +147,7 @@ export function glbToDae(
       }
       tris.push({
         positions,
+        material: prim.material,
         normals,
         uvs,
         colors,
@@ -217,12 +197,20 @@ export function glbToDae(
   const materialXml: string[] = [];
   const effectXml: string[] = [];
   const sceneNodes: string[] = [];
+  const imagesXml: string[] = [];
+  const materials = (json.materials ?? []) as Array<{pbrMetallicRoughness?: {baseColorFactor?: number[]; baseColorTexture?: {index: number; texCoord?: number}}}>;
+  const textures = (json.textures ?? []) as Array<{source?: number}>;
 
   tris.forEach((tri, i) => {
     const geomId = `geom_${i}`;
     const matId = `mat_${i}`;
     const fxId = `fx_${i}`;
 
+    const material = tri.material === undefined ? undefined : materials[tri.material]?.pbrMetallicRoughness;
+    const tex = material?.baseColorTexture;
+    const imageIndex = tex ? textures[tex.index]?.source : undefined;
+    const texturePath = imageIndex === undefined ? undefined : options.texturePaths?.[imageIndex];
+    if (texturePath && tex?.texCoord && tex.texCoord !== 0) throw new Error("Unsupported texture coordinate set");
     // Average vertex colour → diffuse for solid-colour preview
     let avg: [number, number, number] = [0.78, 0.78, 0.78];
     if (tri.colors && tri.colors.length >= 3) {
@@ -234,7 +222,11 @@ export function glbToDae(
       if (n) avg = [r / n, g / n, b / n];
     }
 
-    effectXml.push(`<effect id="${fxId}-effect"><profile_COMMON><technique sid="common"><lambert><diffuse><color>${fmt(avg[0])} ${fmt(avg[1])} ${fmt(avg[2])} 1</color></diffuse></lambert></technique></profile_COMMON></effect>`);
+    if (material?.baseColorFactor) avg = material.baseColorFactor.slice(0,3) as [number,number,number];
+    if (texturePath && tri.uvs) {
+      imagesXml.push(`<image id="image_${i}"><init_from>${xmlEscape(texturePath)}</init_from></image>`);
+      effectXml.push(`<effect id="${fxId}-effect"><profile_COMMON><newparam sid="surface_${i}"><surface type="2D"><init_from>image_${i}</init_from></surface></newparam><newparam sid="sampler_${i}"><sampler2D><source>surface_${i}</source></sampler2D></newparam><technique sid="common"><lambert><diffuse><texture texture="sampler_${i}" texcoord="UVSET0"/></diffuse></lambert></technique></profile_COMMON></effect>`);
+    } else effectXml.push(`<effect id="${fxId}-effect"><profile_COMMON><technique sid="common"><lambert><diffuse><color>${fmt(avg[0])} ${fmt(avg[1])} ${fmt(avg[2])} 1</color></diffuse></lambert></technique></profile_COMMON></effect>`);
     materialXml.push(`<material id="${matId}" name="${xmlEscape(tri.name)}"><instance_effect url="#${fxId}-effect"/></material>`);
 
     const posCount = tri.positions.length / 3;
@@ -269,6 +261,7 @@ export function glbToDae(
       colorSource = `<source id="${geomId}-col"><float_array id="${geomId}-col-array" count="${tri.colors.length}">${colFloats}</float_array><technique_common><accessor source="#${geomId}-col-array" count="${posCount}" stride="${stride}">${params}</accessor></technique_common></source>`;
     }
 
+    const uvSource = tri.uvs ? `<source id="${geomId}-uv"><float_array id="${geomId}-uv-array" count="${tri.uvs.length}">${Array.from(tri.uvs,(v,k)=>fmt(k%2 ? 1-v : v)).join(" ")}</float_array><technique_common><accessor source="#${geomId}-uv-array" count="${tri.uvs.length/2}" stride="2"><param name="S" type="float"/><param name="T" type="float"/></accessor></technique_common></source>` : "";
     const vertices = `<vertices id="${geomId}-vtx"><input semantic="POSITION" source="#${geomId}-pos"/></vertices>`;
 
     const triCount = tri.indices.length / 3;
@@ -283,6 +276,7 @@ export function glbToDae(
       inputs.push(`<input semantic="COLOR" source="#${geomId}-col" offset="${nextOffset}" set="0"/>`);
       nextOffset++;
     }
+    if (tri.uvs) { inputs.push(`<input semantic="TEXCOORD" source="#${geomId}-uv" offset="${nextOffset}" set="0"/>`); nextOffset++; }
     const stride = nextOffset;
     const p: number[] = [];
     for (let k = 0; k < tri.indices.length; k++) {
@@ -292,9 +286,9 @@ export function glbToDae(
 
     const trianglesXml = `<triangles count="${triCount}" material="${matId}-binding">${inputs.join("")}<p>${p.join(" ")}</p></triangles>`;
 
-    geometryXml.push(`<geometry id="${geomId}" name="${xmlEscape(tri.name)}"><mesh>${posSource}${normSource}${colorSource}${vertices}${trianglesXml}</mesh></geometry>`);
+    geometryXml.push(`<geometry id="${geomId}" name="${xmlEscape(tri.name)}"><mesh>${posSource}${normSource}${colorSource}${uvSource}${vertices}${trianglesXml}</mesh></geometry>`);
 
-    sceneNodes.push(`<node id="node_${i}" name="${xmlEscape(tri.name)}"><instance_geometry url="#${geomId}"><bind_material><technique_common><instance_material symbol="${matId}-binding" target="#${matId}"/></technique_common></bind_material></instance_geometry></node>`);
+    sceneNodes.push(`<node id="node_${i}" name="${xmlEscape(tri.name)}"><instance_geometry url="#${geomId}"><bind_material><technique_common><instance_material symbol="${matId}-binding" target="#${matId}"><bind_vertex_input semantic="UVSET0" input_semantic="TEXCOORD" input_set="0"/></instance_material></technique_common></bind_material></instance_geometry></node>`);
   });
 
   const created = new Date().toISOString();
@@ -307,6 +301,7 @@ export function glbToDae(
     <unit name="${unitName}" meter="${unit}"/>
     <up_axis>Y_UP</up_axis>
   </asset>
+  <library_images>${imagesXml.join("")}</library_images>
   <library_effects>${effectXml.join("")}</library_effects>
   <library_materials>${materialXml.join("")}</library_materials>
   <library_geometries>${geometryXml.join("")}</library_geometries>
@@ -315,4 +310,20 @@ export function glbToDae(
   </library_visual_scenes>
   <scene><instance_visual_scene url="#scene"/></scene>
 </COLLADA>`;
+}
+/** Extract embedded images without decoding/recompressing their original pixels. */
+export function glbTextureFiles(bytes: Uint8Array): { paths: Record<number,string>; files: Record<string,Uint8Array> } {
+  const {json,bin}=parseGlb(bytes);
+  const images=(json.images ?? []) as Array<{bufferView?:number;mimeType?:string}>;
+  const views=(json.bufferViews ?? []) as BufferView[];
+  const paths: Record<number,string>={}, files: Record<string,Uint8Array>={};
+  images.forEach((image,i)=>{
+    if(image.bufferView===undefined) throw new Error("External texture not available in GLB");
+    const extension=image.mimeType==="image/png"?"png":image.mimeType==="image/jpeg"?"jpg":null;
+    if(!extension) throw new Error("SketchUp texture export supports PNG and JPEG images");
+    const v=views[image.bufferView];
+    const name=`textures/material_${i}.${extension}`;
+    paths[i]=name; files[name]=bin.slice(v.byteOffset??0,(v.byteOffset??0)+v.byteLength);
+  });
+  return {paths,files};
 }

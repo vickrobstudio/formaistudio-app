@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "postinstall": "node scripts/fix-prerender-config-loader.mjs",
-    "test:critical": "node --experimental-strip-types tests/material-groups.test.ts && node --experimental-strip-types tests/door-wall-placement.test.ts && node --experimental-strip-types tests/model-ground.test.ts && node --experimental-strip-types tests/architectural-measurement.test.ts && node --experimental-strip-types tests/plan-extrusion.test.ts && node --experimental-strip-types tests/native-cors.test.ts && node --experimental-strip-types tests/billing.test.ts && node --experimental-strip-types tests/metered-operation.test.ts && node --experimental-strip-types tests/geometry.test.ts && node --experimental-strip-types tests/webhook-signature.test.ts"
+    "test:critical": "node --experimental-strip-types tests/textured-collada.test.ts && node --experimental-strip-types tests/material-groups.test.ts && node --experimental-strip-types tests/door-wall-placement.test.ts && node --experimental-strip-types tests/model-ground.test.ts && node --experimental-strip-types tests/architectural-measurement.test.ts && node --experimental-strip-types tests/plan-extrusion.test.ts && node --experimental-strip-types tests/native-cors.test.ts && node --experimental-strip-types tests/billing.test.ts && node --experimental-strip-types tests/metered-operation.test.ts && node --experimental-strip-types tests/geometry.test.ts && node --experimental-strip-types tests/webhook-signature.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.92",
@@ -95,7 +95,8 @@
     "tw-animate-css": "^1.3.4",
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "fflate": "0.8.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.0",
@@ -123,7 +124,3 @@
     "node": ">=22.18.0"
   }
 }
-
-
-
-
